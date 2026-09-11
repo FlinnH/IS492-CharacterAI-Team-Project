@@ -14,6 +14,7 @@
 | --- | --- | --- | --- |
 | Gawon Lim | @Gawonl2 | Team Lead | gawonl2@illinois.edu |
 | Flynn Huynh | @FlinnH | [Pending] | fhuynh2@illinois.edu |
+| Kiara Gao | @hantarita | [Pending] | jiaqig11@illinois.edu |
 
 ---
 
