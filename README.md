@@ -12,9 +12,9 @@
 
 | Name | GitHub | Role / Domain Ownership | Contact |
 | --- | --- | --- | --- |
-| Gawon Lim | @Gawonl2 | Team Lead | gawonl2@illinois.edu |
-| Flynn Huynh | @FlinnH | [Pending] | fhuynh2@illinois.edu |
-| Kiara Gao | @hantarita | [Pending] | jiaqig11@illinois.edu |
+| Gawon Lim | @Gawonl2 | Team Lead, Tech Stack | gawonl2@illinois.edu |
+| Flynn Huynh | @FlinnH | Co-Lead, Prep & Debug | fhuynh2@illinois.edu |
+| Kiara Gao | @hantarita | Co-Lead, Designer & Literature & Logistics | jiaqig11@illinois.edu |
 
 ---
 
