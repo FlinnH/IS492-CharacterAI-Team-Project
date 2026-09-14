@@ -103,9 +103,17 @@ in Checkpoint 4.
 
 | Existing system | What it does well | Where it falls short |
 | --- | --- | --- |
-| [ ] | [ ] | [ ] |
-| [ ] | [ ] | [ ] |
-| [ ] | [ ] | [ ] |
+| **Character.AI**<br>Consumer platform for chatting with user-created characters | Massive reach: about 20M monthly active users and roughly 18M user-created characters. It is actively working on long-chat consistency, shipping a new default model pitched on in-character consistency (April 2026) and Story Memory and pinned Facts (May 2026). | Closed and platform-locked. Memory fixes are end-user features inside one proprietary model, so a developer cannot see why a character broke, test it against a fixed scenario, or carry the fix into their own product. Safety failures surfaced after harm: it banned open-ended chat for under-18 users in November 2025, and the first teen-harm lawsuits settled in January 2026. |
+| **Replika**<br>Single long-term AI companion with persistent memory | Strong emotional bonding built on remembering the user over months. Peer-reviewed survey work finds users report high perceived social support (Maples et al., 2024). | Shows what happens when continuity breaks: after the Replika 2.0 rebuild (April 2026) changed its memory architecture, long-time users on r/Replika reported companions losing memories they had built over years. Consistency is not inspectable or testable from outside. Documented relational harms, including "algorithmic compliance" with harmful user statements (Zhang et al., 2025), a €5M GDPR fine from Italy's data protection authority (2025), and a consumer complaint to the FTC over manipulative design. |
+| **Inworld AI**<br>Commercial character engine for games and interactive media | Closest to what developers need in production: a Character Brain (personality, emotion, memory, goals), a Contextual Mesh (world knowledge, narrative and safety constraints), real-time voice, and Unity and Unreal integrations. Adopted by studios such as Xbox and Ubisoft. | Consistency is a black box. There is no transparent way to stress-test a character over long or adversarial conversations, attribute a failure to memory, knowledge, or style, or compare configurations with evidence. Built for studios, it is heavyweight and platform-locked for independent, educational, or research developers. |
+
+<sub>Sources: Character.AI usage figures from Demandsage and Business of Apps
+(2026); policy and lawsuit reporting from Fortune (Oct 2025) and Bloomberg Law
+(Jan 2026). Replika research from Maples et al. (2024) and Zhang et al. (2025);
+GDPR fine from the European Data Protection Board (May 2025); FTC complaint
+reported by TIME (Jan 2025); memory-loss reports collected from r/Replika by
+secondary blogs (2026). Inworld architecture from Inworld and NVIDIA. Usage
+figures are industry estimates, not peer-reviewed.</sub>
 
 ---
 
