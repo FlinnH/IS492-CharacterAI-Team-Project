@@ -204,7 +204,7 @@ tools, models, and prompts used in this project are disclosed here.
 
 | Tool / Model | Used for | Team member |
 | --- | --- | --- |
-| [ ] | [ ] | [ ] |
+| Anthropic | Literature search, README drafting and editing, repo initial file template | Flynn |
 
 ---
 
