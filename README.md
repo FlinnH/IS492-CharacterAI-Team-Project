@@ -122,8 +122,48 @@ figures are industry estimates, not peer-reviewed.</sub>
 > *What are we building, and why is generative AI functionally essential to it
 > rather than decorative?*
 
-[Academic research on character-based AI often addresses individual components in isolation—such as long-term memory, retrieval-augmented generation (RAG), persona prompting, style transfer, or preference optimization. While this component-level work is valuable, it does not always translate directly into a cohesive, deployable character-chat experience.
-This project aims to bridge that gap by designing and implementing an MVP that integrates these complementary techniques into a unified system. Rather than proposing a new solution for only one aspect of character simulation, the project will investigate how memory, character-specific retrieval, contextual prompting, dialogue-style conditioning, and preference-based alignment can work together to produce a more consistent, believable, and engaging character chatbot.
+[We are building a creator-facing workbench for designing, running, and evaluating
+LLM characters. A creator starts with a structured character specification:
+backstory, personality, relationships, knowledge boundaries, and behavioral
+rules. The system then combines that specification with long-term conversation
+memory, character-specific retrieval, current situational context, dialogue-style
+conditioning, and preference-based alignment to generate the character's response
+at each turn.
+
+The important part is not simply putting these components into one pipeline. The
+tool will make the pipeline testable. Creators will be able to run the same
+character through fixed long-form or adversarial scenarios, inspect where its
+behavior starts to break, and compare different system configurations. For
+example, the same scenario could be run with baseline prompting, then with
+memory, then retrieval, then the full integrated system. We can therefore study
+both whether the final character is more believable and which components actually
+contribute to that improvement.
+
+Our MVP has two connected sides:
+
+Character runtime: generates dialogue using persona, memory, retrieved
+knowledge, conversation history, and situational context rather than relying
+on a single static system prompt.
+Evaluation and debugging layer: tracks failures such as persona drift,
+memory loss, factual contradiction, inappropriate knowledge, style drift, and
+situational mismatch so creators can identify what failed instead of blindly
+rewriting the prompt.
+
+The value proposition is straightforward: give character creators a way to
+build an LLM character as a system, not just a prompt, and to test whether that
+system actually preserves the character over time.
+
+Generative AI is functionally essential because the central behavior being
+studied is open-ended language generation. The system must respond to dialogue
+and situations that cannot be exhaustively scripted in advance while balancing
+several potentially competing constraints: what the character knows, what it
+remembers, how it normally speaks, how it relates to the user, and what is
+appropriate in the current situation. A conventional rules engine can retrieve
+facts or select predefined dialogue, but it cannot provide the same flexible,
+natural response generation that makes these character experiences useful in the
+first place. At the same time, using an LLM creates the consistency problem this
+project is designed to investigate, making generative AI both the enabling
+technology and the object of evaluation.
  ]
 
 ---
