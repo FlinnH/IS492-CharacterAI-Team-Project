@@ -122,7 +122,7 @@ figures are industry estimates, not peer-reviewed.</sub>
 > *What are we building, and why is generative AI functionally essential to it
 > rather than decorative?*
 
-[We are building a creator-facing workbench for designing, running, and evaluating
+We are building a creator-facing workbench for designing, running, and evaluating
 LLM characters. A creator starts with a structured character specification:
 backstory, personality, relationships, knowledge boundaries, and behavioral
 rules. The system then combines that specification with long-term conversation
@@ -164,18 +164,23 @@ natural response generation that makes these character experiences useful in the
 first place. At the same time, using an LLM creates the consistency problem this
 project is designed to investigate, making generative AI both the enabling
 technology and the object of evaluation.
- ]
 
 ---
 
 ## Milestones Roadmap
 
-| Checkpoint | Deliverable | Due | Owners |
-| --- | --- | --- | --- |
-| CP1 | Repo, literature review, proposal, kickoff presentation | Sep 17 | All |
-| CP2 | Prompting study across 3+ tools, gap analysis, design spec, prototype | TBD | All |
-| CP3 | Working end-to-end tool + live demo | TBD | All |
-| CP4 | Evaluation study + final report (3,500–4,500 words) | TBD | All |
+| Checkpoint | Target | Deliverables |
+| --- | --- | --- |
+| **CP1** | Sep 17 *(confirmed)* | Public repo and project board, literature review with individual reflections, formal proposal, and kickoff presentation. |
+| **CP2** | Oct 16 *(estimated)* | Prompting study across 3+ existing tools covering typical, edge, and failure cases; gap analysis from user interviews; a design spec with user journeys and key screens; and (if enough time) a clickthrough prototype of the Define -> Stress-test -> Repair flow. |
+| **CP3** | Nov 13 *(estimated)* | A working end-to-end MVP: a character runtime that generates dialogue from a structured specification, and an evaluation layer that reports where and why a character breaks. Demonstrated live on example characters, with setup instructions and an architecture diagram. |
+| **CP4** | Dec 4 *(estimated)* | Evaluation comparing the integrated system against baseline prompting on the same characters and scenarios, a user study with character creators, and the final report. |
+
+> Checkpoint 1's date is confirmed. Later dates are our own estimates based on
+> even spacing across the semester and will be corrected once the schedule is
+> confirmed. We expect to prioritise memory, character-specific retrieval, and
+> dialogue-style conditioning in the core MVP, and we suspect preference-based
+> alignment is better scoped as a stretch goal we evaluate if time allows.
 
 ---
 
