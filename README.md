@@ -122,7 +122,9 @@ figures are industry estimates, not peer-reviewed.</sub>
 > *What are we building, and why is generative AI functionally essential to it
 > rather than decorative?*
 
-[ ]
+[Academic research on character-based AI often addresses individual components in isolation—such as long-term memory, retrieval-augmented generation (RAG), persona prompting, style transfer, or preference optimization. While this component-level work is valuable, it does not always translate directly into a cohesive, deployable character-chat experience.
+This project aims to bridge that gap by designing and implementing an MVP that integrates these complementary techniques into a unified system. Rather than proposing a new solution for only one aspect of character simulation, the project will investigate how memory, character-specific retrieval, contextual prompting, dialogue-style conditioning, and preference-based alignment can work together to produce a more consistent, believable, and engaging character chatbot.
+ ]
 
 ---
 
