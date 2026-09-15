@@ -178,7 +178,7 @@ technology and the object of evaluation.
 
 > Checkpoint 1's date is confirmed. Later dates are our own estimates based on
 > even spacing across the semester and will be corrected once the schedule is
-> confirmed. We expect to prioritise memory, character-specific retrieval, and
+> confirmed. We expect to prioritize memory, character-specific retrieval, and
 > dialogue-style conditioning in the core MVP, and we suspect preference-based
 > alignment is better scoped as a stretch goal we evaluate if time allows.
 
