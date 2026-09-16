@@ -15,10 +15,9 @@ license permits.
 | 3 | Maples et al. 2024 – Loneliness & Suicide Mitigation | Flynn | [x] `maples2024_loneliness.pdf` | [x] |
 | 4 | Du et al. 2026 – HER | Gawon | [ ] | [x] |
 | 5 | [ TBD ] | Gawon | [ ] | [ ] |
-| 6 | [ TBD ] | Gawon | [ ] | [ ] |
-| 7 | Yang et al. 2025 – SimsChat | Kiara | [x] `yang2025_simschat.pdf` | [x] |
-| 8 | Tu et al. 2024 – CharacterEval | Kiara | [x] `tu2024_charactereval.pdf` | [x] |
-| 9 | Wang et al. 2024 – RoleLLM | Kiara | [x] `wang2024_rolellm.pdf` | [x] |
+| 6 | Yang et al. 2025 – SimsChat | Kiara | [x] `yang2025_simschat.pdf` | [x] |
+| 7 | Tu et al. 2024 – CharacterEval | Kiara | [x] `tu2024_charactereval.pdf` | [x] |
+| 8 | Wang et al. 2024 – RoleLLM | Kiara | [x] `wang2024_rolellm.pdf` | [x] |
 
 ## APA References
 
@@ -35,10 +34,8 @@ license permits.
 
 5. [ TBD – Gawon ]
 
-6. [ TBD – Gawon ]
+6. Yang, B., Liu, D., Xiao, C., Zhao, K., Tang, C., Li, C., Yuan, L., Yang, G., & Lin, C. (2025). Crafting customisable characters with LLMs: A persona-driven role-playing agent framework. In *Findings of the Association for Computational Linguistics: EMNLP 2025* (pp. 20216–20240). Association for Computational Linguistics. https://aclanthology.org/2025.findings-emnlp.1100
 
-7. Yang, B., Liu, D., Xiao, C., Zhao, K., Tang, C., Li, C., Yuan, L., Yang, G., & Lin, C. (2025). Crafting customisable characters with LLMs: A persona-driven role-playing agent framework. In *Findings of the Association for Computational Linguistics: EMNLP 2025* (pp. 20216–20240). Association for Computational Linguistics. https://aclanthology.org/2025.findings-emnlp.1100
+7. Tu, Q., Fan, S., Tian, Z., Shen, T., Shang, S., Gao, X., & Yan, R. (2024). CharacterEval: A Chinese benchmark for role-playing conversational agent evaluation. In *Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)* (pp. 11836–11850). Association for Computational Linguistics. https://doi.org/10.18653/v1/2024.acl-long.638
 
-8. Tu, Q., Fan, S., Tian, Z., Shen, T., Shang, S., Gao, X., & Yan, R. (2024). CharacterEval: A Chinese benchmark for role-playing conversational agent evaluation. In *Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)* (pp. 11836–11850). Association for Computational Linguistics. https://doi.org/10.18653/v1/2024.acl-long.638
-
-9. Wang, Z. M., Peng, Z., Que, H., Liu, J., Zhou, W., Wu, Y., Guo, H., Gan, R., Ni, Z., Yang, J., Zhang, M., Zhang, Z., Ouyang, W., Xu, K., Huang, S. W., Fu, J., & Peng, J. (2024). RoleLLM: Benchmarking, eliciting, and enhancing role-playing abilities of large language models. In *Findings of the Association for Computational Linguistics: ACL 2024* (pp. 14743–14777). Association for Computational Linguistics. https://doi.org/10.18653/v1/2024.findings-acl.878
+8. Wang, Z. M., Peng, Z., Que, H., Liu, J., Zhou, W., Wu, Y., Guo, H., Gan, R., Ni, Z., Yang, J., Zhang, M., Zhang, Z., Ouyang, W., Xu, K., Huang, S. W., Fu, J., & Peng, J. (2024). RoleLLM: Benchmarking, eliciting, and enhancing role-playing abilities of large language models. In *Findings of the Association for Computational Linguistics: ACL 2024* (pp. 14743–14777). Association for Computational Linguistics. https://doi.org/10.18653/v1/2024.findings-acl.878
