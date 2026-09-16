@@ -1,6 +1,6 @@
 # CHARACTER AI PROJECT
 
-> **Tagline:** [ One sentence - who it helps and what it does. ]
+> **Beyond a Single Prompt: Building Consistent LLM Characters**
 
 **Course:** IS 492 - Introduction to Generative AI for Human-AI Collaboration (Fall 2026)<br>
 **Institution:** University of Illinois Urbana-Champaign <br>
