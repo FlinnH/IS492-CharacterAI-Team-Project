@@ -25,3 +25,48 @@ Benchmark improvements do not guarantee reliable long-term behavior in a deploye
 5. One Concrete Inspiration
 
 Context-Adaptive Pairwise Character Judge: For our character AI system, generate two candidate NPC responses and evaluate them using the current persona, retrieved character/world knowledge, dialogue history, relationship state, and scene context. Instead of applying the same fixed checklist to every turn, first select a small set of context-relevant principles—such as persona consistency, lore grounding, emotional continuity, or conversational naturalness—and then make a pairwise preference judgment between the candidates. These preferences could later be used for preference-based optimization or as feedback for iterative prompt/model improvement.
+
+
+## Paper 2 — LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory
+
+### 1. Full Citation & Link
+
+Wu, D., Wang, H., Yu, W., Zhang, Y., Chang, K.-W., & Yu, D. (2025). *LongMemEval: Benchmarking chat assistants on long-term interactive memory*. International Conference on Learning Representations (ICLR 2025). https://arxiv.org/abs/2410.10813
+
+**Official ICLR page:** https://proceedings.iclr.cc/paper_files/paper/2025/hash/d813d324dbf0598bbdc9c8e79740ed01-Abstract-Conference.html
+
+**Code:** https://github.com/xiaowu0162/LongMemEval
+
+---
+
+### 2. Structured Summary (4–6 sentences)
+
+LongMemEval investigates whether LLM-based conversational systems can reliably remember and use information across long-term, multi-session interactions rather than only within a short recent context. The authors construct a benchmark of 500 carefully curated questions that evaluates five core memory abilities: information extraction, multi-session reasoning, temporal reasoning, knowledge updates, and abstention when the required information is unavailable. Their experiments show that commercial chat assistants and long-context LLMs experience roughly a 30% accuracy drop when they must recover information from sustained conversation histories, demonstrating that simply increasing the context window does not guarantee reliable long-term memory. The paper then decomposes a memory system into indexing, retrieval, and reading stages and studies design choices such as session-level decomposition, fact-augmented retrieval keys, and time-aware query expansion. These memory optimizations substantially improve retrieval and downstream question answering, suggesting that reliable conversational memory requires explicit memory architecture rather than simply placing the entire dialogue history into the model context. Overall, the paper provides both an evaluation framework and practical design guidance for building more reliable persistent conversational systems.
+
+### 3. Three Key Insights
+
+1. **A large context window is not the same as reliable memory.** Even when models technically have enough context capacity to contain a long conversation, they can still fail to identify and correctly use information from earlier interactions. This is especially relevant to long-running character conversations because storing every previous message in the prompt does not guarantee that the character will actually remember the right event at the right time.
+
+2. **Long-term memory is not a single ability.** LongMemEval separates memory into information extraction, multi-session reasoning, temporal reasoning, knowledge updates, and abstention. This is useful for our project because a character can succeed at simple recall while still failing more complex consistency requirements—for example, remembering an old fact but failing to recognize that it was later updated.
+
+3. **Memory architecture matters at multiple stages.** The paper shows that performance depends not only on the underlying language model but also on how memories are indexed, retrieved, and presented to the model. Techniques such as session decomposition, fact-augmented keys, and time-aware query expansion improve retrieval effectiveness, suggesting that memory should be treated as an explicit system component rather than as additional prompt text.
+
+### 4. Two Limitations or Risks
+
+1. **LongMemEval evaluates conversational memory rather than full character consistency.** Its tasks focus primarily on whether an assistant can retrieve and reason over previously established information. A believable fictional character additionally needs to preserve personality, speaking style, relationships, motivations, knowledge boundaries, and context-dependent behavior. Therefore, strong LongMemEval performance would not necessarily mean that a character remains believable across a long role-playing interaction.
+
+2. **The benchmark reduces memory behavior to question-answer correctness.** This makes evaluation controlled and reproducible, but real character conversations are more open-ended. A character might retrieve the correct memory yet express it in a way that violates its personality or current emotional state. Conversely, it may intentionally avoid stating a remembered fact because doing so is more appropriate for the narrative situation. Our project therefore needs to evaluate memory together with persona and contextual appropriateness rather than using retrieval accuracy alone.
+
+### 5. One Concrete Inspiration
+
+**Character Memory Stress Test** — Adapt LongMemEval's five memory abilities into controlled role-playing scenarios for our Character Consistency Workbench.
+
+For example:
+
+* **Information Extraction:** Can the character remember a fact the player told it many turns ago?
+* **Multi-Session Reasoning:** Can it combine information learned during different interactions?
+* **Temporal Reasoning:** Can it distinguish what happened before versus after a particular story event?
+* **Knowledge Update:** If a relationship, location, or world fact changes, does the character use the newest valid information instead of an outdated memory?
+* **Abstention / Knowledge Boundary:** Can the character avoid claiming to remember or know something that was never established?
+
+The same scenario could then be run using **baseline prompting**, **prompting + long-term memory**, and the **full integrated system**. This would let us measure not only whether memory improves recall, but whether better retrieval actually improves overall character consistency without introducing inappropriate knowledge or behavior.
