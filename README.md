@@ -206,6 +206,8 @@ tools, models, and prompts used in this project are disclosed here.
 | --- | --- | --- |
 | Anthropic | Literature search, README drafting and editing, repo initial file template | Flynn |
 | Anthropic | Competitive landscape research and drafting, bibliography formatting | Kiara |
+| ChatGPT| Refining md writings and slide texts| Gawon |
+| NotebookLM | understanding and extracting key information for Literature Review | Gawon |
 
 ---
 
