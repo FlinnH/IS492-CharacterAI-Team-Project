@@ -13,7 +13,7 @@ license permits.
 | 1 | Li et al. 2024 – Persona Drift | Flynn | [x] `li2024_persona_drift.pdf` | [x] |
 | 2 | Zhang et al. 2025 – Dark Side of AI Companionship | Flynn | [x] `zhang2025_dark_side.pdf` | [x] |
 | 3 | Maples et al. 2024 – Loneliness & Suicide Mitigation | Flynn | [x] `maples2024_loneliness.pdf` | [x] |
-| 4 | Du et al. 2026 – HER | Gawon | [ ] | [x] |
+| 4 | Du et al. 2026 – HER | Gawon | [x] `Du2025_HER.pdf` | [x] |
 | 5 | [ TBD ] | Gawon | [ ] | [ ] |
 | 6 | Yang et al. 2025 – SimsChat | Kiara | [x] `yang2025_simschat.pdf` | [x] |
 | 7 | Tu et al. 2024 – CharacterEval | Kiara | [x] `tu2024_charactereval.pdf` | [x] |
