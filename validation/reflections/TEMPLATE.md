@@ -29,3 +29,16 @@
 ## What this means for our design
 
 [ ]
+
+<!-- theory-patch-v1 -->
+## One finding that changed (or confirmed) my assumption
+
+> Pick one finding about the proposed scenario. Tie it to complementarity, trust calibration, shared mental models, or one of the three pillars (reasoning, memory, attention) from Gonzalez et al. (2026).
+
+[ ]
+
+## Class storyboard
+
+> CP2 Step 10 asks each member to add the class-generated storyboard here.
+
+[ ]

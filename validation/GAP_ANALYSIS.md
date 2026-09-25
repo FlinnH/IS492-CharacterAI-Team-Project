@@ -20,6 +20,29 @@ Empirical failure modes observed across tools, plus speed-dating findings.
 
 ---
 
+<!-- theory-patch-v1 -->
+## Theoretical Reading
+
+> CP2 Step 5: for each dimension, the failure we saw (with a receipt), then the theory reading.
+> A receipt is a scenario ID from PROMPTING_PROTOCOL.md, a transcript quote, or an interview note.
+> Example readings from the CP2 guide:
+> - Accuracy or hallucination: memory failure plus interrogation failure
+> - Inconsistent advice: weak shared mental model or trust calibration
+> - UX friction from long prompts: attention orchestration failure
+> - Unclear who overrides the model: meta-coordination or role partition gap
+> If a dimension does not apply, write one sentence saying why instead of leaving it blank.
+
+| Dimension | Empirical failure (receipt) | Theoretical reading (pillar and what broke) |
+| --- | --- | --- |
+| **Accuracy & hallucinations** | [ ] | [ ] |
+| **Reliability & consistency** | [ ] | [ ] |
+| **Latency & performance** | [ ] | [ ] |
+| **UX friction** (discuss human-AI teaming here) | [ ] | [ ] |
+| **Safety & guardrails** | [ ] | [ ] |
+| **Cost & efficiency** | [ ] | [ ] |
+
+---
+
 ## Tool → Limitation → Opportunity
 
 > This mapping is what Slide 5 of the CP2 presentation asks for.

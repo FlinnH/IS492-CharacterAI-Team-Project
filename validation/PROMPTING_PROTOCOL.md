@@ -64,6 +64,31 @@ expose gaps.
 
 ---
 
+<!-- theory-patch-v1 -->
+## Theory Tags
+
+> CP2 Step 2: tag every scenario before running any tool.
+> Case type: typical, edge, or failure (already set by the ID letter).
+> Pillar: reasoning, memory, or attention. Add meta-coordination when roles, escalation, or who decides is at issue.
+> Construct: the specific thing the scenario probes, for example overtrust, hallucinated memory, attention overload, or role ambiguity.
+> Add a row for every new scenario ID.
+
+| ID | Case type | Pillar | Construct probed |
+| --- | --- | --- | --- |
+| T1 | typical | [ ] | [ ] |
+| T2 | typical | [ ] | [ ] |
+| T3 | typical | [ ] | [ ] |
+| E1 | edge | [ ] | [ ] |
+| E2 | edge | [ ] | [ ] |
+| E3 | edge | [ ] | [ ] |
+| F1 | failure | [ ] | [ ] |
+| F2 | failure | [ ] | [ ] |
+| F3 | failure | [ ] | [ ] |
+
+> Role check: our claim is about reviewing a transcript. At least one scenario should have the tool act as the reviewer of a transcript, in addition to the scenarios where it plays the character.
+
+---
+
 ## Exact Prompts Used
 
 > Paste the verbatim prompt text for each scenario ID. Reproducibility depends
