@@ -69,3 +69,47 @@
 | Design decision | Evidence that drove it |
 | --- | --- |
 | [ ] | [ ] |
+
+---
+
+<!-- theory-patch-v1 -->
+## 7. Collaboration Mechanics
+
+> Grounded in validation/THEORY_LENS.md. The rubric grades this section.
+> Our draft claim says the workbench shows evidence with each flag so the creator questions it. Sections 7.2 and 7.3 are where that becomes concrete.
+
+### 7.1 Decision rights
+
+| Decision | Who decides | Can the other side override? |
+| --- | --- | --- |
+| Is this turn a consistency failure? | [ ] | [ ] |
+| Which failure type is it? | [ ] | [ ] |
+| Does the character spec change because of it? | [ ] | [ ] |
+
+### 7.2 Interrogation moments
+
+> Points where the creator is pushed to question a flag instead of accepting it.
+
+| Moment | What the creator sees | What the creator has to do |
+| --- | --- | --- |
+| [ ] | [ ] | [ ] |
+
+### 7.3 Trust-calibration cues
+
+> What the interface shows so trust matches reliability: uncertainty, provenance, and what the AI could not check.
+
+| Cue | Where it appears | What it should change in the creator's behavior |
+| --- | --- | --- |
+| [ ] | [ ] | [ ] |
+
+### 7.4 Disagreement and escalation
+
+[ what happens when the creator and the AI disagree, and when the AI hands a turn to the human ]
+
+### 7.5 No orphan features
+
+> Section 6 covers the evidence. This table covers the theory and the requirement.
+
+| Screen or interaction | Traces back to (THEORY_LENS Part 3 row or OPPORTUNITY_FRAMING feature) |
+| --- | --- |
+| [ ] | [ ] |

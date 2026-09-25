@@ -30,6 +30,21 @@ The specific product requirements our tool must meet that existing tools don't.
 
 ---
 
+<!-- theory-patch-v1 -->
+## Theory-Linked Justification
+
+> Required for every feature in the matrix above. "Users liked it" is not enough by itself.
+> Fill in the sentence for each feature: Evidence X shows complementarity break Y; principle Z addresses it.
+> Principle Z is one of: goals and constraints, knowledge infrastructure, attention and interrogation orchestration, partition roles, or training and evaluation.
+
+| Feature | Evidence X (scenario ID or interview) | Complementarity break Y | Principle Z |
+| --- | --- | --- | --- |
+| [ ] | [ ] | [ ] | [ ] |
+| [ ] | [ ] | [ ] | [ ] |
+| [ ] | [ ] | [ ] | [ ] |
+
+---
+
 ## Explicitly Out of Scope
 
 > Naming what you are NOT building protects you at CP3, where every proposed
