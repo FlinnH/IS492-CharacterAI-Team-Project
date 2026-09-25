@@ -29,12 +29,32 @@ Shared complementarity discussion for Checkpoint 2. Aim for 1 to 2 pages once fi
 - The creator approves every flag. That is overtrust, and the interrogation step failed.
 - Human-alone and AI-alone miss the same failures. There are no different mistakes to complement.
 
+<!-- cp2-templates-v2 -->
+**Team sign-off (Step 1).** Each member reads Gonzalez et al. (2026), then agrees to the wording above or suggests a change. Slide 2 uses the first sentence once all three agree.
+
+| Member | Agree? | Suggested change (blank if you agree) |
+| --- | --- | --- |
+| Flynn | [ ] | [ ] |
+| Gawon | [ ] | [ ] |
+| Kiara | [ ] | [ ] |
+
+> Open question for the sign-off: the paper expects the biggest gains where humans and AI make different kinds of errors, and it says AI alone often does best on well-defined, structured tasks (see its "Task characteristics" section). Do we expect the hybrid to win on every failure type, or mainly on fuzzy ones (persona drift, style drift, situational mismatch) while the AI reviewer ties on crisp ones (factual contradiction, knowledge boundary)?
+
 ---
 
 ## Part 2. Cognitive Diagnosis
 
 > Who owns what in the review task. The row numbers point to Table 1 in Gonzalez et al. (2026).
 > Fill the Human and AI cells from what we saw in the transcripts and interviews.
+>
+> Table 1 rows, so nobody needs the paper open:
+>
+> - Reasoning: 1 ethical authority and accountability, 2 explainability and transparency, 3 bias and fairness checks, 4 goal alignment and facilitation, 5 error detection and recovery
+> - Memory: 6 knowledge storage and retrieval, 7 expertise mapping and transactive memory
+> - Attention: 8 filtering, triage, and anomaly detection, 9 workload and focus orchestration
+> - Meta-coordination: 10 team structuring and process
+>
+> Our Part 1 claim sits closest to row 5 (AI flags, humans adjudicate) and row 2 (model evidence paired with human questioning).
 
 | Pillar | Paper rows | Human owns | AI owns | Where each one fails |
 | --- | --- | --- | --- | --- |
@@ -76,6 +96,8 @@ Shared complementarity discussion for Checkpoint 2. Aim for 1 to 2 pages once fi
 [ ]
 
 **How Checkpoint 3 tests against both baselines**
+
+> The CP2 guide says CP3, while the Canvas project page puts the full evaluation in CP4. Until the instructor confirms, plan CP3 as a small pilot of all three arms and CP4 as the full run.
 
 | Arm | What we run | What we measure |
 | --- | --- | --- |

@@ -1,10 +1,8 @@
-# Validation reflection: [ NAME ]
+# Validation reflection: Kiara Gao
 
-<!-- theory-patch-v1 -->
 <!-- cp2-templates-v2 -->
 
-> Every member already has a personal copy in this folder (huynh_flynn_validation.md, lim_gawon_validation.md, gao_kiara_validation.md), so open yours instead of copying this one.
-> Your file covers your part of CP2 Steps 3, 4, and 10. Only you edit it.
+> My part of CP2 Steps 3, 4, and 10. Only I edit this file.
 
 ---
 
@@ -33,7 +31,7 @@
 > Follow [SPEED_DATING_GUIDE.md](../SPEED_DATING_GUIDE.md). Use P1 and P2 instead of names.
 > The CP2 guide asks for notes on all six dimensions. If one does not apply, write one sentence saying why.
 
-### INT-[ INITIALS ]-1
+### INT-KG-1
 
 | | |
 | --- | --- |
@@ -49,7 +47,7 @@
 | What they wanted that we had not considered | [ ] |
 | Review task (optional) | [ caught _ of _, _ false alarms, _ minutes ] |
 
-### INT-[ INITIALS ]-2
+### INT-KG-2
 
 | | |
 | --- | --- |

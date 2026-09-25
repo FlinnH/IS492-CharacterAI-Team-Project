@@ -1,30 +1,19 @@
-# Gap Analysis
-
-Empirical failure modes observed across tools, plus speed-dating findings.
-
----
-
-## Empirical Gap Matrix
-
-> The six dimensions below are fixed by the rubric. Cite scenario IDs from
-> PROMPTING_PROTOCOL.md as evidence — "show receipts, not opinions."
-
-| Dimension | ChatGPT | Claude | Gemini | Our opportunity |
-| --- | --- | --- | --- | --- |
-| **Accuracy & hallucinations** | [ ] | [ ] | [ ] | [ ] |
-| **Reliability & consistency** | [ ] | [ ] | [ ] | [ ] |
-| **Latency & performance** | [ ] | [ ] | [ ] | [ ] |
-| **UX friction** | [ ] | [ ] | [ ] | [ ] |
-| **Safety & guardrails** | [ ] | [ ] | [ ] | [ ] |
-| **Cost & efficiency** | [ ] | [ ] | [ ] | [ ] |
-
----
+# Gap analysis
 
 <!-- theory-patch-v1 -->
-## Theoretical Reading
+<!-- cp2-templates-v2 -->
 
-> CP2 Step 5: for each dimension, the failure we saw (with a receipt), then the theory reading.
-> A receipt is a scenario ID from PROMPTING_PROTOCOL.md, a transcript quote, or an interview note.
+Where current tools fail, with receipts, read through our theory lens. CP2 Steps 4 and 5.
+
+**Status:** EMPTY. Fill this in a team session after the transcripts and interviews exist. One person types while the others talk, so nobody edits this file at the same time.
+
+> Receipts are run IDs (like GPT-F2-R1) or interview IDs (like INT-FH-1). See [README.md](README.md).
+
+---
+
+## Gap matrix
+
+> CP2 Step 5: each dimension, then the failure we saw with its receipt, then the theory reading.
 > Example readings from the CP2 guide:
 > - Accuracy or hallucination: memory failure plus interrogation failure
 > - Inconsistent advice: weak shared mental model or trust calibration
@@ -43,46 +32,35 @@ Empirical failure modes observed across tools, plus speed-dating findings.
 
 ---
 
-## Tool → Limitation → Opportunity
+## Tool, limitation, opportunity
 
-> This mapping is what Slide 5 of the CP2 presentation asks for.
+> Per-tool evidence for Slide 4. Pull rows from the run index at the top of each transcript file.
 
-| Tool | Specific limitation observed | Evidence (scenario ID) | Our opportunity |
+| Tool | Specific limitation observed | Receipt | Our opportunity |
 | --- | --- | --- | --- |
-| [ ] | [ ] | [ ] | [ ] |
-| [ ] | [ ] | [ ] | [ ] |
-| [ ] | [ ] | [ ] | [ ] |
+| ChatGPT | [ ] | [ ] | [ ] |
+| Claude | [ ] | [ ] | [ ] |
+| Gemini | [ ] | [ ] | [ ] |
 
 ---
 
-## Speed-Dating Interviews
+## Speed-dating roll-up
 
-> Two per team member, six total. Document each one.
+> Full interview notes live in each member's own reflection file. Copy one row per interview here. Slide 5 uses this table, and each member presents their own two rows.
 
-### Interview 1
-| | |
-| --- | --- |
-| Interviewer | [ ] |
-| Participant type | [ target user / peer / teammate ] |
-| Date, duration | [ ] |
-| Concept shown | [ ] |
-| Key reactions | [ ] |
-| What they wanted that we had not considered | [ ] |
-
-### Interview 2
-| | |
-| --- | --- |
-| Interviewer | [ ] |
-| Participant type | [ ] |
-| Date, duration | [ ] |
-| Concept shown | [ ] |
-| Key reactions | [ ] |
-| What they wanted that we had not considered | [ ] |
-
-<!-- Duplicate the block above until you have six. -->
+| Interview | Participant type | Strongest finding | Dimension it touches | Full notes |
+| --- | --- | --- | --- | --- |
+| INT-FH-1 | [ ] | [ ] | [ ] | [Flynn](reflections/huynh_flynn_validation.md) |
+| INT-FH-2 | [ ] | [ ] | [ ] | [Flynn](reflections/huynh_flynn_validation.md) |
+| INT-GL-1 | [ ] | [ ] | [ ] | [Gawon](reflections/lim_gawon_validation.md) |
+| INT-GL-2 | [ ] | [ ] | [ ] | [Gawon](reflections/lim_gawon_validation.md) |
+| INT-KG-1 | [ ] | [ ] | [ ] | [Kiara](reflections/gao_kiara_validation.md) |
+| INT-KG-2 | [ ] | [ ] | [ ] | [Kiara](reflections/gao_kiara_validation.md) |
 
 ---
 
-## Cross-Interview Themes
+## Cross-interview themes
+
+> Two or three patterns that came up in more than one interview. List the interview IDs behind each one.
 
 [ ]
