@@ -10,12 +10,12 @@ Receipt first, then theory, then design. The CP2 guide says graders look for tha
 
 | Step | File | Written by | When |
 | --- | --- | --- | --- |
-| 1 | THEORY_LENS.md, Part 1 sign-off | All three | Kickoff |
-| 2 | PROMPTING_PROTOCOL.md and fixtures/ | Team | Before anyone runs a tool |
-| 3 | transcripts/, one file per tool | That tool's tester | After Step 2 is final |
+| 1 | THEORY_LENS.md | Drafted by @FlinnH, Waiting for approval by @Gawonl2 | Kickoff |
+| 2 | PROMPTING_PROTOCOL.md and fixtures/ | Drafted & Finalized by @FlinnH | Before anyone runs a tool |
+| 3 | transcripts/, one file per tool | That tool's tester (All three) | After Step 2 is final |
 | 4 | Your own file in reflections/ (see SPEED_DATING_GUIDE.md) | Each member | Alongside Step 3 |
 | 5 | GAP_ANALYSIS.md | Team session | After Steps 3 and 4 |
-| 6 | THEORY_LENS.md, Parts 2 to 4 | Team session | Right after Step 5 |
+| 6 | THEORY_LENS.md, Parts 2 to 4 | @Gawonl2 | Right after Step 5 |
 | 7 | OPPORTUNITY_FRAMING.md | Team session | After Step 6 |
 | 8 | ../DESIGN_SPEC.md | Section owners | Sections 1 to 5 can start early |
 | 9 | ../prototype/ | Prototype owner | Once DESIGN_SPEC.md has journeys |
