@@ -38,10 +38,10 @@ Every claim in the gap analysis, theory lens, opportunity framing, and design sp
 
 | What | Format | Example |
 | --- | --- | --- |
-| Tool run | TOOL-SCENARIO-RUN | GPT-F2-R1 |
-| Tool codes | GPT (ChatGPT), CLA (Claude), GEM (Gemini) | CLA-T1-R2 |
+| Tool run | TOOL-SCENARIO | GPT-F2 |
+| Tool codes | GPT (ChatGPT), CLA (Claude), GEM (Gemini) | CLA-T1 |
 | Interview | INT-INITIALS-NUMBER | INT-KG-1 |
-| Screenshot | receipt ID plus a number, in transcripts/screenshots/ | GPT-F2-R1_1.png |
+| Screenshot | receipt ID plus a number, in transcripts/screenshots/ | GPT-F2_1.png |
 | Wireframe | screen name plus version, in docs/wireframes/ | flag_review_v1.png |
 
 Initials: FH (Flynn), GL (Gawon), KG (Kiara).
