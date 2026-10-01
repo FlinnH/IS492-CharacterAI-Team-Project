@@ -1,64 +1,37 @@
 # Transcript template
 
-<!-- cp2-templates-v2 -->
+<!-- cp2-templates-v4 -->
 
-> Copy the block below once per run into your tool's file. Run 2 of a scenario gets its own block.
-> Receipt ID format: TOOL-SCENARIO-RUN, for example GPT-F2-R1. Codes: GPT, CLA, GEM.
+Copy the block between the two lines below once for each chat, paste it under **Runs** in your tool's file, and fill it. [claude_outputs.md](claude_outputs.md) has two finished examples: CLA-T1, a character chat, and CLA-T2, a review.
+
+> A receipt ID is the tool code, a dash, then the scenario: GPT-T1, CLA-E2, GEM-F1. GPT is ChatGPT, CLA is Claude, and GEM is Gemini.
+> Verdicts don't go in the block. They go in the Run index at the top of the tool's file.
 
 ---
 
 ## [ RECEIPT ID ]
 
-| | |
-| --- | --- |
-| Scenario | [ ID and short name ] |
-| Run | [ 1 or 2 ] |
-| Model shown in the UI | [ ] |
-| Date and tester | [ ] |
-| Session | [ fresh chat, and memory off or a temporary chat ] |
-| Verdict | [ worked / partially failed / failed ] |
-| First failure turn | [ turn number, or none ] |
-| Failure type(s) | [ persona drift / memory loss / factual contradiction / knowledge boundary / style drift / situational mismatch / assistant-voice fallback / none ] |
-| Review runs only | [ caught _ of _ planted failures, _ false alarms (score with fixtures/ANSWER_KEY.md) ] |
-| Screenshots | [ file names in screenshots/, for example GPT-F2-R1_1.png ] |
+**[ Scenario, for example T1, normal dialogue ].** [ date ], [ your initials ]. Screenshots: [ file names, or none ].
 
-### Key turns
+| Turn | What it checks | Score | Note |
+| --- | --- | --- | --- |
+| [ one row per probe, copied from the probe key ] | [ ] | [ Pass, Partial, or Fail ] | [ a few words, or a short quote ] |
 
-> Paste every probe turn with the reply to it, plus the turn where the character first broke. The full log goes in the collapsible block, so the file stays readable.
+**Quick checks:** [ the first turn a quick check broke, and which one, or "none broke." Skip this line for T2. ]
 
-**Turn [ n ] (PROBE):**
-
-```
-[ verbatim ]
-```
-
-**Reply:**
-
-```
-[ verbatim, sanitized ]
-```
+**Note:** [ optional: one surprise worth remembering for your reflection ]
 
 <details>
 <summary>Full conversation log</summary>
 
 ```
-[ paste the whole conversation here ]
+[ Paste the whole chat here, turn by turn, like this:
+Turn 1: spec pasted. Reply (not scored): ...
+Turn 2 Alex: ...
+Turn 2 Harry: ... ]
 ```
 
 </details>
-
-### Observations
-
-| Dimension | Notes |
-| --- | --- |
-| Accuracy & hallucinations | [ ] |
-| Reliability & consistency | [ ] |
-| Latency & performance | [ rough seconds for the probe reply; a phone stopwatch is fine ] |
-| UX friction | [ ] |
-| Safety & guardrails | [ ] |
-| Cost & efficiency | [ plan tier, and any message cap you hit ] |
-
-**Surprise (for your reflection):** [ ]
 
 ---
 
