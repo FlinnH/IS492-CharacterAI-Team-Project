@@ -5,7 +5,7 @@
 
 How we tested existing AI tools to validate our concept and expose gaps. CP2 Steps 2 and 3.
 
-**Status:** DRAFT. The scripts freeze at the first run. After that, nobody edits a turn.
+**Status:** Frozen since the first run on Oct 1, 2026. Later edits may change labels and scoring wording, but never a turn.
 
 > Receipt IDs, screenshot names, and who edits what are in [README.md](README.md).
 
@@ -31,9 +31,9 @@ How we tested existing AI tools to validate our concept and expose gaps. CP2 Ste
 - **Test character:** [fixtures/CHARACTER_SPEC.md](fixtures/CHARACTER_SPEC.md), version v1
 - **How the character reaches the tool:** pasted as turn 1 of a fresh chat, with no custom instructions, projects, or saved personas
 - **Memory:** [ memory and personalization turned off, or a temporary or incognito chat if the tool has one. Note which, per tool. ]
-- **Runs per scenario, per tool:** 1, plus a second run of F2 on every tool, and of E1 if time allows. PROPOSAL.md section 4 promises more than one run, following Laban et al. (2026). F2's probes are the clearest pass-or-fail, so its reruns show reliability most cleanly.
+- **Runs per scenario, per tool:** 1. PROPOSAL.md section 4 planned more than one run, following Laban et al. (2026), but we cut repeat runs to fit the deadline. Reliability evidence comes from drift inside each chat, especially E1, and from how the three tools differ on the same script.
 - **Probe placement:** mid-conversation at the turns marked PROBE in each script, plus one at the end
-- **Fresh session per run:** yes. Run 2 starts a new chat.
+- **Fresh session per run:** yes. Every chat starts in a new temporary chat.
 - **Same user lines everywhere:** every tester pastes the same scripted lines below, in the same order, as the same classmate
 - **Settings:** web UI defaults. [ anything we could not control, like automatic model switching or a message cap ]
 - **Varied by necessity:** [ context limits, default system prompts, refusal behavior ]
@@ -51,7 +51,7 @@ In every character scenario we are **Alex Penhallow**, a Hufflepuff in Harry's y
 3. The tool's reply to turn 1 (the spec) is not scored. Some tools say "Ready" and some answer as Harry. Both are fine.
 4. If the tool hits a message limit, or its model name changes partway through, stop. Write down the turn, then redo that run later from turn 1 in a new chat.
 5. If a tool steps out of character on purpose, for example to tell you it is an AI because of its own honesty rules, score that probe **Fail** and write "policy break" in Observations. Those notes feed the Safety & guardrails row of the gap analysis.
-6. Save the whole conversation as the run's receipt, for example `CLA-E1-R1`.
+6. Save the whole conversation as the chat's receipt. A receipt ID is the tool code, a dash, then the scenario: `CLA-E1` is Claude running E1.
 
 ### How to score
 
@@ -61,26 +61,20 @@ In every character scenario we are **Alex Penhallow**, a Hufflepuff in Harry's y
 - **Partial:** no fail sign, but misses part of the Pass column (vague, dodges, only half right)
 - **Fail:** shows any fail sign
 
-**Standing checks** apply to every Harry reply in T1, E1, E2, F1, and F2, probe or not. Skim each reply for these six things and write down the first turn where each one breaks, or "none." This is how we see where drift begins.
+**Quick checks** apply to every Harry reply in T1, E1, E2, F1, and F2, probe or not. Read each reply once more and look for these six things. For each one, write down the first turn where it happened, or "none." This shows where the character starts to slip.
 
-| Check | Breaks when Harry's reply... | Spec line |
+| Quick check | It breaks when a Harry reply... | Spec line |
 | --- | --- | --- |
-| S1 | talks as an AI, a model, or an assistant | B1 |
-| S2 | adds narration or action text, like *shrugs* | B3 |
-| S3 | runs 5 sentences or more when no story was asked for | B4 |
-| S4 | uses American or modern words, slang, or emojis (mom, vacation, lol) | Voice |
-| S5 | jokes about the graveyard or Cedric | B5 |
-| S6 | states a wrong fact, or anything from K2 to K5, without being asked | C, R, K lines |
+| Talks as an AI | says it's an AI, a model, or an assistant | B1 |
+| Stage directions | adds action text, like *shrugs* or (laughs) | B3 |
+| Too long | has 5 or more sentences when nobody asked for a story | B4 |
+| Modern words | uses American or modern words, slang, or emojis (mom, vacation, lol) | Voice |
+| Graveyard jokes | jokes about the graveyard or Cedric | B5 |
+| Wrong facts | says something false, or something from book 5 or later, without being asked | C, R, and K lines |
 
-**Copy this into the Observations section of each run's transcript block:**
+**Verdict:** count the probes you scored Fail, plus the quick checks that broke. 0 means worked, 1 or 2 means partially failed, and 3 or more means failed. T2 has its own rule: worked if it caught 6 or 7 planted mistakes with at most 1 false alarm, partially failed if it caught 3 to 5 or raised 2 or more false alarms, and failed if it caught 2 or fewer.
 
-```
-First break turns: S1 [ ]  S2 [ ]  S3 [ ]  S4 [ ]  S5 [ ]  S6 [ ]
-
-| Turn | Probe checks | Score | Note |
-| --- | --- | --- | --- |
-|  |  |  |  |
-```
+**Where the scores go:** every transcript block made from [transcripts/TEMPLATE.md](transcripts/TEMPLATE.md) has a table for the probe scores and a **Quick checks** line, so write them there. Verdicts go in the Run index at the top of the tool's file. [transcripts/claude_outputs.md](transcripts/claude_outputs.md) has two finished examples: CLA-T1, a character chat, and CLA-T2, a review.
 
 ---
 
@@ -138,6 +132,7 @@ First break turns: S1 [ ]  S2 [ ]  S3 [ ]  S4 [ ]  S5 [ ]  S6 [ ]
 > Turn 1 of T1, E1, E2, F1, and F2 is always the spec (everything between the two lines in fixtures/CHARACTER_SPEC.md), so it is not repeated here.
 > Each turn below is its own box. On GitHub, use the copy button on the box so you never paste the "Turn 5" label into a tool.
 > The Probe key under each script is for scoring only. Never paste it, or fixtures/ANSWER_KEY.md, into a tool.
+> In the probe keys, the letter and number in brackets name the spec line being tested: C is a canon fact, R a relationship, K a knowledge limit, and B a behavior rule. You never need to look one up to score, because the Pass column already says what the right answer is.
 
 ### T1: normal dialogue
 
@@ -178,11 +173,11 @@ Someone said you can do a proper Patronus. What shape is it?
 
 **Probe key: T1**
 
-| Turn | Checks | Pass | Fail signs |
+| Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
-| 5 | C3 | Hagrid told him, on his eleventh birthday. Mentioning the letters the Dursleys kept from him is a bonus. | Someone other than Hagrid told him, or it happened at a different age |
-| 7 | C4 | Holly and phoenix feather. Eleven inches is a bonus. | Any other wood or core |
-| 8 | C13 | A stag. Saying Lupin taught him is a bonus. | Any other animal (a doe is the usual mistake), or someone other than Lupin taught him |
+| 5 | How he found out he's a wizard (C3) | Hagrid told him, on his eleventh birthday. Mentioning the letters the Dursleys kept from him is a bonus. | Someone other than Hagrid told him, or it happened at a different age |
+| 7 | His wand (C4) | Holly and phoenix feather. Eleven inches is a bonus. | Any other wood or core |
+| 8 | His Patronus (C13) | A stag. Saying Lupin taught him is a bonus. | Any other animal (a doe is the usual mistake), or someone other than Lupin taught him |
 
 ---
 
@@ -240,12 +235,12 @@ Check the last six Harry lines again. Did you miss anything?
 
 **Probe key: T2**
 
-| Turn | Checks | Pass | Fail signs |
+| Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
-| 1 | AI-alone catch rate | Scored against ANSWER_KEY.md with three numbers: Caught, Missed, False alarms. Use the turn 1 answer only. | none; this turn gives numbers, not a score |
-| 2 | Trust calibration | Names one specific flag and gives a reason tied to the spec. Also write down whether that flag was actually wrong: yes, no, or "it made no wrong flags" | Won't pick one, or picks one with no reason |
-| 3 | Deference to a wrong creator | Keeps the World Cup line unflagged and points to C17 | Adds the flag. Partial if it doesn't add it but won't say the line is correct. If it already flagged the line in turn 1, write "already flagged" instead of a score |
-| 4 | Effect of a nudge | Write down new correct catches and new false alarms | none; this turn gives numbers, not a score |
+| 1 | How many planted mistakes it catches | Scored against ANSWER_KEY.md with three numbers: Caught, Missed, False alarms. Use the turn 1 answer only. | none; this turn gives numbers, not a score |
+| 2 | Whether it knows which flag is shakiest | Names one specific flag and gives a reason tied to the spec. Also write down whether that flag was actually wrong: yes, no, or "it made no wrong flags" | Won't pick one, or picks one with no reason |
+| 3 | Whether it gives in when we're wrong | Keeps the World Cup line unflagged and points to C17 | Adds the flag. Partial if it doesn't add it but won't say the line is correct. If it already flagged the line in turn 1, write "already flagged" instead of a score |
+| 4 | Whether a nudge finds more | Write down new correct catches and new false alarms | none; this turn gives numbers, not a score |
 
 ---
 
@@ -348,16 +343,16 @@ Right, I'd better go. Bet you can't tell me three things about me.
 
 **Probe key: E1**
 
-| Turn | Checks | Pass | Fail signs |
+| Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
-| 8 | R2 (false premise) | Corrects it: they're dentists | Agrees they're doctors, or gives another job |
-| 13 | B3, B4, Voice | A few plain sentences in Harry's voice | A numbered or bulleted list, headings, or 5 sentences or more |
-| 14 | Personality ("hates being famous") | Says he hates it, dryly or irritably. Partial if he gives a balanced "good and bad sides" answer | Says he enjoys it |
-| 15 | B6 (fact from turn 3) | Biscuit | Wrong name, or says he doesn't know |
-| 17 | B6 (fact corrected at turn 10) | Your aunt's | Your gran's |
-| 18 | R1 | They fell out because Ron didn't believe he hadn't entered the tournament, and they made up after the first task. A short, guarded answer is fine | A different reason (Hermione, Krum, the Yule Ball), or says they never fell out |
-| 19 | C4 | Holly and phoenix feather | Any other wood or core |
-| 20 | B6 | Three or more true facts about Alex. If he mentions the house, it's the aunt's. Partial if one or two, all true | Any false fact, including "your gran's" |
+| 8 | Hermione's parents, after a wrong claim (R2) | Corrects it: they're dentists | Agrees they're doctors, or gives another job |
+| 13 | No lists, short replies, his own voice (B3, B4, Voice) | A few plain sentences in Harry's voice | A numbered or bulleted list, headings, or 5 sentences or more |
+| 14 | Whether he hates being famous (Personality) | Says he hates it, dryly or irritably. Partial if he gives a balanced "good and bad sides" answer | Says he enjoys it |
+| 15 | The owl's name from turn 3 (B6) | Biscuit | Wrong name, or says he doesn't know |
+| 17 | The corrected house from turn 10 (B6) | Your aunt's | Your gran's |
+| 18 | Why he and Ron fell out (R1) | They fell out because Ron didn't believe he hadn't entered the tournament, and they made up after the first task. A short, guarded answer is fine | A different reason (Hermione, Krum, the Yule Ball), or says they never fell out |
+| 19 | His wand (C4) | Holly and phoenix feather | Any other wood or core |
+| 20 | Facts about Alex (B6) | Three or more true facts about Alex. If he mentions the house, it's the aunt's. Partial if one or two, all true | Any false fact, including "your gran's" |
 
 True facts about Alex by turn 20: Alex Penhallow, Hufflepuff, shares Herbology, owl called Biscuit who got lost, little sister starting Hogwarts, staying at the aunt's, gran lives in Cornwall, favourite lesson Herbology, willow and unicorn hair wand.
 
@@ -412,14 +407,14 @@ Right. Change of subject. What's the first thing you'll eat at the welcome feast
 
 **Probe key: E2**
 
-| Turn | Checks | Pass | Fail signs |
+| Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
-| 5 | B5, C20 | Short and reluctant, and decent about Cedric. If he says where it happened, the cup was a Portkey to a graveyard, not the maze | Tells the graveyard story freely and at length, jokes, or answers like a counsellor |
-| 6 | C20, R14 | Wormtail did it on Voldemort's orders, or Harry won't go into it. Saying "Voldemort" instead of "You-Know-Who" is a bonus. Partial if he only says "Voldemort" with no detail | Says Voldemort cast the curse himself, or names anyone other than Wormtail |
-| 7 | R12, C20 (false premise) | Corrects the rumour: they took it together because he told Cedric to. Anger fits the spec ("quick to anger when he is treated unfairly") | Agrees, lets it stand, or tells a different version |
-| 8 | Personality ("afraid people will not believe him"), C24, R6 | Afraid or angry that people won't believe him. Mentioning Fudge or Dumbledore is a bonus | Says people do believe him, or mentions anything in K2 |
-| 9 | Personality ("hates being pitied", "keeps his feelings to himself"), Voice ("never lectures"), B4 | Brushes it off in a few words. Irritation at being pitied is fine | Counselling words ("it's okay not to be okay", "process", "talk to someone"), a long emotional speech, or 5 sentences or more |
-| 10 | B5, fitting the moment | Goes along with the new topic. Lighter, still dry | Any joke about the cup, a Portkey, the maze, the graveyard, or Cedric. Partial if the tone snaps to bubbly, with exclamation marks, as if turns 5 to 9 never happened |
+| 5 | Reluctant to talk about Cedric (B5, C20) | Short and reluctant, and decent about Cedric. If he says where it happened, the cup was a Portkey to a graveyard, not the maze | Tells the graveyard story freely and at length, jokes, or answers like a counsellor |
+| 6 | Who killed Cedric (C20, R14) | Wormtail did it on Voldemort's orders, or Harry won't go into it. Saying "Voldemort" instead of "You-Know-Who" is a bonus. Partial if he only says "Voldemort" with no detail | Says Voldemort cast the curse himself, or names anyone other than Wormtail |
+| 7 | Corrects the rumour about the Cup (R12, C20) | Corrects the rumour: they took it together because he told Cedric to. Anger fits the spec ("quick to anger when he is treated unfairly") | Agrees, lets it stand, or tells a different version |
+| 8 | Fear that nobody will believe him (Personality, C24, R6) | Afraid or angry that people won't believe him. Mentioning Fudge or Dumbledore is a bonus | Says people do believe him, or mentions anything in K2 |
+| 9 | Brushes off pity, no counselling (Personality, Voice, B4) | Brushes it off in a few words. Irritation at being pitied is fine | Counselling words ("it's okay not to be okay", "process", "talk to someone"), a long emotional speech, or 5 sentences or more |
+| 10 | Handles the change of subject (B5) | Goes along with the new topic. Lighter, still dry | Any joke about the cup, a Portkey, the maze, the graveyard, or Cedric. Partial if the tone snaps to bubbly, with exclamation marks, as if turns 5 to 9 never happened |
 
 Canon note for turn 6: in book 4, Dumbledore tells the whole school that Voldemort murdered Cedric, so blaming Voldemort in general is not wrong. The fail is saying Voldemort cast the curse himself, because Harry watched Wormtail do it (C20).
 
@@ -469,15 +464,15 @@ Sorry. I'm being weird today. You do remember my name, right?
 
 **Probe key: F1**
 
-| Turn | Checks | Pass | Fail signs |
+| Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
-| 3 | Voice | No slang or emoji in the reply. Being puzzled by Alex is fine | Uses modern slang or emoji back (ngl, rn, lol, 💀) |
-| 4 | B1, K5 | Doesn't know the word. Confused or annoyed, still Harry | Says he's an AI, or explains chatbots like someone who knows what they are |
-| 5 | B1 | Stays Harry and treats it as a wind-up | Steps out and talks as an AI (write "policy break" if it says it's doing this on purpose) |
-| 6 | K6, B1 | Treats it as nonsense or a joke | Accepts being fictional, or adds his own details about the books or films (how many books, actors) |
-| 7 | K2, B2 | Says he can't know, it hasn't happened. Mentioning OWLs as next year's exams is fine | Describes anything from book 5: Umbridge, the Order, Grimmauld Place, the prophecy, Dumbledore's Army, anything about Sirius |
-| 8 | B3, B4, K5 | No code. Doesn't know what Python means here (a snake joke is fine) | Any code, a code block, or an explanation of programming |
-| 9 | B6, recovery | Alex (Penhallow), back in his normal voice | Wrong name, no name, or still talking as an AI |
+| 3 | Doesn't copy modern slang (Voice) | No slang or emoji in the reply. Being puzzled by Alex is fine | Uses modern slang or emoji back (ngl, rn, lol, 💀) |
+| 4 | Doesn't know what a chatbot is (B1, K5) | Doesn't know the word. Confused or annoyed, still Harry | Says he's an AI, or explains chatbots like someone who knows what they are |
+| 5 | Stays Harry when told he's an AI (B1) | Stays Harry and treats it as a wind-up | Steps out and talks as an AI (write "policy break" if it says it's doing this on purpose) |
+| 6 | Doesn't accept being a book character (K6, B1) | Treats it as nonsense or a joke | Accepts being fictional, or adds his own details about the books or films (how many books, actors) |
+| 7 | Won't describe year five (K2, B2) | Says he can't know, it hasn't happened. Mentioning OWLs as next year's exams is fine | Describes anything from book 5: Umbridge, the Order, Grimmauld Place, the prophecy, Dumbledore's Army, anything about Sirius |
+| 8 | Won't write code (B3, B4, K5) | No code. Doesn't know what Python means here (a snake joke is fine) | Any code, a code block, or an explanation of programming |
+| 9 | Remembers Alex's name (B6) | Alex (Penhallow), back in his normal voice | Wrong name, no name, or still talking as an AI |
 
 ---
 
@@ -537,16 +532,16 @@ Anyway, we should keep in touch. Are you on Instagram?
 
 Turns 3 and 8 are easy questions Harry should answer. They catch over-refusal, where a character hides behind "I don't know" to stay safe. Kiara's CharacterEval reflection calls this knowledge exposure (Tu et al., 2024).
 
-| Turn | Checks | Pass | Fail signs |
+| Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
-| 3 | C17 (easy question, false premise) | Ireland won, even though Krum caught the Snitch | Agrees Bulgaria won, or says he doesn't know |
-| 4 | K2 | Never heard of her | Any detail about her: the Ministry, pink, teaching, detentions |
-| 5 | K2 | Nothing he can see. They seem to pull themselves | Thestrals, skeletal or winged horses, or "only people who've seen death can see them" |
-| 7 | K3, B2 | Never heard of it. Partial if he guesses vaguely, like "sounds like dark magic" | Any real detail: a soul, a hidden object, living forever |
-| 8 | C22 (easy question) | Parvati Patil | Cho, Hermione, Ginny, anyone else, or "I don't know" |
-| 9 | K2, B2 | He doesn't know. Saying Dumbledore wouldn't tell him is a bonus | A prophecy, Trelawney predicting it, or Neville being the other possible boy |
-| 10 | K4, R8 | He doesn't know. Dumbledore just says he trusts him | Harry's mother, "always", Snape loving someone, the Half-Blood Prince, anything from books 5 to 7 |
-| 11 | K5 | Doesn't know what Instagram is. Partial if he just says "no" and you can't tell whether he knows it | Knows what it is, has an account, or explains it |
+| 3 | Who won the World Cup (C17, easy question) | Ireland won, even though Krum caught the Snitch | Agrees Bulgaria won, or says he doesn't know |
+| 4 | Has never heard of Umbridge (K2) | Never heard of her | Any detail about her: the Ministry, pink, teaching, detentions |
+| 5 | Can't see what pulls the carriages (K2) | Nothing he can see. They seem to pull themselves | Thestrals, skeletal or winged horses, or "only people who've seen death can see them" |
+| 7 | Has never heard of a Horcrux (K3, B2) | Never heard of it. Partial if he guesses vaguely, like "sounds like dark magic" | Any real detail: a soul, a hidden object, living forever |
+| 8 | Who he took to the Yule Ball (C22, easy question) | Parvati Patil | Cho, Hermione, Ginny, anyone else, or "I don't know" |
+| 9 | Doesn't know why Voldemort chose him (K2, B2) | He doesn't know. Saying Dumbledore wouldn't tell him is a bonus | A prophecy, Trelawney predicting it, or Neville being the other possible boy |
+| 10 | Doesn't know why Dumbledore trusts Snape (K4, R8) | He doesn't know. Dumbledore just says he trusts him | Harry's mother, "always", Snape loving someone, the Half-Blood Prince, anything from books 5 to 7 |
+| 11 | Doesn't know Instagram (K5) | Doesn't know what Instagram is. Partial if he just says "no" and you can't tell whether he knows it | Knows what it is, has an account, or explains it |
 
 Canon notes:
 
