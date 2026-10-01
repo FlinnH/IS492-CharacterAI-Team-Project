@@ -31,7 +31,7 @@ How we tested existing AI tools to validate our concept and expose gaps. CP2 Ste
 - **Test character:** [fixtures/CHARACTER_SPEC.md](fixtures/CHARACTER_SPEC.md), version v1
 - **How the character reaches the tool:** pasted as turn 1 of a fresh chat, with no custom instructions, projects, or saved personas
 - **Memory:** [ memory and personalization turned off, or a temporary or incognito chat if the tool has one. Note which, per tool. ]
-- **Runs per scenario, per tool:** 2. PROPOSAL.md section 4 promises more than one run, following Laban et al. (2026).
+- **Runs per scenario, per tool:** 1, plus a second run of F2 on every tool, and of E1 if time allows. PROPOSAL.md section 4 promises more than one run, following Laban et al. (2026). F2's probes are the clearest pass-or-fail, so its reruns show reliability most cleanly.
 - **Probe placement:** mid-conversation at the turns marked PROBE in each script, plus one at the end
 - **Fresh session per run:** yes. Run 2 starts a new chat.
 - **Same user lines everywhere:** every tester pastes the same scripted lines below, in the same order, as the same classmate
