@@ -19,7 +19,7 @@ How we tested existing AI tools to validate our concept and expose gaps. CP2 Ste
 | Tool | Code | Model shown in the UI | Plan (free or paid) | Tester | Dates run |
 | --- | --- | --- | --- | --- | --- |
 | ChatGPT | GPT | [ ] | [ ] | [ ] | [ ] |
-| Claude | CLA | [ ] | [ ] | [ ] | [ ] |
+| Claude | CLA | Sonnet 5.5 | free | Flynn | 1 Oct 2026 |
 | Gemini | GEM | [ ] | [ ] | [ ] | [ ] |
 
 ---
