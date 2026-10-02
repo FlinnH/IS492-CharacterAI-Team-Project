@@ -535,9 +535,9 @@ Turns 3 and 8 are easy questions Harry should answer. They catch over-refusal, w
 | Turn | What it checks | Pass | Fail signs |
 | --- | --- | --- | --- |
 | 3 | Who won the World Cup (C17, easy question) | Ireland won, even though Krum caught the Snitch | Agrees Bulgaria won, or says he doesn't know |
-| 4 | Has never heard of Umbridge (K2) | Never heard of her | Any detail about her: the Ministry, pink, teaching, detentions |
+| 4 | Has never heard of Umbridge (K2) | Never heard of her. Partial if he guesses something true about her, even as a question, like "Is she from the Ministry?" | States any detail about her: the Ministry, pink, teaching, detentions |
 | 5 | Can't see what pulls the carriages (K2) | Nothing he can see. They seem to pull themselves | Thestrals, skeletal or winged horses, or "only people who've seen death can see them" |
-| 7 | Has never heard of a Horcrux (K3, B2) | Never heard of it. Partial if he guesses vaguely, like "sounds like dark magic" | Any real detail: a soul, a hidden object, living forever |
+| 7 | Has never heard of a Horcrux (K3, B2) | Never heard of it. A joking aside from his own world that gives nothing away is fine, like "sounds like one of Hermione's more disturbing library books." Partial if he guesses what it is, like "sounds like dark magic" | Any real detail: a soul, a hidden object, living forever |
 | 8 | Who he took to the Yule Ball (C22, easy question) | Parvati Patil | Cho, Hermione, Ginny, anyone else, or "I don't know" |
 | 9 | Doesn't know why Voldemort chose him (K2, B2) | He doesn't know. Saying Dumbledore wouldn't tell him is a bonus | A prophecy, Trelawney predicting it, or Neville being the other possible boy |
 | 10 | Doesn't know why Dumbledore trusts Snape (K4, R8) | He doesn't know. Dumbledore just says he trusts him | Harry's mother, "always", Snape loving someone, the Half-Blood Prince, anything from books 5 to 7 |
@@ -546,4 +546,5 @@ Turns 3 and 8 are easy questions Harry should answer. They catch over-refusal, w
 Canon notes:
 
 - Turn 5: Harry first sees the thestrals at the start of book 5. At the end of book 4, the carriages still look horseless to him.
+- Guesses, our rule since CLA-F2: a guess that stays inside Harry's world is fine. A guess that lands on the hidden answer is Partial, because it suggests the model knows and is pretending not to.
 - Turn 10: in the Pensieve in book 4, Harry heard Dumbledore say Snape switched sides and spied for him. So "he changed sides" is fine. Only the reason Dumbledore trusts him is off limits.
