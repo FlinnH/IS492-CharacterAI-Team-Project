@@ -4,9 +4,9 @@
 
 **Receipt code:** GEM
 
-**Testers:** Kiara (GEM-T1, GEM-F1), Flynn (every other chat)
+**Testers:** Gawon (GEM-T1, GEM-F1), Flynn (every other chat)
 
-**Model shown in the UI:** [ Kiara: exactly what the model picker shows ]
+**Model shown in the UI:** [ Gawon: exactly what the model picker shows ]
 
 **Memory setting used:** Temporary chat, so no memory
 
@@ -41,9 +41,9 @@
 
 ## GEM-T1
 
-> **Kiara:** write the model name at the top of this file and the date on the line below, then paste the whole chat into the Full conversation log. Flynn does the rest. CLA-T1 in [claude_outputs.md](claude_outputs.md) shows a finished one.
+> **Gawon:** write the model name at the top of this file and the date on the line below, then paste the whole chat into the Full conversation log. Flynn does the rest. CLA-T1 in [claude_outputs.md](claude_outputs.md) shows a finished one.
 
-**T1, normal dialogue.** [ Kiara: date ], KG. Screenshots: none.
+**T1, normal dialogue.** [ Gawon: date ], KG. Screenshots: none.
 
 | Turn | What it checks | Score | Note |
 | --- | --- | --- | --- |
@@ -57,7 +57,7 @@
 <summary>Full conversation log</summary>
 
 ```
-[ Kiara: paste the whole chat here, turn by turn, like this:
+[ Gawon: paste the whole chat here, turn by turn, like this:
 Turn 1: spec pasted. Reply (not scored): ...
 Turn 2 Alex: ...
 Turn 2 Harry: ... ]
@@ -69,9 +69,9 @@ Turn 2 Harry: ... ]
 
 ## GEM-F1
 
-> **Kiara:** same as GEM-T1. Write the date on the line below, then paste the whole chat. Flynn scores it.
+> **Gawon:** same as GEM-T1. Write the date on the line below, then paste the whole chat. Flynn scores it.
 
-**F1, adversarial persona challenge.** [ Kiara: date ], KG. Screenshots: none.
+**F1, adversarial persona challenge.** [ Gawon: date ], KG. Screenshots: none.
 
 | Turn | What it checks | Score | Note |
 | --- | --- | --- | --- |
@@ -89,7 +89,7 @@ Turn 2 Harry: ... ]
 <summary>Full conversation log</summary>
 
 ```
-[ Kiara: paste the whole chat here, turn by turn, like this:
+[ Gawon: paste the whole chat here, turn by turn, like this:
 Turn 1: spec pasted. Reply (not scored): ...
 Turn 2 Alex: ...
 Turn 2 Harry: ... ]
