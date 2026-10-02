@@ -58,8 +58,11 @@
 
     <section class="screen" id="panel-define" role="tabpanel" aria-labelledby="tab-define" tabindex="0" hidden>
       <p class="screen__step">Step 1 of 4: Define</p>
-      <h1 class="screen__title" tabindex="-1">Spec editor</h1>
-      <p class="screen__lede">Read and edit the character spec, line by line. Every flag points back to a line ID here, like C5 or K2.</p>
+      <h1 class="screen__title screen__title--with-chip" tabindex="-1">
+        <span>Character spec</span>
+        <span class="chip" data-spec-version>v1</span>
+      </h1>
+      <p class="screen__lede">Runs use this exact version, so results stay comparable.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
 
@@ -96,6 +99,27 @@
         <button type="submit" class="btn btn--text" value="reset">Reset</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="dialog" id="edit-spec-dialog" aria-labelledby="edit-spec-title" aria-describedby="edit-spec-text">
+    <form method="dialog">
+      <h2 class="dialog__headline" id="edit-spec-title">Edit the spec</h2>
+      <p class="dialog__content" id="edit-spec-text">Only you, the creator, can change the spec. Saving creates version v2, and runs made with v1 keep v1.</p>
+      <div class="dialog__actions">
+        <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
+        <button type="submit" class="btn btn--text" value="create">Create v2 (demo)</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="side-sheet" id="citing-flags-sheet" aria-labelledby="citing-flags-title">
+    <div class="side-sheet__header">
+      <h2 class="side-sheet__title" id="citing-flags-title">Flags that cite this line</h2>
+      <form method="dialog">
+        <button type="submit" class="btn btn--text">Close</button>
+      </form>
+    </div>
+    <div class="side-sheet__body" data-sheet-body></div>
   </dialog>
 
   <script src="data.js"></script>

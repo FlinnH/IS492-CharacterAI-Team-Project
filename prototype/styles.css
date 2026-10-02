@@ -6,8 +6,9 @@
        state layers, and motion, named after the M3 tokens
     2. Base and layout
     3. Components: top app bar, tabs, buttons, cards, chips, outlined text
-       field, dialog, snackbar
-    4. Window sizes and reduced motion
+       field, dialog, side sheet, snackbar
+    4. Screens: layout that belongs to one screen
+    5. Window sizes and reduced motion
 */
 
 /* 1. Tokens ================================================================ */
@@ -251,6 +252,13 @@ img {
   max-width: 100%;
 }
 
+/* Search matches and quoted evidence */
+mark {
+  border-radius: 2px;
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
 [hidden] {
   display: none !important;
 }
@@ -332,6 +340,14 @@ img {
   color: var(--md-sys-color-on-surface);
 }
 
+/* A heading followed by a chip, like "Character spec v1" */
+.screen__title--with-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
 /* The heading takes focus after a screen change, but it is not a control */
 .screen__title:focus {
   outline: none;
@@ -357,6 +373,12 @@ img {
 
 .empty-state .icon {
   color: var(--md-sys-color-primary);
+}
+
+.empty-state__note {
+  margin-top: 4px;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
 }
 
 .load-error {
@@ -705,7 +727,9 @@ button.chip:active::before {
        <label class="text-field__label" for="x">Label</label>
        <p class="text-field__support">Supporting text</p>
      </div>
-   Add text-field--error for an error; say what is wrong in the supporting text too. */
+   Add text-field--error for an error; say what is wrong in the supporting text too.
+   For a leading icon, add text-field--icon-leading and put
+   <span class="icon text-field__icon" aria-hidden="true"> before the field. */
 
 .text-field {
   position: relative;
@@ -726,6 +750,8 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-body-large-tracking);
   caret-color: var(--md-sys-color-primary);
   resize: vertical;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .text-field__input:hover {
@@ -756,6 +782,7 @@ button.chip:active::before {
   pointer-events: none;
   transition:
     top var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    left var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
     font-size var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
 }
 
@@ -789,6 +816,30 @@ button.chip:active::before {
 .text-field--error .text-field__label,
 .text-field--error .text-field__support {
   color: var(--md-sys-color-error);
+}
+
+.text-field__icon {
+  position: absolute;
+  top: 16px;
+  left: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  pointer-events: none;
+}
+
+.text-field--icon-leading .text-field__input {
+  padding-left: 52px;
+}
+
+/* Resting, the label sits after the icon; floating, it moves to the outline's start */
+.text-field--icon-leading .text-field__label {
+  left: 48px;
+  max-width: calc(100% - 60px);
+}
+
+.text-field--icon-leading .text-field__input:focus + .text-field__label,
+.text-field--icon-leading .text-field__input:not(:placeholder-shown) + .text-field__label {
+  left: 12px;
+  max-width: calc(100% - 24px);
 }
 
 /* Dialog (M3 basic dialog on the native <dialog> element) ------------------ */
@@ -843,6 +894,64 @@ button.chip:active::before {
   margin-top: 24px;
 }
 
+/* Side sheet (M3 modal side sheet on the native <dialog> element) ---------- */
+/* Slides in from the right edge, at most 400px wide, and keeps a strip of
+   scrim visible on phones so it reads as a layer over the page. */
+
+.side-sheet {
+  --field-label-bg: var(--md-sys-color-surface-container-low);
+  inset: 0 0 0 auto;
+  width: min(400px, calc(100vw - 56px));
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-large) 0 0 var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.side-sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: side-sheet-enter var(--md-sys-motion-duration-medium4) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+.side-sheet::backdrop {
+  background: rgb(0 0 0 / 0.32);
+}
+
+@keyframes side-sheet-enter {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+.side-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 12px 8px 24px;
+}
+
+.side-sheet__title {
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* min-height: 0 lets the body shrink and scroll instead of spilling out */
+.side-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 24px 24px;
+}
+
 /* Snackbar ----------------------------------------------------------------- */
 /* Hidden with opacity, not display, so it stays a live region for screen readers */
 
@@ -875,7 +984,190 @@ button.chip:active::before {
   transform: translate(-50%, 0);
 }
 
-/* 4. Window sizes and reduced motion ======================================= */
+/* 4. Screens =============================================================== */
+
+/* Spec editor -------------------------------------------------------------- */
+
+/* One readable column: spec lines get hard to read past about 90 characters */
+.spec-editor {
+  max-width: 52rem;
+}
+
+.spec-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.spec-toolbar__search {
+  flex: 1 1 18rem;
+}
+
+/* Lines the 40px button up with the middle of the 56px field */
+.spec-toolbar .btn {
+  margin-top: 8px;
+}
+
+.spec-status {
+  margin-top: 16px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.spec-results {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.spec-card__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.spec-lines {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.spec-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Every ID chip gets the same width, so the line text lines up */
+.spec-line__id {
+  flex: none;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: 0 12px;
+}
+
+.spec-line__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+/* Lines without an ID: the opening instruction and the labeled fields */
+.spec-line--intro,
+.spec-line--field {
+  display: block;
+}
+
+.spec-line--intro .spec-line__text,
+.spec-line--field .spec-line__text {
+  padding-top: 0;
+}
+
+.spec-line--intro .spec-line__text {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.spec-line__label {
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.spec-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+/* The line shown at the top of the "Flags that cite" side sheet */
+.cited-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cited-line__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 6px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.sheet-summary {
+  margin-top: 20px;
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+/* Flag summaries: short flag cards in the side sheet -------------------- */
+
+.flag-list {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag-summary {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.flag-summary__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.flag-summary__place {
+  display: block;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-summary__details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.flag-summary__details dt {
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-summary__details dd {
+  margin: 2px 0 0;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+/* Confidence shows as words plus a signal-bars icon, never color alone */
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.confidence .icon {
+  font-size: 18px;
+  color: var(--md-sys-color-primary);
+}
+
+/* 5. Window sizes and reduced motion ======================================= */
 /* M3 window size classes: compact below 600px, medium from 600px,
    expanded from 840px. */
 
