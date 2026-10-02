@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Character Consistency Workbench</title>
+  <meta name="description" content="CP2 prototype: define, stress-test, diagnose, and repair an AI character. Demo data only.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header" id="app-header">
+    <div class="app-header__inner">
+      <div class="top-app-bar">
+        <span class="icon top-app-bar__icon" aria-hidden="true">theater_comedy</span>
+        <p class="top-app-bar__title">Character Consistency Workbench</p>
+        <div class="top-app-bar__actions">
+          <span class="chip chip--icon-leading">
+            <span class="icon" aria-hidden="true">database</span>
+            <span>Demo data</span>
+          </span>
+          <button type="button" class="btn btn--outlined btn--icon-leading" id="reset-demo" aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">restart_alt</span>
+            <span>Reset demo</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Workbench screens">
+        <button type="button" class="tab" role="tab" id="tab-define" data-screen="define" aria-controls="panel-define" aria-selected="true" tabindex="0">
+          <span class="icon" aria-hidden="true">edit_note</span>
+          <span>Spec editor</span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-run" data-screen="run" aria-controls="panel-run" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">forum</span>
+          <span>Run a conversation</span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-diagnose" data-screen="diagnose" aria-controls="panel-diagnose" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">flag</span>
+          <span>Flag review</span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-compare" data-screen="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">compare_arrows</span>
+          <span>Compare runs</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main" id="main">
+    <noscript>
+      <p class="load-error">This prototype needs JavaScript. Turn it on and reload the page.</p>
+    </noscript>
+
+    <section class="screen" id="panel-define" role="tabpanel" aria-labelledby="tab-define" tabindex="0" hidden>
+      <p class="screen__step">Step 1 of 4: Define</p>
+      <h1 class="screen__title" tabindex="-1">Spec editor</h1>
+      <p class="screen__lede">Read and edit the character spec, line by line. Every flag points back to a line ID here, like C5 or K2.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-run" role="tabpanel" aria-labelledby="tab-run" tabindex="0" hidden>
+      <p class="screen__step">Step 2 of 4: Stress-test</p>
+      <h1 class="screen__title" tabindex="-1">Run a conversation</h1>
+      <p class="screen__lede">Run a fixed test script against the spec and read the character's replies turn by turn.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-diagnose" role="tabpanel" aria-labelledby="tab-diagnose" tabindex="0" hidden>
+      <p class="screen__step">Step 3 of 4: Diagnose</p>
+      <h1 class="screen__title" tabindex="-1">Flag review</h1>
+      <p class="screen__lede">The AI proposes flags and shows its evidence. You decide whether each one is a real failure.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" tabindex="0" hidden>
+      <p class="screen__step">Step 4 of 4: Repair</p>
+      <h1 class="screen__title" tabindex="-1">Compare runs</h1>
+      <p class="screen__lede">Same script, same spec, two runs. See which replies changed and which failures are still there.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+  </main>
+
+  <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
+    <form method="dialog">
+      <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
+      <p class="dialog__content" id="reset-dialog-text">This clears every decision, note, and spec edit you made and brings back the starting demo data. You can't undo this.</p>
+      <div class="dialog__actions">
+        <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
+        <button type="submit" class="btn btn--text" value="reset">Reset</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,918 @@
+/*
+  Character Consistency Workbench: CP2 prototype styles
+
+  Built on Google Material 3 (m3.material.io):
+    1. Tokens: baseline light color scheme, type scale, shape, elevation,
+       state layers, and motion, named after the M3 tokens
+    2. Base and layout
+    3. Components: top app bar, tabs, buttons, cards, chips, outlined text
+       field, dialog, snackbar
+    4. Window sizes and reduced motion
+*/
+
+/* 1. Tokens ================================================================ */
+
+:root {
+  /* Color: M3 baseline scheme, light (values from Material Web's baseline tokens) */
+  --md-sys-color-primary: #6750a4;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #eaddff;
+  --md-sys-color-on-primary-container: #21005d;
+  --md-sys-color-primary-fixed: #eaddff;
+  --md-sys-color-primary-fixed-dim: #d0bcff;
+  --md-sys-color-on-primary-fixed: #21005d;
+  --md-sys-color-on-primary-fixed-variant: #4f378b;
+  --md-sys-color-inverse-primary: #d0bcff;
+  --md-sys-color-secondary: #625b71;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #e8def8;
+  --md-sys-color-on-secondary-container: #1d192b;
+  --md-sys-color-secondary-fixed: #e8def8;
+  --md-sys-color-secondary-fixed-dim: #ccc2dc;
+  --md-sys-color-on-secondary-fixed: #1d192b;
+  --md-sys-color-on-secondary-fixed-variant: #4a4458;
+  --md-sys-color-tertiary: #7d5260;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffd8e4;
+  --md-sys-color-on-tertiary-container: #31111d;
+  --md-sys-color-tertiary-fixed: #ffd8e4;
+  --md-sys-color-tertiary-fixed-dim: #efb8c8;
+  --md-sys-color-on-tertiary-fixed: #31111d;
+  --md-sys-color-on-tertiary-fixed-variant: #633b48;
+  --md-sys-color-error: #b3261e;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #f9dedc;
+  --md-sys-color-on-error-container: #410e0b;
+  --md-sys-color-background: #fef7ff;
+  --md-sys-color-on-background: #1d1b20;
+  --md-sys-color-surface: #fef7ff;
+  --md-sys-color-on-surface: #1d1b20;
+  --md-sys-color-surface-variant: #e7e0ec;
+  --md-sys-color-on-surface-variant: #49454f;
+  --md-sys-color-surface-dim: #ded8e1;
+  --md-sys-color-surface-bright: #fef7ff;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f7f2fa;
+  --md-sys-color-surface-container: #f3edf7;
+  --md-sys-color-surface-container-high: #ece6f0;
+  --md-sys-color-surface-container-highest: #e6e0e9;
+  --md-sys-color-surface-tint: #6750a4;
+  --md-sys-color-inverse-surface: #322f35;
+  --md-sys-color-inverse-on-surface: #f5eff7;
+  --md-sys-color-outline: #79747e;
+  --md-sys-color-outline-variant: #cac4d0;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+
+  /* Typeface: Roboto, with system fallbacks */
+  --md-ref-typeface-brand: "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --md-ref-typeface-plain: "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+
+  /* Type scale: size, line height, weight, and tracking for each M3 role */
+  --md-sys-typescale-display-large-size: 3.5625rem;
+  --md-sys-typescale-display-large-line-height: 4rem;
+  --md-sys-typescale-display-large-weight: 400;
+  --md-sys-typescale-display-large-tracking: -0.25px;
+  --md-sys-typescale-display-medium-size: 2.8125rem;
+  --md-sys-typescale-display-medium-line-height: 3.25rem;
+  --md-sys-typescale-display-medium-weight: 400;
+  --md-sys-typescale-display-medium-tracking: 0;
+  --md-sys-typescale-display-small-size: 2.25rem;
+  --md-sys-typescale-display-small-line-height: 2.75rem;
+  --md-sys-typescale-display-small-weight: 400;
+  --md-sys-typescale-display-small-tracking: 0;
+  --md-sys-typescale-headline-large-size: 2rem;
+  --md-sys-typescale-headline-large-line-height: 2.5rem;
+  --md-sys-typescale-headline-large-weight: 400;
+  --md-sys-typescale-headline-large-tracking: 0;
+  --md-sys-typescale-headline-medium-size: 1.75rem;
+  --md-sys-typescale-headline-medium-line-height: 2.25rem;
+  --md-sys-typescale-headline-medium-weight: 400;
+  --md-sys-typescale-headline-medium-tracking: 0;
+  --md-sys-typescale-headline-small-size: 1.5rem;
+  --md-sys-typescale-headline-small-line-height: 2rem;
+  --md-sys-typescale-headline-small-weight: 400;
+  --md-sys-typescale-headline-small-tracking: 0;
+  --md-sys-typescale-title-large-size: 1.375rem;
+  --md-sys-typescale-title-large-line-height: 1.75rem;
+  --md-sys-typescale-title-large-weight: 400;
+  --md-sys-typescale-title-large-tracking: 0;
+  --md-sys-typescale-title-medium-size: 1rem;
+  --md-sys-typescale-title-medium-line-height: 1.5rem;
+  --md-sys-typescale-title-medium-weight: 500;
+  --md-sys-typescale-title-medium-tracking: 0.15px;
+  --md-sys-typescale-title-small-size: 0.875rem;
+  --md-sys-typescale-title-small-line-height: 1.25rem;
+  --md-sys-typescale-title-small-weight: 500;
+  --md-sys-typescale-title-small-tracking: 0.1px;
+  --md-sys-typescale-body-large-size: 1rem;
+  --md-sys-typescale-body-large-line-height: 1.5rem;
+  --md-sys-typescale-body-large-weight: 400;
+  --md-sys-typescale-body-large-tracking: 0.5px;
+  --md-sys-typescale-body-medium-size: 0.875rem;
+  --md-sys-typescale-body-medium-line-height: 1.25rem;
+  --md-sys-typescale-body-medium-weight: 400;
+  --md-sys-typescale-body-medium-tracking: 0.25px;
+  --md-sys-typescale-body-small-size: 0.75rem;
+  --md-sys-typescale-body-small-line-height: 1rem;
+  --md-sys-typescale-body-small-weight: 400;
+  --md-sys-typescale-body-small-tracking: 0.4px;
+  --md-sys-typescale-label-large-size: 0.875rem;
+  --md-sys-typescale-label-large-line-height: 1.25rem;
+  --md-sys-typescale-label-large-weight: 500;
+  --md-sys-typescale-label-large-tracking: 0.1px;
+  --md-sys-typescale-label-medium-size: 0.75rem;
+  --md-sys-typescale-label-medium-line-height: 1rem;
+  --md-sys-typescale-label-medium-weight: 500;
+  --md-sys-typescale-label-medium-tracking: 0.5px;
+  --md-sys-typescale-label-small-size: 0.6875rem;
+  --md-sys-typescale-label-small-line-height: 1rem;
+  --md-sys-typescale-label-small-weight: 500;
+  --md-sys-typescale-label-small-tracking: 0.5px;
+
+  /* Shape: corner radius scale */
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* Elevation: M3 shadow levels */
+  --md-sys-elevation-level0: none;
+  --md-sys-elevation-level1: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level2: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level3: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+
+  /* State layers: opacity of the overlay on hover, focus, and press */
+  --md-sys-state-hover-state-layer-opacity: 0.08;
+  --md-sys-state-focus-state-layer-opacity: 0.1;
+  --md-sys-state-pressed-state-layer-opacity: 0.1;
+
+  /* Motion */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium4: 400ms;
+
+  /* App helpers (not M3 tokens) ------------------------------------------- */
+
+  /* Shorthands for the font property, built from the type scale above */
+  --type-display-large: var(--md-sys-typescale-display-large-weight) var(--md-sys-typescale-display-large-size) / var(--md-sys-typescale-display-large-line-height) var(--md-ref-typeface-brand);
+  --type-display-medium: var(--md-sys-typescale-display-medium-weight) var(--md-sys-typescale-display-medium-size) / var(--md-sys-typescale-display-medium-line-height) var(--md-ref-typeface-brand);
+  --type-display-small: var(--md-sys-typescale-display-small-weight) var(--md-sys-typescale-display-small-size) / var(--md-sys-typescale-display-small-line-height) var(--md-ref-typeface-brand);
+  --type-headline-large: var(--md-sys-typescale-headline-large-weight) var(--md-sys-typescale-headline-large-size) / var(--md-sys-typescale-headline-large-line-height) var(--md-ref-typeface-brand);
+  --type-headline-medium: var(--md-sys-typescale-headline-medium-weight) var(--md-sys-typescale-headline-medium-size) / var(--md-sys-typescale-headline-medium-line-height) var(--md-ref-typeface-brand);
+  --type-headline-small: var(--md-sys-typescale-headline-small-weight) var(--md-sys-typescale-headline-small-size) / var(--md-sys-typescale-headline-small-line-height) var(--md-ref-typeface-brand);
+  --type-title-large: var(--md-sys-typescale-title-large-weight) var(--md-sys-typescale-title-large-size) / var(--md-sys-typescale-title-large-line-height) var(--md-ref-typeface-brand);
+  --type-title-medium: var(--md-sys-typescale-title-medium-weight) var(--md-sys-typescale-title-medium-size) / var(--md-sys-typescale-title-medium-line-height) var(--md-ref-typeface-plain);
+  --type-title-small: var(--md-sys-typescale-title-small-weight) var(--md-sys-typescale-title-small-size) / var(--md-sys-typescale-title-small-line-height) var(--md-ref-typeface-plain);
+  --type-body-large: var(--md-sys-typescale-body-large-weight) var(--md-sys-typescale-body-large-size) / var(--md-sys-typescale-body-large-line-height) var(--md-ref-typeface-plain);
+  --type-body-medium: var(--md-sys-typescale-body-medium-weight) var(--md-sys-typescale-body-medium-size) / var(--md-sys-typescale-body-medium-line-height) var(--md-ref-typeface-plain);
+  --type-body-small: var(--md-sys-typescale-body-small-weight) var(--md-sys-typescale-body-small-size) / var(--md-sys-typescale-body-small-line-height) var(--md-ref-typeface-plain);
+  --type-label-large: var(--md-sys-typescale-label-large-weight) var(--md-sys-typescale-label-large-size) / var(--md-sys-typescale-label-large-line-height) var(--md-ref-typeface-plain);
+  --type-label-medium: var(--md-sys-typescale-label-medium-weight) var(--md-sys-typescale-label-medium-size) / var(--md-sys-typescale-label-medium-line-height) var(--md-ref-typeface-plain);
+  --type-label-small: var(--md-sys-typescale-label-small-weight) var(--md-sys-typescale-label-small-size) / var(--md-sys-typescale-label-small-line-height) var(--md-ref-typeface-plain);
+
+  /* Layout: page margin follows the M3 window size classes (see section 4) */
+  --app-margin: 16px;
+  --app-content-max: 1120px;
+
+  /* The floating label of a text field covers the outline with this color,
+     so it has to match whatever the field sits on. Cards and dialogs reset it. */
+  --field-label-bg: var(--md-sys-color-surface);
+}
+
+/* Typescale utility classes, named like Material Web's */
+.md-typescale-display-large { font: var(--type-display-large); letter-spacing: var(--md-sys-typescale-display-large-tracking); }
+.md-typescale-display-medium { font: var(--type-display-medium); letter-spacing: var(--md-sys-typescale-display-medium-tracking); }
+.md-typescale-display-small { font: var(--type-display-small); letter-spacing: var(--md-sys-typescale-display-small-tracking); }
+.md-typescale-headline-large { font: var(--type-headline-large); letter-spacing: var(--md-sys-typescale-headline-large-tracking); }
+.md-typescale-headline-medium { font: var(--type-headline-medium); letter-spacing: var(--md-sys-typescale-headline-medium-tracking); }
+.md-typescale-headline-small { font: var(--type-headline-small); letter-spacing: var(--md-sys-typescale-headline-small-tracking); }
+.md-typescale-title-large { font: var(--type-title-large); letter-spacing: var(--md-sys-typescale-title-large-tracking); }
+.md-typescale-title-medium { font: var(--type-title-medium); letter-spacing: var(--md-sys-typescale-title-medium-tracking); }
+.md-typescale-title-small { font: var(--type-title-small); letter-spacing: var(--md-sys-typescale-title-small-tracking); }
+.md-typescale-body-large { font: var(--type-body-large); letter-spacing: var(--md-sys-typescale-body-large-tracking); }
+.md-typescale-body-medium { font: var(--type-body-medium); letter-spacing: var(--md-sys-typescale-body-medium-tracking); }
+.md-typescale-body-small { font: var(--type-body-small); letter-spacing: var(--md-sys-typescale-body-small-tracking); }
+.md-typescale-label-large { font: var(--type-label-large); letter-spacing: var(--md-sys-typescale-label-large-tracking); }
+.md-typescale-label-medium { font: var(--type-label-medium); letter-spacing: var(--md-sys-typescale-label-medium-tracking); }
+.md-typescale-label-small { font: var(--type-label-small); letter-spacing: var(--md-sys-typescale-label-small-tracking); }
+
+/* 2. Base and layout ======================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Keeps anything scrolled into view clear of the sticky header */
+  scroll-padding-top: 8rem;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Keyboard focus: the M3 focus ring, 3px in the secondary color */
+:focus-visible {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Material Symbols. Icons are decorative (aria-hidden) and always sit next to
+   visible text. They stay hidden until app.js confirms the icon font loaded,
+   so an offline page never shows raw names like "restart_alt". */
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  font-variation-settings: "FILL" 0;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  visibility: hidden;
+}
+
+.icons-ready .icon {
+  visibility: visible;
+}
+
+.icon--filled {
+  font-variation-settings: "FILL" 1;
+}
+
+/* Screens: one per tab */
+.screen {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 24px var(--app-margin) 48px;
+}
+
+/* The panel can take focus (it starts with plain text), so its ring sits inside */
+.screen:focus-visible {
+  outline-offset: -3px;
+}
+
+.screen__step {
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  color: var(--md-sys-color-primary);
+}
+
+.screen__title {
+  margin-top: 4px;
+  font: var(--type-headline-medium);
+  letter-spacing: var(--md-sys-typescale-headline-medium-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* The heading takes focus after a screen change, but it is not a control */
+.screen__title:focus {
+  outline: none;
+}
+
+.screen__lede {
+  max-width: 70ch;
+  margin-top: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.screen__body {
+  margin-top: 24px;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.empty-state .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.load-error {
+  max-width: var(--app-content-max);
+  margin: 24px auto;
+  padding: 0 var(--app-margin);
+  color: var(--md-sys-color-error);
+}
+
+/* 3. Components ============================================================ */
+
+/* Top app bar (M3 small) and tabs share one sticky header ------------------ */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  transition: background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+/* M3: the bar changes to surface-container once content scrolls under it */
+.app-header.is-scrolled {
+  background: var(--md-sys-color-surface-container);
+}
+
+.app-header__inner {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 0 var(--app-margin);
+}
+
+.top-app-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 64px;
+  padding: 8px 0;
+}
+
+.top-app-bar__icon {
+  color: var(--md-sys-color-primary);
+}
+
+.top-app-bar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+.top-app-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Primary tabs ------------------------------------------------------------- */
+/* The selected tab shows a 3px indicator and a filled icon, not just a color. */
+
+.tabs {
+  --tab-padding: 16px;
+  position: relative;
+  display: flex;
+  margin: 0 calc(var(--tab-padding) * -1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 var(--tab-padding);
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+}
+
+.tab:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.tab:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+/* The tab row clips anything outside it, so the ring goes inside the tab */
+.tab:focus-visible {
+  outline-offset: -3px;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--md-sys-color-primary);
+}
+
+.tab[aria-selected="true"] .icon {
+  font-variation-settings: "FILL" 1;
+}
+
+.tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: var(--tab-padding);
+  bottom: 0;
+  left: var(--tab-padding);
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--md-sys-color-primary);
+}
+
+/* Buttons: filled, outlined, text ------------------------------------------ */
+/* Add btn--icon-leading when the label starts with an icon. */
+
+.btn {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+/* State layer: a tint in the label color that shows hover, focus, and press */
+.btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+.btn:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.btn:focus-visible::before {
+  opacity: var(--md-sys-state-focus-state-layer-opacity);
+}
+
+.btn:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+.btn .icon {
+  font-size: 18px;
+}
+
+.btn--icon-leading {
+  padding-left: 16px;
+}
+
+.btn--filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.btn--filled:hover {
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.btn--outlined {
+  border: 1px solid var(--md-sys-color-outline);
+  color: var(--md-sys-color-primary);
+}
+
+.btn--text {
+  padding: 0 12px;
+  color: var(--md-sys-color-primary);
+}
+
+.btn--text.btn--icon-leading {
+  padding: 0 16px 0 12px;
+}
+
+.btn:disabled {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  box-shadow: none;
+  cursor: default;
+}
+
+.btn:disabled::before {
+  display: none;
+}
+
+.btn--filled:disabled {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+}
+
+.btn--outlined:disabled {
+  border-color: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+}
+
+/* Cards: outlined, filled, elevated ---------------------------------------- */
+
+.card {
+  display: block;
+  padding: 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+}
+
+.card--outlined {
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.card--filled {
+  --field-label-bg: var(--md-sys-color-surface-container-highest);
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.card--elevated {
+  --field-label-bg: var(--md-sys-color-surface-container-low);
+  background: var(--md-sys-color-surface-container-low);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+/* Chips -------------------------------------------------------------------- */
+/* <span class="chip"> is a static label. <button class="chip chip--assist">
+   is an action. <button class="chip chip--filter" aria-pressed="..."> is a
+   toggle; when selected it should also show a check icon, so the state is
+   never shown by color alone. Add chip--icon-leading when it starts with an icon. */
+
+.chip {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.chip .icon {
+  font-size: 18px;
+  color: var(--md-sys-color-primary);
+}
+
+.chip--icon-leading {
+  padding-left: 8px;
+}
+
+button.chip {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.chip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+button.chip:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+button.chip:focus-visible::before {
+  opacity: var(--md-sys-state-focus-state-layer-opacity);
+}
+
+button.chip:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+.chip--filter {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.chip--filter[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.chip--filter[aria-pressed="true"] .icon {
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+/* Outlined text field ------------------------------------------------------ */
+/* Markup: the label comes after the field, and the field needs placeholder=" "
+   so the label can tell when the field is empty.
+     <div class="text-field">
+       <textarea class="text-field__input" id="x" placeholder=" "></textarea>
+       <label class="text-field__label" for="x">Label</label>
+       <p class="text-field__support">Supporting text</p>
+     </div>
+   Add text-field--error for an error; say what is wrong in the supporting text too. */
+
+.text-field {
+  position: relative;
+  display: block;
+}
+
+.text-field__input {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  margin: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  caret-color: var(--md-sys-color-primary);
+  resize: vertical;
+}
+
+.text-field__input:hover {
+  border-color: var(--md-sys-color-on-surface);
+}
+
+/* Focus shows as a 2px primary outline (M3), instead of the focus ring */
+.text-field__input:focus,
+.text-field__input:focus-visible {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+}
+
+.text-field__label {
+  position: absolute;
+  top: 16px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  padding: 0 4px;
+  overflow: hidden;
+  background: var(--field-label-bg);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transition:
+    top var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    font-size var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.text-field__input:focus + .text-field__label,
+.text-field__input:not(:placeholder-shown) + .text-field__label {
+  top: -8px;
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.text-field__input:focus + .text-field__label {
+  color: var(--md-sys-color-primary);
+}
+
+.text-field__support {
+  margin: 4px 16px 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.text-field--error .text-field__input,
+.text-field--error .text-field__input:focus {
+  border-color: var(--md-sys-color-error);
+}
+
+.text-field--error .text-field__input:focus {
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-error);
+}
+
+.text-field--error .text-field__label,
+.text-field--error .text-field__support {
+  color: var(--md-sys-color-error);
+}
+
+/* Dialog (M3 basic dialog on the native <dialog> element) ------------------ */
+
+.dialog {
+  --field-label-bg: var(--md-sys-color-surface-container-high);
+  width: min(560px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level3);
+}
+
+/* Scrim: M3 uses the scrim color (black) at 32% */
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.32);
+}
+
+.dialog[open] {
+  animation: dialog-enter var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+}
+
+.dialog__headline {
+  font: var(--type-headline-small);
+  letter-spacing: var(--md-sys-typescale-headline-small-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+.dialog__content {
+  margin-top: 16px;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+/* Snackbar ----------------------------------------------------------------- */
+/* Hidden with opacity, not display, so it stays a live region for screen readers */
+
+.snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  max-width: min(600px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  box-shadow: var(--md-sys-elevation-level3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 16px);
+  transition:
+    opacity var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.snackbar.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* 4. Window sizes and reduced motion ======================================= */
+/* M3 window size classes: compact below 600px, medium from 600px,
+   expanded from 840px. */
+
+@media (max-width: 599px) {
+  html {
+    scroll-padding-top: 11rem;
+  }
+
+  .tabs {
+    --tab-padding: 12px;
+  }
+
+  .screen__title {
+    font: var(--type-headline-small);
+    letter-spacing: var(--md-sys-typescale-headline-small-tracking);
+  }
+}
+
+@media (min-width: 600px) {
+  :root {
+    --app-margin: 24px;
+  }
+}
+
+@media (min-width: 840px) {
+  .screen {
+    padding-top: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
