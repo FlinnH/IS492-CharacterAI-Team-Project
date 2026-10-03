@@ -6,7 +6,7 @@ The CP2 proof of concept (Step 9). It covers the critical journeys in DESIGN_SPE
 
 **Format:** HTML, CSS, and JavaScript clickthrough, vibe-coded with Claude Code.
 
-**Link:** [ Vercel link ]
+**Link:** is492-characterai-team-project-prot.vercel.app
 
 **Owner:** Flynn
 
