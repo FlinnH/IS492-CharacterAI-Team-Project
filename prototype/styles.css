@@ -315,6 +315,12 @@ img {
   max-width: 100%;
 }
 
+/* Reply text from the chat logs keeps its line breaks. Only put this on an
+   element that holds nothing but that text, or template newlines show too. */
+.keep-lines {
+  white-space: pre-line;
+}
+
 /* Search matches and quoted evidence */
 mark {
   border-radius: 2px;
@@ -1433,6 +1439,15 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-title-medium-tracking);
 }
 
+/* Where the chat came from: date, chat mode, model, and any gaps in the log */
+.transcript__source {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
 /* "Turn 4 of 9", the progress bar, and Skip to end, while a run plays */
 .run-progress {
   display: flex;
@@ -1961,13 +1976,6 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-title-small-tracking);
 }
 
-.drift__receipt {
-  display: block;
-  font: var(--type-label-medium);
-  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
-  color: var(--md-sys-color-on-surface-variant);
-}
-
 .drift__strip {
   display: flex;
   flex-wrap: wrap;
@@ -2084,11 +2092,6 @@ button.chip:active::before {
 .compare-reply {
   font: var(--type-body-medium);
   letter-spacing: var(--md-sys-typescale-body-medium-tracking);
-}
-
-.compare-table__receipt {
-  font-weight: 400;
-  color: var(--md-sys-color-on-surface-variant);
 }
 
 .compare-table__turn {
