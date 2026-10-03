@@ -14,6 +14,9 @@
 /* 1. Tokens ================================================================ */
 
 :root {
+  /* Native controls (select lists, scrollbars, checkboxes) follow the theme */
+  color-scheme: light;
+
   /* Color: M3 baseline scheme, light (values from Material Web's baseline tokens) */
   --md-sys-color-primary: #6750a4;
   --md-sys-color-on-primary: #ffffff;
@@ -189,6 +192,63 @@
   /* The floating label of a text field covers the outline with this color,
      so it has to match whatever the field sits on. Cards and dialogs reset it. */
   --field-label-bg: var(--md-sys-color-surface);
+}
+
+/* Dark theme: the M3 baseline dark scheme. app.js sets data-theme on <html>
+   from the system setting, or from the Light and Dark buttons in the top bar.
+   Every color below the tokens comes from these roles, so nothing else
+   needs a dark version. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --md-sys-color-primary: #d0bcff;
+  --md-sys-color-on-primary: #381e72;
+  --md-sys-color-primary-container: #4f378b;
+  --md-sys-color-on-primary-container: #eaddff;
+  --md-sys-color-primary-fixed: #eaddff;
+  --md-sys-color-primary-fixed-dim: #d0bcff;
+  --md-sys-color-on-primary-fixed: #21005d;
+  --md-sys-color-on-primary-fixed-variant: #4f378b;
+  --md-sys-color-inverse-primary: #6750a4;
+  --md-sys-color-secondary: #ccc2dc;
+  --md-sys-color-on-secondary: #332d41;
+  --md-sys-color-secondary-container: #4a4458;
+  --md-sys-color-on-secondary-container: #e8def8;
+  --md-sys-color-secondary-fixed: #e8def8;
+  --md-sys-color-secondary-fixed-dim: #ccc2dc;
+  --md-sys-color-on-secondary-fixed: #1d192b;
+  --md-sys-color-on-secondary-fixed-variant: #4a4458;
+  --md-sys-color-tertiary: #efb8c8;
+  --md-sys-color-on-tertiary: #492532;
+  --md-sys-color-tertiary-container: #633b48;
+  --md-sys-color-on-tertiary-container: #ffd8e4;
+  --md-sys-color-tertiary-fixed: #ffd8e4;
+  --md-sys-color-tertiary-fixed-dim: #efb8c8;
+  --md-sys-color-on-tertiary-fixed: #31111d;
+  --md-sys-color-on-tertiary-fixed-variant: #633b48;
+  --md-sys-color-error: #f2b8b5;
+  --md-sys-color-on-error: #601410;
+  --md-sys-color-error-container: #8c1d18;
+  --md-sys-color-on-error-container: #f9dedc;
+  --md-sys-color-background: #141218;
+  --md-sys-color-on-background: #e6e0e9;
+  --md-sys-color-surface: #141218;
+  --md-sys-color-on-surface: #e6e0e9;
+  --md-sys-color-surface-variant: #49454f;
+  --md-sys-color-on-surface-variant: #cac4d0;
+  --md-sys-color-surface-dim: #141218;
+  --md-sys-color-surface-bright: #3b383e;
+  --md-sys-color-surface-container-lowest: #0f0d13;
+  --md-sys-color-surface-container-low: #1d1b20;
+  --md-sys-color-surface-container: #211f26;
+  --md-sys-color-surface-container-high: #2b2930;
+  --md-sys-color-surface-container-highest: #36343b;
+  --md-sys-color-surface-tint: #d0bcff;
+  --md-sys-color-inverse-surface: #e6e0e9;
+  --md-sys-color-inverse-on-surface: #322f35;
+  --md-sys-color-outline: #938f99;
+  --md-sys-color-outline-variant: #49454f;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
 }
 
 /* Typescale utility classes, named like Material Web's */
@@ -371,6 +431,21 @@ mark {
   margin: 24px auto;
   padding: 0 var(--app-margin);
   color: var(--md-sys-color-error);
+}
+
+/* Footer on every screen */
+.app-footer {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 0 var(--app-margin) 32px;
+}
+
+.app-footer p {
+  padding-top: 16px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
 }
 
 /* 3. Components ============================================================ */
@@ -712,6 +787,71 @@ button.chip:active::before {
 
 .chip--filter[aria-pressed="true"] .icon {
   color: var(--md-sys-color-on-secondary-container);
+}
+
+/* Segmented buttons (M3), used for the Light and Dark theme picker. The
+   selected one shows a check icon as well as a fill. */
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  overflow: hidden;
+}
+
+.segmented__button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmented__button + .segmented__button {
+  border-left: 1px solid var(--md-sys-color-outline);
+}
+
+.segmented__button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+.segmented__button:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.segmented__button:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+/* The group clips its rounded corners, so the ring goes inside the button */
+.segmented__button:focus-visible {
+  outline-offset: -3px;
+}
+
+.segmented__button[aria-pressed="true"] {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.segmented__button .icon {
+  font-size: 18px;
 }
 
 /* Outlined text field ------------------------------------------------------ */
@@ -1969,6 +2109,18 @@ button.chip:active::before {
   color: var(--md-sys-color-on-error-container);
 }
 
+/* Dark theme: a solid dark red behind long replies is hard on the eyes, so
+   broken replies get a soft red tint instead. The flag label and the
+   underlined evidence still mark them. */
+:root[data-theme="dark"] .compare-reply--break {
+  background: color-mix(in srgb, var(--md-sys-color-error) 20%, var(--md-sys-color-surface-container-lowest));
+  color: var(--md-sys-color-on-surface);
+}
+
+:root[data-theme="dark"] .compare-reply--break .compare-reply__label {
+  color: var(--md-sys-color-error);
+}
+
 .compare-reply__label {
   display: flex;
   align-items: center;
@@ -2021,6 +2173,16 @@ button.chip:active::before {
    expanded from 840px. */
 
 @media (max-width: 599px) {
+  /* On phones the top bar wraps to several rows, so it scrolls away instead
+     of covering a third of the screen. */
+  .app-header {
+    position: static;
+  }
+
+  html {
+    scroll-padding-top: 16px;
+  }
+
   .tabs {
     --tab-padding: 12px;
   }
@@ -2070,6 +2232,18 @@ button.chip:active::before {
     margin-top: -16px;
     padding: 16px 0 8px;
     background: var(--md-sys-color-surface);
+  }
+
+  /* Keyboard focus scrolls clear of that bar too (app.js measures it) */
+  html[data-screen="diagnose"] {
+    scroll-padding-top: calc(var(--app-header-height) + var(--review-bar-height, 0px) + 16px);
+  }
+}
+
+/* Large monitors: a little more room for Flag review and Compare runs */
+@media (min-width: 1600px) {
+  :root {
+    --app-content-max: 1280px;
   }
 }
 

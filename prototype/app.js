@@ -654,6 +654,15 @@
   const RUBBER_STAMP_MESSAGE =
     "You agreed with every flag. The AI makes mistakes too, so check again whether each one is really a break.";
 
+  // Measures the sticky summary bar, so the CSS can keep keyboard focus from
+  // scrolling under it (see --review-bar-height in styles.css).
+  const reviewBarObserver = "ResizeObserver" in window
+    ? new ResizeObserver((entries) => {
+        const height = entries[0].target.offsetHeight;
+        document.documentElement.style.setProperty("--review-bar-height", `${height}px`);
+      })
+    : null;
+
   function countWords(text) {
     return text.trim().split(/\s+/).filter(Boolean).length;
   }
@@ -730,11 +739,17 @@
       </div>`;
 
     body.querySelectorAll("[data-reason-for]").forEach((field) => {
+      const flagId = field.dataset.reasonFor;
       field.addEventListener("input", () => {
-        const flagId = field.dataset.reasonFor;
         state.overrideDrafts[flagId] = field.value;
         const save = body.querySelector(`[data-focus-key="save-${flagId}"]`);
         save.setAttribute("aria-disabled", String(countWords(field.value) < MIN_REASON_WORDS));
+      });
+      // Escape closes the reason field, the same as Cancel.
+      field.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        cancelOverride(flagId);
       });
     });
     body.querySelectorAll("[data-reviewed]").forEach((box) => {
@@ -742,6 +757,10 @@
         state.notCheckedReviewed[box.dataset.reviewed] = box.checked;
       });
     });
+    if (reviewBarObserver) {
+      reviewBarObserver.disconnect();
+      reviewBarObserver.observe(body.querySelector(".review__bar-wrap"));
+    }
 
     if (!target) return null;
     revealTurn(body);
@@ -1047,10 +1066,13 @@
     refresh({ focusKey: `reason-${flagId}` });
   };
 
-  actions["cancel-override"] = (button) => {
-    const flagId = button.dataset.flag;
+  function cancelOverride(flagId) {
     delete state.overrideDrafts[flagId];
     refresh({ focusKey: `override-${flagId}` });
+  }
+
+  actions["cancel-override"] = (button) => {
+    cancelOverride(button.dataset.flag);
   };
 
   actions["save-override"] = (button) => {
@@ -1277,6 +1299,8 @@
   function showScreen(id, { moveFocus = false } = {}) {
     const isChange = currentScreen !== null && currentScreen !== id;
     currentScreen = id;
+    // The CSS keys a few screen-wide rules off this, like scroll padding.
+    document.documentElement.dataset.screen = id;
 
     tabs.forEach((tab) => {
       const selected = tab.dataset.screen === id;
@@ -1306,9 +1330,11 @@
   }
 
   // Scrolls the page so an element sits just below the sticky header, and
-  // below a sticky bar on the same screen, like the one on Flag review.
+  // below a sticky bar on the same screen, like the one on Flag review. On
+  // phones the header scrolls away, so only the gap counts there.
   function scrollBelowHeader(element) {
-    let offset = header.offsetHeight + 16;
+    const headerSticks = getComputedStyle(header).position === "sticky";
+    let offset = (headerSticks ? header.offsetHeight : 0) + 16;
     const bar = element.closest("[data-screen-body]").querySelector(".review__bar-wrap");
     if (bar && getComputedStyle(bar).position === "sticky") offset += bar.offsetHeight;
     window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - offset);
@@ -1502,6 +1528,33 @@
     }).observe(header);
   }
 
+  // Theme: the M3 baseline light or dark scheme. It follows the system
+  // setting until the creator picks one with the Light and Dark buttons.
+  // Like everything else it lives in memory, but Reset demo leaves it alone.
+  const darkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  let themePicked = false;
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    document.querySelectorAll('[data-action="set-theme"]').forEach((button) => {
+      const selected = button.dataset.themeChoice === theme;
+      button.setAttribute("aria-pressed", String(selected));
+      // M3 segmented buttons: the selected one shows a check, not just a fill.
+      button.querySelector(".icon").textContent = selected ? "check" : button.dataset.icon;
+    });
+  }
+
+  actions["set-theme"] = (button) => {
+    themePicked = true;
+    applyTheme(button.dataset.themeChoice);
+  };
+
+  if (darkQuery && darkQuery.addEventListener) {
+    darkQuery.addEventListener("change", () => {
+      if (!themePicked) applyTheme(darkQuery.matches ? "dark" : "light");
+    });
+  }
+
   // Icons stay hidden until the Material Symbols font has loaded, so an
   // offline page never shows raw icon names such as "restart_alt".
   function revealIconsWhenReady() {
@@ -1520,6 +1573,7 @@
 
   // 6. Start ===============================================================
 
+  applyTheme(darkQuery && darkQuery.matches ? "dark" : "light");
   window.addEventListener("hashchange", onHashChange);
   revealIconsWhenReady();
   updateHeader();

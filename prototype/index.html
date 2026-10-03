@@ -23,6 +23,18 @@
             <span class="icon" aria-hidden="true">database</span>
             <span>Demo data</span>
           </span>
+          <div class="segmented" role="group" aria-label="Theme">
+            <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="light"
+              data-icon="light_mode" aria-pressed="true">
+              <span class="icon" aria-hidden="true">check</span>
+              <span>Light</span>
+            </button>
+            <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="dark"
+              data-icon="dark_mode" aria-pressed="false">
+              <span class="icon" aria-hidden="true">dark_mode</span>
+              <span>Dark</span>
+            </button>
+          </div>
           <button type="button" class="btn btn--outlined btn--icon-leading" id="reset-demo" aria-haspopup="dialog">
             <span class="icon" aria-hidden="true">restart_alt</span>
             <span>Reset demo</span>
@@ -88,13 +100,17 @@
     </section>
   </main>
 
+  <footer class="app-footer">
+    <p>Prototype for IS 492 CP2. Demo data. No real AI calls.</p>
+  </footer>
+
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="visually-hidden" id="announcer" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
     <form method="dialog">
       <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
-      <p class="dialog__content" id="reset-dialog-text">This clears every decision, note, and spec edit you made and brings back the starting demo data. You can't undo this.</p>
+      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting demo data. You can't undo this.</p>
       <div class="dialog__actions">
         <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
         <button type="submit" class="btn btn--text" value="reset">Reset</button>
