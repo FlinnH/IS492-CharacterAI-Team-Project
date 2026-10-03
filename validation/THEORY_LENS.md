@@ -6,7 +6,7 @@ Shared complementarity discussion for Checkpoint 2.
 
 **Status:** Final for CP2, Oct 2, 2026. Gawon and Kiara still tick their own sign-off rows.
 
-**Order of work:** receipt first, then theory, then design. Parts 2 to 4 cite Claude's six scored chats in [transcripts/claude_outputs.md](transcripts/claude_outputs.md). ChatGPT and Gemini rows get added as their chats come in, so the theory keeps explaining what we saw instead of the other way round.
+**Order of work:** receipt first, then theory, then design. Parts 2 to 4 cite Claude's six scored chats in [transcripts/claude_outputs.md](transcripts/claude_outputs.md) and Flynn's two interviews in [reflections/huynh_flynn_validation.md](reflections/huynh_flynn_validation.md). ChatGPT and Gemini rows get added as their chats come in, so the theory keeps explaining what we saw instead of the other way round.
 
 ---
 
@@ -32,11 +32,11 @@ Shared complementarity discussion for Checkpoint 2.
 
 **Team sign-off (Step 1).** Each member reads Gonzalez et al. (2026), then agrees to the wording above or suggests a change.
 
-| Member | Suggested change (blank if you agree) |
-| --- |  --- |
-| Flynn | Agree | 
-| Gawon | [ ] |
-| Kiara | [ ] |
+| Member | Agree? | Suggested change (blank if you agree) |
+| --- | --- | --- |
+| Flynn | Agree | |
+| Gawon | Agree |  |
+| Kiara | Agree |  |
 
 **The open question, answered by our first evidence.** We asked whether the hybrid would win mainly on fuzzy failures while the AI tied on crisp ones. CLA-T2 says the split is different. Alone, the AI reviewer caught 3 of 4 crisp mistakes and 2 of 3 fuzzy ones. The two it missed both needed joining information that sat far apart: the memory slip at line 30, which only shows against Alex's correction at line 11, and the Portkey joke at line 22, which only lands if you know where the Portkey took Harry. One question from us brought both back. So we expect the hybrid to win wherever a failure depends on connecting distant context or on judgment, whatever its type.
 
@@ -69,10 +69,11 @@ Shared complementarity discussion for Checkpoint 2.
 | --- | --- | --- | --- |
 | 1 | CLA-T2: alone, the reviewer caught 5 of 7. After one question about its least-sure flags, it found the other 2 (lines 22 and 30). | Attention, rows 8 and 9: the AI's scan was good, but the human's question decided where it looked again. That is complementarity coming from interrogation, not from the AI alone. | Build the follow-up into every review: after the first pass, the workbench asks the reviewer to re-check its weakest calls and shows the creator what changed. |
 | 2 | CLA-T2: a correct flag came with an invented spec rule, "the spec says first-years take boats." | Reasoning, row 2: the explanation sounded authoritative and was made up, which miscalibrates trust. | Every flag quotes its spec line straight from the spec, never in the AI's own words, so an invented rule has nowhere to hide. |
-| 3 | CLA-T1, E1, E2, F1, and F2: at turn 2, Harry claimed a shared memory with Alex that Alex never gave. | Memory, row 6: the model fills gaps with confident confabulation. No probe catches it, because it breaks no listed fact. | A provenance check on claims about the user: anything Harry says about Alex must trace to something Alex said, or it gets flagged. |
+| 3 | CLA-T1, E1, E2, F1, and F2: at turn 2, Harry claimed a shared memory with Alex that Alex never gave. A real user saw the same thing: his assistant invented his mom's birthday (INT-FH-2). | Memory, row 6: the model fills gaps with confident confabulation. No probe catches it, because it breaks no listed fact. | A provenance check on claims about the user: anything Harry says about Alex must trace to something Alex said, or it gets flagged. |
 | 4 | CLA-E2: the spec never says how Alex reaches Harry, so every chat opened as if Alex had sent an owl. In CLA-E2, Harry asked how Alex found him in every reply, even right after Alex's grief. | Reasoning, row 4: the goal and the situation were underspecified, so the model invented its own. This failure starts in the spec, not in the model. | The spec editor asks for the setting, meaning where and how the conversation happens, and warns when it's empty. |
 | 5 | CLA-F2: an in-world aside about Horcruxes was fine, but "Is she from the Ministry?" lands on the hidden answer. Telling the two apart took the creator's judgment. | Reasoning, rows 1 and 5: this is adjudication the spec can't encode ahead of time, so accountability stays with the human. | Guesses near the knowledge boundary go to the creator as "needs your call" instead of being auto-flagged. |
 | 6 | CLA-T1, E1, E2, F1, and F2: every chat broke the 1 to 4 sentence rule from turn 2, even while every fact stayed right. | Reasoning, row 4: a measurable rule was ignored from the start. That's goal misalignment, not drift. | Measurable rules, like sentence count and banned words, run as automatic checks on every turn, separate from the AI judge. |
+| 7 | INT-FH-1 and INT-FH-2: both users would trust a flag only after seeing where the character broke, and P1 would never let a tool decide alone. | Meta-coordination, row 10, and reasoning, row 2: users already keep the final call for themselves, and their trust depends on visible evidence. | The creator decides every flag, and Agree stays off until the evidence is open. |
 
 ---
 
