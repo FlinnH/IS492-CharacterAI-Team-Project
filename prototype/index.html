@@ -82,13 +82,14 @@
 
     <section class="screen" id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" tabindex="0" hidden>
       <p class="screen__step">Step 4 of 4: Repair</p>
-      <h1 class="screen__title" tabindex="-1">Compare runs</h1>
-      <p class="screen__lede">Same script, same spec, two runs. See which replies changed and which failures are still there.</p>
+      <h1 class="screen__title" tabindex="-1">Same script, same spec, different results.</h1>
+      <p class="screen__lede">Both runs used the same test script and the same spec version. Flags you overrode on Flag review don't count as breaks.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
   </main>
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="visually-hidden" id="announcer" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
     <form method="dialog">

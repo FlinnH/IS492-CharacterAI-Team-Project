@@ -179,9 +179,12 @@
   --type-label-medium: var(--md-sys-typescale-label-medium-weight) var(--md-sys-typescale-label-medium-size) / var(--md-sys-typescale-label-medium-line-height) var(--md-ref-typeface-plain);
   --type-label-small: var(--md-sys-typescale-label-small-weight) var(--md-sys-typescale-label-small-size) / var(--md-sys-typescale-label-small-line-height) var(--md-ref-typeface-plain);
 
-  /* Layout: page margin follows the M3 window size classes (see section 4) */
+  /* Layout: page margin follows the M3 window size classes (see section 5) */
   --app-margin: 16px;
   --app-content-max: 1120px;
+
+  /* Height of the sticky header. app.js measures it and keeps this current. */
+  --app-header-height: 7rem;
 
   /* The floating label of a text field covers the outline with this color,
      so it has to match whatever the field sits on. Cards and dialogs reset it. */
@@ -217,7 +220,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   /* Keeps anything scrolled into view clear of the sticky header */
-  scroll-padding-top: 8rem;
+  scroll-padding-top: calc(var(--app-header-height) + 16px);
 }
 
 body {
@@ -361,24 +364,6 @@ mark {
 
 .screen__body {
   margin-top: 24px;
-}
-
-.empty-state {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 24px;
-  color: var(--md-sys-color-on-surface-variant);
-}
-
-.empty-state .icon {
-  color: var(--md-sys-color-primary);
-}
-
-.empty-state__note {
-  margin-top: 4px;
-  font: var(--type-body-medium);
-  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
 }
 
 .load-error {
@@ -600,21 +585,27 @@ mark {
   padding: 0 16px 0 12px;
 }
 
-.btn:disabled {
+/* aria-disabled="true" looks the same as disabled but stays focusable, for a
+   button whose hint explains when it turns on (like Agree on Flag review). */
+.btn:disabled,
+.btn[aria-disabled="true"] {
   color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
   box-shadow: none;
   cursor: default;
 }
 
-.btn:disabled::before {
+.btn:disabled::before,
+.btn[aria-disabled="true"]::before {
   display: none;
 }
 
-.btn--filled:disabled {
+.btn--filled:disabled,
+.btn--filled[aria-disabled="true"] {
   background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
 }
 
-.btn--outlined:disabled {
+.btn--outlined:disabled,
+.btn--outlined[aria-disabled="true"] {
   border-color: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
 }
 
@@ -674,6 +665,10 @@ mark {
 
 .chip--icon-leading {
   padding-left: 8px;
+}
+
+.chip--icon-trailing {
+  padding-right: 8px;
 }
 
 button.chip {
@@ -842,6 +837,36 @@ button.chip:active::before {
   max-width: calc(100% - 24px);
 }
 
+/* Outlined select: a native <select> in the same field. A select always has a
+   value, so its label always floats. The dropdown arrow is a CSS triangle, so
+   it shows even without the icon font.
+     <div class="text-field text-field--select">
+       <select class="text-field__input" id="x">...</select>
+       <label class="text-field__label" for="x">Label</label>
+     </div> */
+
+.text-field--select .text-field__input {
+  padding-right: 44px;
+  cursor: pointer;
+}
+
+.text-field--select .text-field__label {
+  top: -8px;
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.text-field--select::after {
+  content: "";
+  position: absolute;
+  top: 26px;
+  right: 19px;
+  border-top: 5px solid var(--md-sys-color-on-surface-variant);
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  pointer-events: none;
+}
+
 /* Dialog (M3 basic dialog on the native <dialog> element) ------------------ */
 
 .dialog {
@@ -950,6 +975,37 @@ button.chip:active::before {
   min-height: 0;
   overflow-y: auto;
   padding: 8px 24px 24px;
+}
+
+/* Linear progress indicator (M3, determinate, on the native <progress>) ---- */
+
+.linear-progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-highest);
+  overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.linear-progress::-webkit-progress-bar {
+  border-radius: inherit;
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+/* No width transition: the bar moves one turn at a time, so a step is honest
+   and avoids animating a layout property. */
+.linear-progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
+}
+
+.linear-progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
 }
 
 /* Snackbar ----------------------------------------------------------------- */
@@ -1076,6 +1132,33 @@ button.chip:active::before {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+/* The line opened from Compare runs: tinted, with a note saying why */
+.spec-line.is-spotlit {
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.spec-line__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.spec-line__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.spec-line__note .icon {
+  font-size: 16px;
+}
+
 .spec-empty {
   display: flex;
   flex-wrap: wrap;
@@ -1167,15 +1250,777 @@ button.chip:active::before {
   color: var(--md-sys-color-primary);
 }
 
+/* Run a conversation ------------------------------------------------------- */
+
+.run-screen {
+  max-width: 52rem;
+}
+
+.run-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.run-setup .text-field {
+  flex: 1 1 11rem;
+}
+
+/* Lines the 40px button up with the middle of the 56px fields */
+.run-setup .btn {
+  margin-top: 8px;
+}
+
+.transcript {
+  margin-top: 24px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.transcript__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.transcript__title {
+  margin-right: auto;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* "Turn 4 of 9", the progress bar, and Skip to end, while a run plays */
+.run-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.run-progress__label {
+  min-width: 6.5rem;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.run-progress .linear-progress {
+  flex: 1 1 8rem;
+  width: auto;
+}
+
+/* The chat scrolls on its own, so the controls above it stay in view */
+.chat {
+  height: min(60vh, 34rem);
+  min-height: 18rem;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--md-sys-color-surface-container-lowest);
+}
+
+.chat:focus-visible {
+  outline-offset: -3px;
+}
+
+.chat__empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  text-align: center;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.chat__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The small system line, "Turn 1: character spec v1 loaded" */
+.chat__system {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.chat__system .icon {
+  font-size: 16px;
+}
+
+/* Chat bubbles: the script's lines (Alex) on the right, the character's
+   replies on the left. Every bubble names its speaker, so side and color are
+   never the only cue. */
+.bubble {
+  max-width: min(85%, 36rem);
+  padding: 8px 14px 10px;
+  border-radius: var(--md-sys-shape-corner-large);
+  animation: bubble-enter var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+.bubble--user {
+  align-self: flex-end;
+  border-top-right-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.bubble--character {
+  align-self: flex-start;
+  border-top-left-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+@keyframes bubble-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.bubble__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.bubble__turn {
+  font-weight: 400;
+}
+
+.bubble__text {
+  margin-top: 2px;
+}
+
+.run-result__card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 16px;
+}
+
+.run-result__card .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.run-result__text {
+  flex: 1 1 16rem;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* Flag review -------------------------------------------------------------- */
+/* Phones get one column: the flags, then the conversation. From 840px (see
+   section 5) the conversation sits on the left and the flags on the right,
+   and both keep their top part in view while the cards scroll. */
+
+.review {
+  display: grid;
+  gap: 24px;
+}
+
+.review__bar {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container);
+}
+
+.review__summary {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* The rubber-stamp check */
+.review__nudge {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flag-cards {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag-cards__empty {
+  margin-top: 16px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+/* A card takes focus only when "Go to flag" lands on it, so the ring shows
+   for mouse users too */
+.flag-card:focus {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.flag-card.is-agreed {
+  border-color: var(--md-sys-color-primary);
+}
+
+.flag-card.is-overridden {
+  border-style: dashed;
+  border-color: var(--md-sys-color-outline);
+}
+
+.flag-card__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* The quote marks and the caption set the evidence apart; no accent bar */
+.flag-card__evidence {
+  margin: 0;
+}
+
+.flag-card__evidence blockquote {
+  margin: 0;
+}
+
+.flag-card__evidence figcaption {
+  margin-top: 2px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The confidence chip is a label, not a control, so it has no outline */
+.flag-card__confidence {
+  border-color: transparent;
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.flag-card__label {
+  font-weight: 500;
+}
+
+.flag-card__cite-text,
+.flag-card__why,
+.flag-card__unsure,
+.flag-card__reason,
+.context-line {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.flag-card__cite-text {
+  justify-self: stretch;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+/* "The AI is unsure" on low-confidence flags */
+.flag-card__unsure {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.flag-card__unsure .icon {
+  font-size: 20px;
+}
+
+.flag-card__context {
+  display: grid;
+  justify-self: stretch;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.context-line__speaker {
+  display: block;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.flag-card__hint,
+.flag-card__reason {
+  flex-basis: 100%;
+}
+
+.flag-card__hint {
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.flag-card.is-agreed .flag-card__status .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.flag-card__override {
+  display: grid;
+  justify-self: stretch;
+  gap: 8px;
+}
+
+/* Not checked by the AI */
+.not-checked {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.not-checked__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.not-checked__title .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.not-checked__item {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+/* Checkbox: the native control in the M3 primary color, on a 40px row */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--md-sys-color-primary);
+  cursor: pointer;
+}
+
+/* The compact conversation */
+.review__conversation {
+  display: flex;
+  flex-direction: column;
+  max-height: 28rem;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-lowest);
+  overflow: hidden;
+}
+
+.review__convo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.review__convo-title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.review__convo-run {
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* position: relative makes each turn's offsetTop relative to this box,
+   which revealTurn() in app.js relies on */
+.review__convo-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.review__convo-scroll:focus-visible {
+  outline-offset: -3px;
+}
+
+.convo {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.convo__system {
+  justify-self: center;
+  margin-bottom: 4px;
+  padding: 2px 10px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-small);
+  letter-spacing: var(--md-sys-typescale-label-small-tracking);
+}
+
+.convo-turn {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 8px 12px;
+  border-left: 4px solid transparent;
+  border-radius: 0 var(--md-sys-shape-corner-small) var(--md-sys-shape-corner-small) 0;
+}
+
+/* Flagged: a colored border, a flag icon, and the word "Flagged" */
+.convo-turn--flagged {
+  border-left-color: var(--md-sys-color-error);
+}
+
+/* Overridden: the creator says it isn't a break, so the border goes quiet */
+.convo-turn--overridden {
+  border-left-style: dashed;
+  border-left-color: var(--md-sys-color-outline);
+}
+
+/* The turn the creator is looking at, after "Show in context" */
+.convo-turn[aria-current="true"] {
+  background: var(--md-sys-color-secondary-container);
+}
+
+.convo-turn__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.convo-turn__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--md-sys-color-error);
+}
+
+.convo-turn__flag .icon {
+  font-size: 16px;
+}
+
+.convo-turn--overridden .convo-turn__flag {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.convo-turn__line {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.convo-turn__speaker {
+  font-weight: 500;
+}
+
+/* Compare runs ------------------------------------------------------------- */
+
+.compare {
+  display: grid;
+  gap: 32px;
+}
+
+.compare__heading {
+  margin-bottom: 12px;
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+}
+
+/* Drift strips: one small square per turn */
+.drift {
+  display: grid;
+  gap: 16px;
+}
+
+.drift__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.drift__run {
+  min-width: 8rem;
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.drift__receipt {
+  display: block;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.drift__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Clean: outlined. Break: filled, with a flag icon. Overridden: dashed.
+   The turn number shows on every square. */
+.drift__turn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.drift__turn .icon {
+  font-size: 16px;
+}
+
+.drift__turn--break {
+  border-color: var(--md-sys-color-error);
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+}
+
+.drift__turn--overridden {
+  border-style: dashed;
+}
+
+.drift__first {
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.drift__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.drift__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drift__turn--sample {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+}
+
+.drift__turn--sample .icon {
+  font-size: 12px;
+}
+
+/* Side by side. The table scrolls sideways on narrow screens. */
+.compare-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+.compare-table-wrap:focus-visible {
+  outline-offset: -3px;
+}
+
+.compare-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.compare-table thead th {
+  background: var(--md-sys-color-surface-container);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.compare-table thead th:first-child {
+  width: 30%;
+}
+
+.compare-table tbody th,
+.compare-reply {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.compare-table__receipt {
+  font-weight: 400;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.compare-table__turn {
+  display: block;
+  margin-bottom: 2px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.compare-table__speaker {
+  font-weight: 500;
+}
+
+/* A reply that broke: tinted, labeled, with the evidence underlined */
+.compare-reply--break {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.compare-reply__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.compare-reply__label .icon {
+  font-size: 16px;
+}
+
+.compare-reply__label--quiet {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.compare-reply mark {
+  background: none;
+  color: inherit;
+  text-decoration: underline wavy var(--md-sys-color-error);
+  text-underline-offset: 3px;
+}
+
+/* Next step: a spec line that broke in both runs */
+.next-step {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.next-step + .next-step {
+  margin-top: 16px;
+}
+
+.next-step__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.next-step__title .icon {
+  color: var(--md-sys-color-primary);
+}
+
 /* 5. Window sizes and reduced motion ======================================= */
 /* M3 window size classes: compact below 600px, medium from 600px,
    expanded from 840px. */
 
 @media (max-width: 599px) {
-  html {
-    scroll-padding-top: 11rem;
-  }
-
   .tabs {
     --tab-padding: 12px;
   }
@@ -1195,6 +2040,36 @@ button.chip:active::before {
 @media (min-width: 840px) {
   .screen {
     padding-top: 32px;
+  }
+
+  /* Flag review: the conversation on the left, the flags on the right */
+  .review {
+    grid-template-columns: minmax(15rem, 21rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .review__conversation {
+    grid-row: 1;
+    grid-column: 1;
+    position: sticky;
+    top: calc(var(--app-header-height) + 16px);
+    max-height: calc(100vh - var(--app-header-height) - 32px);
+  }
+
+  .review__main {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  /* The summary, the rubber-stamp check, and the filters stay in view. The
+     surface-colored padding hides cards as they scroll under the bar. */
+  .review__bar-wrap {
+    position: sticky;
+    top: var(--app-header-height);
+    z-index: 2;
+    margin-top: -16px;
+    padding: 16px 0 8px;
+    background: var(--md-sys-color-surface);
   }
 }
 

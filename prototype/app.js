@@ -31,6 +31,11 @@
   // and change `state`, which is a copy; "Reset demo" makes a fresh one.
   const DATA = deepFreeze(window.WORKBENCH_DATA);
 
+  // Run a conversation: the scenarios in the prompting study (only F2 has
+  // demo data) and the tools you can pick, which are demo only.
+  const SCENARIO_IDS = ["T1", "T2", "E1", "E2", "F1", "F2"];
+  const TOOLS = ["ChatGPT", "Claude", "Gemini"];
+
   let state = createInitialState();
 
   function createInitialState() {
@@ -42,6 +47,25 @@
       specQuery: "",
       // Set by "Go to flag" on the Spec editor; Flag review opens at this flag.
       openFlagId: null,
+      // Run a conversation: the chosen scenario, tool, and run, and how far
+      // the playback has got. Flag review shows the same run.
+      scenarioId: DATA.scenario.id,
+      tool: TOOLS[0],
+      runId: DATA.runs[0].id,
+      playback: { status: "idle", shown: 0 },
+      // Flag review. Every map is keyed by flag ID unless noted.
+      // decisions: { verdict: "agreed" } or { verdict: "overridden", reason }
+      decisions: {},
+      contextOpen: {}, // the turn is expanded in the card right now
+      contextSeen: {}, // the creator has opened it at least once (unlocks Agree)
+      citesOpen: {}, // "flagId:lineId" when a spec line chip is expanded
+      overrideDrafts: {}, // the reason being typed; a key means the field is open
+      flagFilter: "All",
+      notCheckedReviewed: {}, // "runId:index" when marked as reviewed
+      reviewTurn: null, // the turn highlighted in the conversation
+      // Set by "Open K2 in the spec" on Compare runs: { lineId, note }. The
+      // Spec editor highlights that line once and lands on it.
+      specHighlight: null,
     };
   }
 
@@ -152,6 +176,12 @@
   let specCountTimer = 0;
 
   function renderDefine(body) {
+    // Arriving from "Open K2 in the spec": clear the search so the line
+    // shows, highlight it this once, and land on its chip.
+    const spotlight = state.specHighlight;
+    state.specHighlight = null;
+    if (spotlight) state.specQuery = "";
+
     panelFor("define").querySelector("[data-spec-version]").textContent = state.spec.version;
 
     body.innerHTML = `
@@ -183,11 +213,12 @@
       state.specQuery = search.value;
       renderSpecResults(body);
     });
-    renderSpecResults(body, { announce: false });
+    renderSpecResults(body, { announce: false, spotlight });
+    return spotlight ? body.querySelector(`[data-focus-key="line-${spotlight.lineId}"]`) : null;
   }
 
   // Redraws only the cards, so the search field keeps focus while you type.
-  function renderSpecResults(body, { announce = true } = {}) {
+  function renderSpecResults(body, { announce = true, spotlight = null } = {}) {
     const terms = searchTerms(state.specQuery);
     let total = 0;
     let shown = 0;
@@ -200,7 +231,7 @@
       return `
         <section class="card card--outlined spec-card" aria-labelledby="spec-card-${index}">
           <h2 class="spec-card__title" id="spec-card-${index}">${escapeHtml(card.heading)}</h2>
-          ${renderSpecLines(lines, terms)}
+          ${renderSpecLines(lines, terms, spotlight)}
         </section>`;
     });
 
@@ -229,17 +260,29 @@
     }
   }
 
-  function renderSpecLines(lines, terms) {
+  // spotlight, when set, is { lineId, note }: that line gets highlighted
+  // with the note under its text.
+  function renderSpecLines(lines, terms, spotlight = null) {
     const items = lines.map((line) => {
       const text = `<p class="spec-line__text">${highlight(line.text, terms)}</p>`;
       if (line.id) {
+        const spotlit = Boolean(spotlight) && spotlight.lineId === line.id;
+        const content = spotlit
+          ? `<div class="spec-line__body">
+              ${text}
+              <p class="spec-line__note">
+                <span class="icon" aria-hidden="true">compare_arrows</span>
+                <span>${escapeHtml(spotlight.note)}</span>
+              </p>
+            </div>`
+          : text;
         return `
-          <li class="spec-line">
+          <li class="spec-line${spotlit ? " is-spotlit" : ""}">
             <button type="button" class="chip chip--assist spec-line__id" data-action="show-citing-flags"
               data-line="${escapeHtml(line.id)}" data-focus-key="line-${escapeHtml(line.id)}" aria-haspopup="dialog">
               ${escapeHtml(line.id)}<span class="visually-hidden">, show flags that cite this line</span>
             </button>
-            ${text}
+            ${content}
           </li>`;
       }
       if (line.label) {
@@ -351,6 +394,8 @@
   };
 
   actions["go-to-flag"] = (button) => {
+    const target = findFlag(button.dataset.flag);
+    if (target && target.run.id !== state.runId) changeRunSetup({ runId: target.run.id });
     state.openFlagId = button.dataset.flag;
     citingSheet.close();
     goToScreen("diagnose");
@@ -365,38 +410,836 @@
   };
 
   // 3.2 Run a conversation (Stress-test) ------------------------------------
+  // Pick a scenario, tool, and run, then play the run one message at a time,
+  // the way a live conversation arrives, with the turn count and a way to
+  // skip ahead (DESIGN_SPEC section 4). Playback keeps going if you switch
+  // screens. Choosing a different scenario, tool, or run stops it.
+
+  const PLAYBACK_STEP_MS = 500;
+  let playbackTimer = 0;
+
+  function selectedRun() {
+    return state.runs.find((run) => run.id === state.runId) || state.runs[0];
+  }
+
+  // A new scenario, tool, or run is a new run to play, so the chat clears.
+  function changeRunSetup(change) {
+    stopPlayback();
+    Object.assign(state, change);
+    state.playback = { status: "idle", shown: 0 };
+  }
+
+  function stopPlayback() {
+    clearTimeout(playbackTimer);
+  }
+
+  // Everything the chat shows for one run, in order: the spec loading at
+  // turn 1, then for each turn the script's line and the character's reply.
+  function chatItems(scenario, run) {
+    const items = [{ kind: "system", turn: 1, text: `Turn 1: character spec ${run.specVersion} loaded` }];
+    scenario.userLines.forEach((line) => {
+      items.push({ kind: "user", turn: line.turn, text: line.text });
+      const reply = run.replies.find((candidate) => candidate.turn === line.turn);
+      if (reply) items.push({ kind: "character", turn: reply.turn, text: reply.text });
+    });
+    return items;
+  }
+
+  function breaksText(count) {
+    if (count === 0) return "no possible breaks";
+    return count === 1 ? "1 possible break" : `${count} possible breaks`;
+  }
 
   function renderRun(body) {
-    body.innerHTML = emptyState();
+    const run = selectedRun();
+    const items = chatItems(state.scenario, run);
+
+    const scenarioOptions = SCENARIO_IDS.map((id) => {
+      const hasData = id === state.scenario.id;
+      const label = hasData ? state.scenario.name : `${id} (no demo data)`;
+      return `<option value="${id}"${hasData ? "" : " disabled"}${id === state.scenarioId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+    }).join("");
+    const toolOptions = TOOLS.map(
+      (tool) => `<option value="${tool}"${tool === state.tool ? " selected" : ""}>${tool} (demo)</option>`,
+    ).join("");
+    const runOptions = state.runs.map(
+      (option) => `<option value="${escapeHtml(option.id)}"${option.id === run.id ? " selected" : ""}>${escapeHtml(option.name)}</option>`,
+    ).join("");
+
+    body.innerHTML = `
+      <div class="run-screen">
+        <div class="run-setup">
+          ${selectField("run-scenario", "Scenario", scenarioOptions)}
+          ${selectField("run-tool", "Tool", toolOptions, "Demo only. Every tool plays the same demo run.")}
+          ${selectField("run-run", "Run", runOptions)}
+          <button type="button" class="btn btn--filled btn--icon-leading" data-action="start-run" data-focus-key="start-run">
+            <span class="icon" aria-hidden="true">play_arrow</span>
+            <span>Start run</span>
+          </button>
+        </div>
+
+        <section class="card card--outlined transcript" aria-labelledby="transcript-title">
+          <div class="transcript__header">
+            <h2 class="transcript__title" id="transcript-title">Transcript</h2>
+            <span class="chip chip--icon-leading">
+              <span class="icon" aria-hidden="true">receipt_long</span>
+              <span>Receipt ${escapeHtml(run.receipt)}</span>
+            </span>
+            <span class="chip chip--icon-leading">
+              <span class="icon" aria-hidden="true">description</span>
+              <span>Spec ${escapeHtml(run.specVersion)}</span>
+            </span>
+          </div>
+          <div class="run-progress" hidden>
+            <p class="run-progress__label" id="run-progress-label"></p>
+            <progress class="linear-progress" aria-labelledby="run-progress-label"></progress>
+            <button type="button" class="btn btn--text" data-action="skip-run" data-focus-key="skip-run">Skip to end</button>
+          </div>
+          <div class="chat" tabindex="0" role="region" aria-label="Messages">
+            ${state.playback.shown === 0
+              ? `<p class="chat__empty">Press Start run to play ${escapeHtml(run.receipt)} turn by turn.</p>`
+              : ""}
+            <ol class="chat__list">${items.slice(0, state.playback.shown).map(renderChatItem).join("")}</ol>
+          </div>
+        </section>
+
+        <div class="run-result" role="status"></div>
+      </div>`;
+
+    body.querySelector("#run-scenario").addEventListener("change", (event) => {
+      changeRunSetup({ scenarioId: event.target.value });
+      refresh();
+    });
+    body.querySelector("#run-tool").addEventListener("change", (event) => {
+      changeRunSetup({ tool: event.target.value });
+      refresh();
+    });
+    body.querySelector("#run-run").addEventListener("change", (event) => {
+      changeRunSetup({ runId: event.target.value });
+      refresh();
+    });
+
+    const chat = body.querySelector(".chat");
+    chat.scrollTop = chat.scrollHeight;
+    renderRunStatus(body);
   }
+
+  // A native <select> dressed as an M3 outlined field.
+  function selectField(id, label, options, support = "") {
+    const describedBy = support ? ` aria-describedby="${id}-help"` : "";
+    return `
+      <div class="text-field text-field--select">
+        <select class="text-field__input" id="${id}" data-focus-key="${id}"${describedBy}>${options}</select>
+        <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
+        ${support ? `<p class="text-field__support" id="${id}-help">${escapeHtml(support)}</p>` : ""}
+      </div>`;
+  }
+
+  function renderChatItem(item) {
+    if (item.kind === "system") {
+      return `
+        <li class="chat__system">
+          <span class="icon" aria-hidden="true">description</span>
+          <span>${escapeHtml(item.text)}</span>
+        </li>`;
+    }
+    const speaker = item.kind === "user" ? state.scenario.userName : state.scenario.characterName;
+    return `
+      <li class="bubble bubble--${item.kind}">
+        <p class="bubble__meta">
+          <span class="bubble__speaker">${escapeHtml(speaker)}</span>
+          <span class="bubble__turn">Turn ${item.turn}<span class="visually-hidden">:</span></span>
+        </p>
+        <p class="bubble__text">${escapeHtml(item.text)}</p>
+      </li>`;
+  }
+
+  // Updates what changes while a run plays: the turn count, the Start and
+  // Skip buttons, and the result card at the end.
+  function renderRunStatus(body) {
+    const { status, shown } = state.playback;
+    const run = selectedRun();
+    const items = chatItems(state.scenario, run);
+    const totalTurns = items[items.length - 1].turn;
+    const turn = shown > 0 ? items[shown - 1].turn : 0;
+
+    const progress = body.querySelector(".run-progress");
+    const skipHadFocus = document.activeElement === progress.querySelector('[data-action="skip-run"]');
+    progress.hidden = status !== "playing";
+    progress.querySelector(".run-progress__label").textContent = `Turn ${turn} of ${totalTurns}`;
+    const bar = progress.querySelector("progress");
+    bar.max = totalTurns;
+    bar.value = turn;
+
+    body.querySelector('[data-action="start-run"]').disabled = status === "playing";
+
+    // The result goes into a live region, so screen readers hear it once.
+    const result = body.querySelector(".run-result");
+    if (status !== "done") {
+      result.innerHTML = "";
+    } else if (!result.firstElementChild) {
+      result.innerHTML = `
+        <div class="card card--filled run-result__card">
+          <span class="icon" aria-hidden="true">task_alt</span>
+          <p class="run-result__text">Run complete. The workbench found ${breaksText(run.flags.length)}.</p>
+          <button type="button" class="btn btn--filled" data-action="review-flags" data-focus-key="review-flags">Review flags</button>
+        </div>`;
+      // Skip to end just disappeared, so its focus moves to the next step.
+      if (skipHadFocus) result.querySelector('[data-action="review-flags"]').focus();
+    }
+  }
+
+  // Shows the next message. Only touches the page while the Run screen is
+  // open; coming back to it redraws everything from `state`.
+  function playNext() {
+    const items = chatItems(state.scenario, selectedRun());
+    state.playback.shown += 1;
+    if (state.playback.shown >= items.length) {
+      state.playback.status = "done";
+    } else {
+      playbackTimer = setTimeout(playNext, PLAYBACK_STEP_MS);
+    }
+    if (currentScreen !== "run") return;
+
+    const body = panelFor("run").querySelector("[data-screen-body]");
+    const chat = body.querySelector(".chat");
+    // Follow new messages, unless the creator scrolled up to reread.
+    const atBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 48;
+    chat.querySelector(".chat__list").insertAdjacentHTML("beforeend", renderChatItem(items[state.playback.shown - 1]));
+    if (atBottom) chat.scrollTop = chat.scrollHeight;
+    renderRunStatus(body);
+  }
+
+  actions["start-run"] = () => {
+    stopPlayback();
+    state.playback = { status: "playing", shown: 1 };
+    const body = panelFor("run").querySelector("[data-screen-body]");
+    renderRun(body);
+    // Start run is disabled while it plays, so focus moves to Skip to end.
+    body.querySelector('[data-action="skip-run"]').focus();
+    playbackTimer = setTimeout(playNext, PLAYBACK_STEP_MS);
+  };
+
+  actions["skip-run"] = () => {
+    stopPlayback();
+    const items = chatItems(state.scenario, selectedRun());
+    const body = panelFor("run").querySelector("[data-screen-body]");
+    const chat = body.querySelector(".chat");
+    chat.querySelector(".chat__list").insertAdjacentHTML(
+      "beforeend",
+      items.slice(state.playback.shown).map(renderChatItem).join(""),
+    );
+    state.playback = { status: "done", shown: items.length };
+    chat.scrollTop = chat.scrollHeight;
+    renderRunStatus(body);
+  };
+
+  actions["review-flags"] = () => {
+    state.openFlagId = null;
+    goToScreen("diagnose");
+  };
 
   // 3.3 Flag review (Diagnose) ----------------------------------------------
+  // The heart of the workbench: the AI proposes flags, and the creator makes
+  // the call on each one (DESIGN_SPEC 7.1 to 7.4).
+  // - Evidence first: Agree unlocks only after "Show in context".
+  // - An override needs a reason of at least 3 words.
+  // - Agree and Override look the same, so the screen doesn't push agreement.
+  // - Agreeing with every flag triggers a rubber-stamp check.
+  // - What the AI could not check is listed for the creator to read.
+  // Every decision redraws the screen; announceReview() tells screen readers.
+
+  const CONFIDENCE_FILTERS = ["All", "High", "Medium", "Low"];
+  const MIN_REASON_WORDS = 3;
+  const RUBBER_STAMP_MESSAGE =
+    "You agreed with every flag. The AI makes mistakes too, so check again whether each one is really a break.";
+
+  function countWords(text) {
+    return text.trim().split(/\s+/).filter(Boolean).length;
+  }
+
+  function verdictOf(decisions, flag) {
+    return decisions[flag.id] ? decisions[flag.id].verdict : null;
+  }
+
+  // "6 flags, 0 agreed, 0 overridden. First break: turn 3." The first break
+  // is the earliest flag the creator hasn't overridden.
+  function reviewSummary(flags, decisions) {
+    const agreed = flags.filter((flag) => verdictOf(decisions, flag) === "agreed").length;
+    const overridden = flags.filter((flag) => verdictOf(decisions, flag) === "overridden").length;
+    const standing = flags.filter((flag) => verdictOf(decisions, flag) !== "overridden").map((flag) => flag.turn);
+    const firstBreak = standing.length > 0 ? `turn ${Math.min(...standing)}` : "none";
+    const noun = flags.length === 1 ? "flag" : "flags";
+    return `${flags.length} ${noun}, ${agreed} agreed, ${overridden} overridden. First break: ${firstBreak}.`;
+  }
+
+  function agreedWithEvery(flags, decisions) {
+    return flags.length > 0 && flags.every((flag) => verdictOf(decisions, flag) === "agreed");
+  }
+
+  function visibleFlags(flags, filter) {
+    return filter === "All" ? flags : flags.filter((flag) => flag.confidence === filter);
+  }
+
+  // "Turn 4, knowledge boundary"
+  function flagTitle(flag) {
+    return `Turn ${flag.turn}, ${flag.type.toLowerCase()}`;
+  }
+
+  function cardId(flag) {
+    return `flag-${flag.id}`;
+  }
 
   function renderDiagnose(body) {
-    const target = state.openFlagId ? findFlag(state.openFlagId) : null;
-    const note = target
-      ? `You chose the flag at ${flagPlace(target.run, target.flag)}. This screen will open there once it is built.`
-      : "";
-    body.innerHTML = emptyState(note);
+    const run = selectedRun();
+    const flags = [...run.flags].sort((a, b) => a.turn - b.turn);
+
+    // Arriving from "Go to flag": make sure that flag shows, then land on it.
+    const target = state.openFlagId ? flags.find((flag) => flag.id === state.openFlagId) : null;
+    state.openFlagId = null;
+    if (target) {
+      if (visibleFlags([target], state.flagFilter).length === 0) state.flagFilter = "All";
+      state.reviewTurn = target.turn;
+    }
+
+    const shown = visibleFlags(flags, state.flagFilter);
+    const cards = shown.length > 0
+      ? `<ol class="flag-cards">${shown.map((flag) => `<li>${renderFlagCard(run, flag)}</li>`).join("")}</ol>`
+      : `<p class="card card--outlined flag-cards__empty">No ${state.flagFilter.toLowerCase()}-confidence flags in this run.</p>`;
+
+    body.innerHTML = `
+      <div class="review">
+        <div class="review__main">
+          <div class="review__bar-wrap">
+            <div class="review__bar">
+              <p class="review__summary">${escapeHtml(reviewSummary(flags, state.decisions))}</p>
+              ${agreedWithEvery(flags, state.decisions)
+                ? `<p class="review__nudge">
+                    <span class="icon" aria-hidden="true">fact_check</span>
+                    <span>${RUBBER_STAMP_MESSAGE}</span>
+                  </p>`
+                : ""}
+              ${renderFlagFilters()}
+            </div>
+          </div>
+          <h2 class="visually-hidden">Flags</h2>
+          ${cards}
+          ${renderNotChecked(run)}
+        </div>
+        ${renderConversation(run, flags)}
+      </div>`;
+
+    body.querySelectorAll("[data-reason-for]").forEach((field) => {
+      field.addEventListener("input", () => {
+        const flagId = field.dataset.reasonFor;
+        state.overrideDrafts[flagId] = field.value;
+        const save = body.querySelector(`[data-focus-key="save-${flagId}"]`);
+        save.setAttribute("aria-disabled", String(countWords(field.value) < MIN_REASON_WORDS));
+      });
+    });
+    body.querySelectorAll("[data-reviewed]").forEach((box) => {
+      box.addEventListener("change", () => {
+        state.notCheckedReviewed[box.dataset.reviewed] = box.checked;
+      });
+    });
+
+    if (!target) return null;
+    revealTurn(body);
+    return body.querySelector(`#${cardId(target)}`);
   }
 
-  // 3.4 Compare runs (Repair) -----------------------------------------------
-
-  function renderCompare(body) {
-    body.innerHTML = emptyState();
+  function renderFlagFilters() {
+    const chips = CONFIDENCE_FILTERS.map((filter) => {
+      const selected = filter === state.flagFilter;
+      return `
+        <button type="button" class="chip chip--filter${selected ? " chip--icon-leading" : ""}" aria-pressed="${selected}"
+          data-action="filter-flags" data-filter="${filter}" data-focus-key="filter-${filter}">
+          ${selected ? '<span class="icon" aria-hidden="true">check</span>' : ""}
+          <span>${filter}</span>
+        </button>`;
+    }).join("");
+    return `<div class="filter-chips" role="group" aria-label="Show flags by confidence">${chips}</div>`;
   }
 
-  // Placeholder until each screen is built.
-  function emptyState(note = "") {
+  function renderFlagCard(run, flag) {
+    const id = cardId(flag);
+    const verdict = verdictOf(state.decisions, flag);
+    const contextOpen = Boolean(state.contextOpen[flag.id]);
+    const classes = `card card--outlined flag-card${verdict ? ` is-${verdict}` : ""}`;
+
     return `
-      <div class="card card--outlined empty-state">
-        <span class="icon" aria-hidden="true">construction</span>
-        <div>
-          <p>Nothing on this screen yet.</p>
-          ${note ? `<p class="empty-state__note">${escapeHtml(note)}</p>` : ""}
+      <article class="${classes}" id="${id}" tabindex="-1" aria-labelledby="${id}-title">
+        <h3 class="flag-card__title" id="${id}-title">${escapeHtml(flagTitle(flag))}</h3>
+        <figure class="flag-card__evidence">
+          <blockquote><p><q>${escapeHtml(flag.evidence)}</q></p></blockquote>
+          <figcaption>From ${escapeHtml(state.scenario.characterName)}'s reply</figcaption>
+        </figure>
+        <div class="flag-card__chips">
+          ${flag.cites.map((lineId) => renderCiteChip(flag, lineId)).join("")}
+          <span class="chip chip--icon-leading flag-card__confidence">
+            <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[flag.confidence]}</span>
+            <span>${escapeHtml(flag.confidence)}<span class="visually-hidden"> confidence</span></span>
+          </span>
+        </div>
+        ${flag.cites.map((lineId) => renderCiteText(flag, lineId)).join("")}
+        <p class="flag-card__why"><span class="flag-card__label">Why this flag?</span> ${escapeHtml(flag.why)}</p>
+        ${flag.confidence === "Low"
+          ? `<p class="flag-card__unsure">
+              <span class="icon" aria-hidden="true">help</span>
+              <span>The AI is unsure. Read the turn before deciding.</span>
+            </p>`
+          : ""}
+        <button type="button" class="btn btn--text btn--icon-leading" data-action="toggle-context" data-flag="${flag.id}"
+          aria-expanded="${contextOpen}" aria-controls="${id}-context" data-focus-key="context-${flag.id}">
+          <span class="icon" aria-hidden="true">${contextOpen ? "expand_less" : "expand_more"}</span>
+          <span>${contextOpen ? "Hide context" : "Show in context"}</span>
+        </button>
+        <div class="flag-card__context" id="${id}-context"${contextOpen ? "" : " hidden"}>
+          ${renderFlagContext(run, flag)}
+        </div>
+        ${renderDecision(flag)}
+      </article>`;
+  }
+
+  // A spec line chip, like K2, that expands to show the line's full text.
+  function renderCiteChip(flag, lineId) {
+    const open = Boolean(state.citesOpen[`${flag.id}:${lineId}`]);
+    const key = `cite-${flag.id}-${lineId}`;
+    return `
+      <button type="button" class="chip chip--assist chip--icon-trailing" data-action="toggle-cite"
+        data-flag="${flag.id}" data-line="${escapeHtml(lineId)}" aria-expanded="${open}"
+        aria-controls="${escapeHtml(key)}-text" data-focus-key="${escapeHtml(key)}">
+        <span>${escapeHtml(lineId)}<span class="visually-hidden">, spec line</span></span>
+        <span class="icon" aria-hidden="true">${open ? "expand_less" : "expand_more"}</span>
+      </button>`;
+  }
+
+  function renderCiteText(flag, lineId) {
+    const open = Boolean(state.citesOpen[`${flag.id}:${lineId}`]);
+    return `
+      <p class="flag-card__cite-text" id="cite-${flag.id}-${escapeHtml(lineId)}-text"${open ? "" : " hidden"}>
+        <span class="flag-card__label">${escapeHtml(lineId)}.</span> ${escapeHtml(specLineText(lineId))}
+      </p>`;
+  }
+
+  // The turn in context: Alex's line, the reply with the evidence marked,
+  // and the full text of every spec line the flag cites.
+  function renderFlagContext(run, flag) {
+    const userLine = state.scenario.userLines.find((line) => line.turn === flag.turn);
+    const reply = run.replies.find((candidate) => candidate.turn === flag.turn);
+    const specLines = flag.cites.map(
+      (lineId) => `
+        <p class="context-line">
+          <span class="context-line__speaker">Spec ${escapeHtml(lineId)}</span>
+          ${escapeHtml(specLineText(lineId))}
+        </p>`,
+    );
+    return `
+      <p class="context-line">
+        <span class="context-line__speaker">${escapeHtml(state.scenario.userName)}, turn ${flag.turn}</span>
+        ${escapeHtml(userLine ? userLine.text : "")}
+      </p>
+      <p class="context-line">
+        <span class="context-line__speaker">${escapeHtml(state.scenario.characterName)}, turn ${flag.turn}</span>
+        ${highlight(reply ? reply.text : "", [flag.evidence.toLowerCase()])}
+      </p>
+      ${specLines.join("")}`;
+  }
+
+  // The bottom of a card: Agree and Override, the override reason field, or
+  // the creator's decision with Undo.
+  function renderDecision(flag) {
+    const decision = state.decisions[flag.id];
+    const undo = `
+      <button type="button" class="btn btn--text" data-action="undo-decision" data-flag="${flag.id}" data-focus-key="undo-${flag.id}">
+        Undo<span class="visually-hidden">: ${escapeHtml(flagTitle(flag))}</span>
+      </button>`;
+
+    if (decision && decision.verdict === "agreed") {
+      return `
+        <div class="flag-card__actions">
+          <p class="flag-card__status">
+            <span class="icon icon--filled" aria-hidden="true">check_circle</span>
+            <span>Agreed by you</span>
+          </p>
+          ${undo}
+        </div>`;
+    }
+
+    if (decision && decision.verdict === "overridden") {
+      return `
+        <div class="flag-card__actions">
+          <p class="flag-card__status">
+            <span class="icon" aria-hidden="true">block</span>
+            <span>Overridden by you</span>
+          </p>
+          <p class="flag-card__reason"><span class="flag-card__label">Your reason:</span> ${escapeHtml(decision.reason)}</p>
+          ${undo}
+        </div>`;
+    }
+
+    if (flag.id in state.overrideDrafts) {
+      const draft = state.overrideDrafts[flag.id];
+      const ready = countWords(draft) >= MIN_REASON_WORDS;
+      return `
+        <div class="flag-card__override">
+          <div class="text-field">
+            <textarea class="text-field__input" id="reason-${flag.id}" rows="2" placeholder=" "
+              aria-describedby="reason-${flag.id}-help" data-reason-for="${flag.id}"
+              data-focus-key="reason-${flag.id}">${escapeHtml(draft)}</textarea>
+            <label class="text-field__label" for="reason-${flag.id}">Why is the AI wrong?</label>
+            <p class="text-field__support" id="reason-${flag.id}-help">Use at least ${MIN_REASON_WORDS} words.</p>
+          </div>
+          <div class="flag-card__actions">
+            <button type="button" class="btn btn--filled" data-action="save-override" data-flag="${flag.id}"
+              aria-disabled="${!ready}" data-focus-key="save-${flag.id}">Save</button>
+            <button type="button" class="btn btn--text" data-action="cancel-override" data-flag="${flag.id}"
+              data-focus-key="cancel-${flag.id}">Cancel</button>
+          </div>
+        </div>`;
+    }
+
+    // Evidence first: Agree stays off until the creator has seen the turn.
+    // aria-disabled (not disabled) keeps it reachable, with the reason linked.
+    const seen = Boolean(state.contextSeen[flag.id]);
+    return `
+      <div class="flag-card__actions">
+        <button type="button" class="btn btn--outlined" data-action="agree" data-flag="${flag.id}"
+          aria-disabled="${!seen}"${seen ? "" : ` aria-describedby="agree-hint-${flag.id}"`}
+          data-focus-key="agree-${flag.id}">Agree</button>
+        <button type="button" class="btn btn--outlined" data-action="start-override" data-flag="${flag.id}"
+          data-focus-key="override-${flag.id}">Override</button>
+        ${seen ? "" : `<p class="flag-card__hint" id="agree-hint-${flag.id}">Show the turn in context before you agree.</p>`}
+      </div>`;
+  }
+
+  function renderNotChecked(run) {
+    if (run.notChecked.length === 0) return "";
+    const items = run.notChecked.map((item, index) => {
+      const key = `${run.id}:${index}`;
+      const boxId = `reviewed-${run.id}-${index}`;
+      return `
+        <div class="not-checked__item">
+          <p><span class="flag-card__label">${escapeHtml(item.topic)}.</span> ${escapeHtml(item.text)}</p>
+          <label class="checkbox" for="${boxId}">
+            <input type="checkbox" id="${boxId}" data-reviewed="${key}" data-focus-key="${boxId}"${state.notCheckedReviewed[key] ? " checked" : ""}>
+            <span>Mark as reviewed<span class="visually-hidden">: ${escapeHtml(item.topic)}</span></span>
+          </label>
+        </div>`;
+    });
+    return `
+      <section class="card card--outlined not-checked" aria-labelledby="not-checked-title">
+        <h3 class="not-checked__title" id="not-checked-title">
+          <span class="icon" aria-hidden="true">visibility_off</span>
+          <span>Not checked by the AI</span>
+        </h3>
+        ${items.join("")}
+      </section>`;
+  }
+
+  // The compact conversation. Flagged turns get a colored border, a flag
+  // icon, and the word "Flagged", plus the creator's decision once made.
+  function renderConversation(run, flags) {
+    const turns = state.scenario.userLines.map((line) => {
+      const reply = run.replies.find((candidate) => candidate.turn === line.turn);
+      const turnFlags = flags.filter((flag) => flag.turn === line.turn);
+      const verdicts = turnFlags.map((flag) => verdictOf(state.decisions, flag));
+      let status = "";
+      if (turnFlags.length > 0 && verdicts.every((verdict) => verdict === "agreed")) status = "Agreed by you";
+      if (turnFlags.length > 0 && verdicts.every((verdict) => verdict === "overridden")) status = "Overridden by you";
+
+      let classes = "convo-turn";
+      if (turnFlags.length > 0) classes += " convo-turn--flagged";
+      if (status === "Overridden by you") classes += " convo-turn--overridden";
+      const evidence = turnFlags.map((flag) => flag.evidence.toLowerCase());
+
+      return `
+        <li class="${classes}" data-turn="${line.turn}"${state.reviewTurn === line.turn ? ' aria-current="true"' : ""}>
+          <p class="convo-turn__head">
+            <span>Turn ${line.turn}</span>
+            ${turnFlags.length > 0
+              ? `<span class="convo-turn__flag"><span class="icon icon--filled" aria-hidden="true">flag</span>Flagged</span>`
+              : ""}
+            ${status ? `<span class="convo-turn__status">${status}</span>` : ""}
+          </p>
+          <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.userName)}:</span> ${escapeHtml(line.text)}</p>
+          <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.characterName)}:</span> ${highlight(reply ? reply.text : "", evidence)}</p>
+        </li>`;
+    });
+
+    return `
+      <div class="review__conversation">
+        <div class="review__convo-head">
+          <h2 class="review__convo-title" id="review-convo-title">Conversation</h2>
+          <p class="review__convo-run">${escapeHtml(run.name)} &middot; ${escapeHtml(run.receipt)}</p>
+        </div>
+        <div class="review__convo-scroll" tabindex="0" role="region" aria-labelledby="review-convo-title"
+          data-scroll-key="review-convo">
+          <ol class="convo">
+            <li class="convo__system">Turn 1: character spec ${escapeHtml(run.specVersion)} loaded</li>
+            ${turns.join("")}
+          </ol>
         </div>
       </div>`;
   }
+
+  // Scrolls the conversation (only its own box, never the page) so the
+  // highlighted turn is in view.
+  function revealTurn(body) {
+    const scroller = body.querySelector(".review__convo-scroll");
+    const turn = scroller ? scroller.querySelector('[aria-current="true"]') : null;
+    if (!turn) return;
+    const above = turn.offsetTop < scroller.scrollTop;
+    const below = turn.offsetTop + turn.offsetHeight > scroller.scrollTop + scroller.clientHeight;
+    if (above || below) scroller.scrollTop = turn.offsetTop - 8;
+  }
+
+  // Screen readers hear the new summary after each decision, and the
+  // rubber-stamp check when it applies.
+  function announceReview() {
+    const flags = selectedRun().flags;
+    const summary = reviewSummary(flags, state.decisions);
+    announce(agreedWithEvery(flags, state.decisions) ? `${summary} ${RUBBER_STAMP_MESSAGE}` : summary);
+  }
+
+  function diagnoseBody() {
+    return panelFor("diagnose").querySelector("[data-screen-body]");
+  }
+
+  actions["filter-flags"] = (chip) => {
+    state.flagFilter = chip.dataset.filter;
+    refresh();
+  };
+
+  actions["toggle-cite"] = (chip) => {
+    const key = `${chip.dataset.flag}:${chip.dataset.line}`;
+    state.citesOpen[key] = !state.citesOpen[key];
+    refresh();
+  };
+
+  actions["toggle-context"] = (button) => {
+    const flagId = button.dataset.flag;
+    const opening = !state.contextOpen[flagId];
+    state.contextOpen[flagId] = opening;
+    if (opening) {
+      state.contextSeen[flagId] = true;
+      state.reviewTurn = findFlag(flagId).flag.turn;
+    }
+    refresh();
+    if (opening) revealTurn(diagnoseBody());
+  };
+
+  actions["agree"] = (button) => {
+    const flagId = button.dataset.flag;
+    if (!state.contextSeen[flagId]) {
+      // Not yet: send the creator to the evidence instead.
+      diagnoseBody().querySelector(`[data-focus-key="context-${flagId}"]`).focus();
+      return;
+    }
+    state.decisions[flagId] = { verdict: "agreed" };
+    refresh({ focusKey: `undo-${flagId}` });
+    announceReview();
+  };
+
+  actions["start-override"] = (button) => {
+    const flagId = button.dataset.flag;
+    state.overrideDrafts[flagId] = "";
+    refresh({ focusKey: `reason-${flagId}` });
+  };
+
+  actions["cancel-override"] = (button) => {
+    const flagId = button.dataset.flag;
+    delete state.overrideDrafts[flagId];
+    refresh({ focusKey: `override-${flagId}` });
+  };
+
+  actions["save-override"] = (button) => {
+    const flagId = button.dataset.flag;
+    const reason = (state.overrideDrafts[flagId] || "").trim();
+    if (countWords(reason) < MIN_REASON_WORDS) {
+      diagnoseBody().querySelector(`[data-focus-key="reason-${flagId}"]`).focus();
+      return;
+    }
+    state.decisions[flagId] = { verdict: "overridden", reason };
+    delete state.overrideDrafts[flagId];
+    refresh({ focusKey: `undo-${flagId}` });
+    announceReview();
+  };
+
+  actions["undo-decision"] = (button) => {
+    const flagId = button.dataset.flag;
+    delete state.decisions[flagId];
+    refresh({ focusKey: `agree-${flagId}` });
+    announceReview();
+  };
+
+  // 3.4 Compare runs (Repair) -----------------------------------------------
+  // Same script, same spec, different results: where each run broke, the
+  // replies side by side, and a next step for every spec line that broke in
+  // both runs, which leads back to the Spec editor (Repair closes the loop to
+  // Define). A break is any flag the creator hasn't overridden on Flag review,
+  // so the creator's calls shape this screen.
+
+  // "break" when a flag on the turn still stands, "overridden" when the
+  // creator overrode every flag on it, "clean" when nothing was flagged.
+  function turnStatus(run, turn, decisions) {
+    const turnFlags = run.flags.filter((flag) => flag.turn === turn);
+    if (turnFlags.length === 0) return "clean";
+    return turnFlags.some((flag) => verdictOf(decisions, flag) !== "overridden") ? "break" : "overridden";
+  }
+
+  function breaksIn(run, decisions) {
+    return run.flags.filter((flag) => verdictOf(decisions, flag) !== "overridden");
+  }
+
+  function firstBreakText(run, decisions) {
+    const turns = breaksIn(run, decisions).map((flag) => flag.turn);
+    return turns.length > 0 ? `First break: turn ${Math.min(...turns)}.` : "No breaks.";
+  }
+
+  // Spec lines that a standing flag cites in every run, in spec order.
+  function linesBrokenInAll(runs, decisions, specOrder) {
+    const citedPerRun = runs.map((run) => new Set(breaksIn(run, decisions).flatMap((flag) => flag.cites)));
+    return specOrder.filter((lineId) => citedPerRun.every((cited) => cited.has(lineId)));
+  }
+
+  // "v1" becomes "v2".
+  function nextVersion(version) {
+    const number = parseInt(String(version).replace(/^v/, ""), 10);
+    return Number.isNaN(number) ? "the next version" : `v${number + 1}`;
+  }
+
+  function renderCompare(body) {
+    const runs = state.runs;
+    const specOrder = state.spec.sections.flatMap((section) => section.lines.map((line) => line.id));
+    const broken = linesBrokenInAll(runs, state.decisions, specOrder);
+
+    body.innerHTML = `
+      <div class="compare">
+        <section aria-labelledby="drift-title">
+          <h2 class="compare__heading" id="drift-title">Where each run broke</h2>
+          <div class="drift">${runs.map(renderDriftRow).join("")}</div>
+          <ul class="drift__legend">
+            <li><span class="drift__turn drift__turn--sample" aria-hidden="true"></span>Clean turn</li>
+            <li>
+              <span class="drift__turn drift__turn--break drift__turn--sample" aria-hidden="true">
+                <span class="icon icon--filled">flag</span>
+              </span>Break
+            </li>
+            <li><span class="drift__turn drift__turn--overridden drift__turn--sample" aria-hidden="true"></span>Flag you overrode</li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="side-by-side-title">
+          <h2 class="compare__heading" id="side-by-side-title">Turn by turn</h2>
+          ${renderCompareTable(runs)}
+        </section>
+
+        <div class="compare__next">
+          ${broken.length > 0
+            ? broken.map(renderNextStep).join("")
+            : '<p class="card card--outlined">No spec line broke in both runs.</p>'}
+        </div>
+      </div>`;
+  }
+
+  // One small square per turn: outlined when clean, filled with a flag icon
+  // when it broke, dashed when the creator overrode its flag.
+  function renderDriftRow(run) {
+    const lines = state.scenario.userLines;
+    const squares = lines.map((line) => {
+      const status = turnStatus(run, line.turn, state.decisions);
+      const said = { clean: "clean", break: "break", overridden: "flag overridden by you" }[status];
+      return `
+        <li class="drift__turn${status === "clean" ? "" : ` drift__turn--${status}`}">
+          ${status === "break" ? '<span class="icon icon--filled" aria-hidden="true">flag</span>' : ""}
+          <span><span class="visually-hidden">Turn </span>${line.turn}<span class="visually-hidden">, ${said}</span></span>
+        </li>`;
+    });
+    const range = `turns ${lines[0].turn} to ${lines[lines.length - 1].turn}`;
+    return `
+      <div class="drift__row">
+        <p class="drift__run">
+          <span>${escapeHtml(run.name)}</span>
+          <span class="drift__receipt">${escapeHtml(run.receipt)}</span>
+        </p>
+        <ol class="drift__strip" aria-label="${escapeHtml(run.name)}, ${range}">${squares.join("")}</ol>
+        <p class="drift__first">${firstBreakText(run, state.decisions)}</p>
+      </div>`;
+  }
+
+  // The runs side by side: one row per turn with Alex's line, then each
+  // run's reply. Replies that broke are highlighted, with the evidence
+  // underlined.
+  function renderCompareTable(runs) {
+    const heads = runs.map(
+      (run) => `<th scope="col">${escapeHtml(run.name)} <span class="compare-table__receipt">(${escapeHtml(run.receipt)})</span></th>`,
+    );
+    const rows = state.scenario.userLines.map(
+      (line) => `
+        <tr>
+          <th scope="row">
+            <span class="compare-table__turn">Turn ${line.turn}</span>
+            <span><span class="compare-table__speaker">${escapeHtml(state.scenario.userName)}:</span> ${escapeHtml(line.text)}</span>
+          </th>
+          ${runs.map((run) => renderCompareCell(run, line.turn)).join("")}
+        </tr>`,
+    );
+    return `
+      <div class="compare-table-wrap" tabindex="0" role="region" aria-labelledby="side-by-side-title">
+        <table class="compare-table">
+          <thead><tr><th scope="col">Turn</th>${heads.join("")}</tr></thead>
+          <tbody>${rows.join("")}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderCompareCell(run, turn) {
+    const reply = run.replies.find((candidate) => candidate.turn === turn);
+    const status = turnStatus(run, turn, state.decisions);
+    const standing = breaksIn(run, state.decisions).filter((flag) => flag.turn === turn);
+
+    let label = "";
+    if (status === "break") {
+      const types = [...new Set(standing.map((flag) => flag.type.toLowerCase()))].join(", ");
+      const cites = [...new Set(standing.flatMap((flag) => flag.cites))].join(", ");
+      label = `
+        <p class="compare-reply__label">
+          <span class="icon icon--filled" aria-hidden="true">flag</span>
+          <span>Flagged: ${escapeHtml(types)}, ${escapeHtml(cites)}</span>
+        </p>`;
+    } else if (status === "overridden") {
+      label = '<p class="compare-reply__label compare-reply__label--quiet">Flag overridden by you</p>';
+    }
+
+    const evidence = standing.map((flag) => flag.evidence.toLowerCase());
+    return `
+      <td class="compare-reply${status === "break" ? " compare-reply--break" : ""}">
+        ${label}
+        <p>${highlight(reply ? reply.text : "", evidence)}</p>
+      </td>`;
+  }
+
+  function renderNextStep(lineId) {
+    return `
+      <article class="card card--filled next-step" aria-labelledby="next-step-${escapeHtml(lineId)}">
+        <h2 class="next-step__title" id="next-step-${escapeHtml(lineId)}">
+          <span class="icon" aria-hidden="true">lightbulb</span>
+          <span>Next step</span>
+        </h2>
+        <p>${escapeHtml(lineId)} broke in both runs. Consider making it more specific in ${nextVersion(state.spec.version)}.</p>
+        <button type="button" class="btn btn--filled btn--icon-leading" data-action="open-spec-line"
+          data-line="${escapeHtml(lineId)}" data-focus-key="open-${escapeHtml(lineId)}">
+          <span class="icon" aria-hidden="true">edit_note</span>
+          <span>Open ${escapeHtml(lineId)} in the spec</span>
+        </button>
+      </article>`;
+  }
+
+  actions["open-spec-line"] = (button) => {
+    state.specHighlight = { lineId: button.dataset.line, note: "From Compare runs: this line broke in both runs." };
+    goToScreen("define");
+  };
 
   // 4. Router and tabs =====================================================
   // The URL hash (#define, #run, #diagnose, #compare) decides which screen
@@ -446,32 +1289,53 @@
     });
     document.title = `${SCREENS[id].title} | ${APP_NAME}`;
 
-    renderScreen(id);
+    // A screen can return an element to land on, like the flag that "Go to
+    // flag" asked for. Otherwise focus goes to the heading when it should move.
+    const landing = renderScreen(id);
     if (isChange) window.scrollTo(0, 0);
-    if (moveFocus) panelFor(id).querySelector(".screen__title").focus({ preventScroll: true });
+    if (landing) {
+      scrollBelowHeader(landing);
+      landing.focus({ preventScroll: true });
+    } else if (moveFocus) {
+      panelFor(id).querySelector(".screen__title").focus({ preventScroll: true });
+    }
   }
 
   function renderScreen(id) {
-    SCREENS[id].render(panelFor(id).querySelector("[data-screen-body]"));
+    return SCREENS[id].render(panelFor(id).querySelector("[data-screen-body]"));
   }
 
-  // Redraws the current screen after a state change, then puts focus back
-  // on the control that had it (matched by data-focus-key), or on the
-  // screen heading if that control is gone.
-  function refresh() {
+  // Scrolls the page so an element sits just below the sticky header, and
+  // below a sticky bar on the same screen, like the one on Flag review.
+  function scrollBelowHeader(element) {
+    let offset = header.offsetHeight + 16;
+    const bar = element.closest("[data-screen-body]").querySelector(".review__bar-wrap");
+    if (bar && getComputedStyle(bar).position === "sticky") offset += bar.offsetHeight;
+    window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - offset);
+  }
+
+  // Redraws the current screen after a state change. Boxes marked with
+  // data-scroll-key keep their scroll position. Focus goes to focusKey if
+  // given, else back to the control that had it (matched by data-focus-key),
+  // else to the screen heading if that control is gone.
+  function refresh({ focusKey = null } = {}) {
     const panel = panelFor(currentScreen);
     const body = panel.querySelector("[data-screen-body]");
     const active = document.activeElement;
     const focusWasInBody = body.contains(active);
-    const focusKey = focusWasInBody ? active.getAttribute("data-focus-key") : null;
+    const key = focusKey || (focusWasInBody ? active.getAttribute("data-focus-key") : null);
+    const scrolls = Array.from(body.querySelectorAll("[data-scroll-key]"), (box) => [box.dataset.scrollKey, box.scrollTop]);
 
     renderScreen(currentScreen);
 
-    if (!focusWasInBody) return;
-    const target = focusKey
-      ? body.querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`)
-      : null;
-    (target || panel.querySelector(".screen__title")).focus();
+    scrolls.forEach(([scrollKey, top]) => {
+      const box = body.querySelector(`[data-scroll-key="${CSS.escape(scrollKey)}"]`);
+      if (box) box.scrollTop = top;
+    });
+    if (!focusWasInBody && !focusKey) return;
+    const target = key ? body.querySelector(`[data-focus-key="${CSS.escape(key)}"]`) : null;
+    if (target) target.focus();
+    else panel.querySelector(".screen__title").focus({ preventScroll: true });
   }
 
   function onHashChange() {
@@ -577,6 +1441,7 @@
   resetButton.addEventListener("click", () => {
     openDialog(resetDialog, resetButton, (choice) => {
       if (choice !== "reset") return;
+      stopPlayback();
       state = createInitialState();
       refresh();
       showSnackbar("Demo reset. Everything is back to the starting data.");
@@ -606,6 +1471,20 @@
     }, 300);
   }
 
+  const announcer = document.getElementById("announcer");
+  let announceTimer = 0;
+
+  // Tells screen readers about a change on a screen that just redrew, like
+  // the new review summary after a decision. Redrawn text isn't announced
+  // by itself, so it goes through this hidden live region.
+  function announce(message) {
+    clearTimeout(announceTimer);
+    announcer.textContent = "";
+    announceTimer = setTimeout(() => {
+      announcer.textContent = message;
+    }, 50);
+  }
+
   // M3: the top app bar changes color once content scrolls under it.
   const header = document.getElementById("app-header");
 
@@ -614,6 +1493,14 @@
   }
 
   window.addEventListener("scroll", updateHeader, { passive: true });
+
+  // Sticky parts of a screen sit just below the header, so the CSS gets its
+  // height as --app-header-height (it changes when the bar wraps on phones).
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--app-header-height", `${header.offsetHeight}px`);
+    }).observe(header);
+  }
 
   // Icons stay hidden until the Material Symbols font has loaded, so an
   // offline page never shows raw icon names such as "restart_alt".
