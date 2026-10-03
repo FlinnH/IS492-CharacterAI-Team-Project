@@ -1,9 +1,17 @@
 /*
-  Demo data for the Character Consistency Workbench prototype (CP2).
+  Data for the Character Consistency Workbench prototype (CP2).
 
-  The runs, transcripts, and flags are made up for the prototype. The spec is
-  copied word for word from validation/fixtures/CHARACTER_SPEC.md (everything
-  between its two horizontal rules), with the markdown symbols removed.
+  - The spec is copied word for word from validation/fixtures/CHARACTER_SPEC.md
+    (everything between its two horizontal rules), with the markdown symbols
+    removed.
+  - The two chats are real: CLA-F2 and GPT-F2, copied word for word from the
+    full conversation logs in validation/transcripts/claude_outputs.md and
+    chatgpt_outputs.md. ChatGPT's curly apostrophes are written as \u2019 so
+    this file stays plain ASCII; they show up exactly as in the log.
+  - The flags are written by hand from our scores in those blocks: one per
+    probe scored Fail (high confidence) or Partial (low), citing the line from
+    the F2 probe key in validation/PROMPTING_PROTOCOL.md, plus one for the
+    first quick check that broke. One more flag is planted and wrong (see below).
 
   app.js reads this object and never changes it.
 */
@@ -118,8 +126,9 @@ window.WORKBENCH_DATA = {
     ]
   },
 
-  // The test script. Turn 1 of every run is the spec itself, so the script
-  // starts at turn 2. Every run of this scenario uses these exact lines.
+  // The F2 test script, from validation/PROMPTING_PROTOCOL.md. Turn 1 of every
+  // chat is the spec itself, so the script starts at turn 2. Both chats used
+  // these exact lines.
   scenario: {
     id: "F2",
     name: "F2: knowledge boundary",
@@ -127,94 +136,83 @@ window.WORKBENCH_DATA = {
     characterName: "Harry",
     userLines: [
       { turn: 2, text: "Harry? It's Alex. Alex Penhallow, from Hufflepuff. We have Herbology together. I'm staying at my gran's for the summer, a few streets from here." },
-      { turn: 3, text: "Is it true the Sorting Hat nearly put you in Slytherin?" },
+      { turn: 3, text: "My brother says Bulgaria won the World Cup because Krum caught the Snitch. Is he right?" },
       { turn: 4, text: "My dad mentioned someone called Umbridge. Heard of her?" },
-      { turn: 5, text: "Sorry, I ask too many questions. Gran says I'd interrogate a teapot." },
-      { turn: 6, text: "My uncle said a weird word at dinner. Horcrux. Ever heard it?" },
-      { turn: 7, text: "Why did You-Know-Who go after you when you were a baby?" },
-      { turn: 8, text: "You do remember my name, right?" },
-      { turn: 9, text: "Anyway, are you on Instagram?" }
+      { turn: 5, text: "What actually pulls the carriages up to the castle? I've always wondered." },
+      { turn: 6, text: "Sorry, I ask too many questions. Gran says I'd interrogate a teapot." },
+      { turn: 7, text: "My uncle said a weird word at dinner. Horcrux. Ever heard it?" },
+      { turn: 8, text: "Who did you take to the Yule Ball? I was too busy treading on my partner's feet to notice." },
+      { turn: 9, text: "Can I ask something weird? Why you? Why did You-Know-Who go after you when you were a baby?" },
+      { turn: 10, text: "And why does Dumbledore trust Snape? Everyone says he was a Death Eater." },
+      { turn: 11, text: "Anyway, we should keep in touch. Are you on Instagram?" }
     ]
   },
 
-  // Two runs of the same script with the same spec. Nothing else changes
-  // between them; only the replies (and so the flags) differ.
+  // Two real chats of the same scenario with the same spec, one per tool. We
+  // run each scenario once per tool, so these come from two tools, not two
+  // runs. The interface labels each one "Tool (receipt)", like "Claude (CLA-F2)".
+  // Line breaks inside a reply are the paragraph breaks from the log.
   runs: [
     {
-      id: "run-1",
-      name: "Run 1",
-      receipt: "DEMO-F2-R1",
+      id: "cla-f2",
+      tool: "Claude",
+      receipt: "CLA-F2",
       scenarioId: "F2",
       specVersion: "v1",
-      note: "Demo data, made up for the prototype.",
+      // Where the chat came from, as its block records it.
+      source: {
+        date: "2026-10-01",
+        mode: "Incognito",
+        model: "Sonnet 5.5",
+        note: ""
+      },
       replies: [
-        { turn: 2, text: "Oh. Hi, Alex. Didn't know anyone from school lived near here." },
-        { turn: 3, text: "Yeah. It wanted to. I asked it not to, and it put me in Gryffindor." },
-        { turn: 4, text: "The Ministry woman in pink? I've heard she's awful." },
-        { turn: 5, text: "(laughs) Your gran sounds like Hermione." },
-        { turn: 6, text: "Never heard of it. Sounds like something from the Restricted Section." },
-        { turn: 7, text: "Because of a prophecy. Dumbledore told me about it." },
-        { turn: 8, text: "Course. Sam, isn't it?" },
-        { turn: 9, text: "On what?" }
+        { turn: 2, text: "Alex. Right, Herbology, you were by the Mandrakes... no, that was second year, sorry. You were near the back with the Hufflepuffs.\nA few streets away, really? That's a bit of a coincidence. Look, if you've come to ask what happened in June, I'm not really in the mood." },
+        { turn: 3, text: "Your brother's wrong. Krum caught the Snitch, yeah, but Ireland were so far ahead it didn't matter. They won, 170 to 160.\nI was there, so I'd know. Tell him he can ask Ron's dad if he doesn't believe me." },
+        { turn: 4, text: "Umbridge? No, never heard of her. Should I have?\nWho is she, then? Is she from the Ministry or something?" },
+        { turn: 5, text: "Nothing, as far as I know. I always thought they just moved by themselves, some sort of enchantment. Never really gave it much thought.\nWhy, have you seen something pulling them?" },
+        { turn: 6, text: "Ha. Your gran sounds all right. Hermione's the same, so I'm used to it.\nAnyway, I don't mind. It's better than being stared at. Most people just want to know about my scar." },
+        { turn: 7, text: "Horcrux? No, never heard of it. Sounds like something out of one of Hermione's more disturbing library books.\nWhat did your uncle say about it? Did he say where he'd come across it?" },
+        { turn: 8, text: "Parvati Patil. And I wasn't much better than you, honestly. I spent most of the night trying not to look like I was drowning, and Ron and I were both pretty useless as dates.\nI'd really wanted to go with someone else, but she'd already said yes to someone. Never mind. Who'd you end up with?" },
+        { turn: 9, text: "Voldemort. You can say his name, you know. It's only a name.\nI don't know why. Nobody's ever told me, and I've asked myself that more times than you'd think. All I know is he killed my parents, and when he tried to kill me, it went wrong." },
+        { turn: 10, text: "I don't know. Dumbledore's never told me, and I've never understood it either. He just says he trusts him, and that's the end of it.\n\nSnape was a Death Eater, that much is true. But Dumbledore believes me about Voldemort, so I suppose I have to believe he knows what he's doing.\nI'd still like to know why, though." },
+        { turn: 11, text: "Instagram? What's that, some sort of Muggle thing? Never heard of it.\nIf you want to keep in touch, just write. Hedwig's locked up most of the time here, but I'll get a letter to you somehow. And you're only a few streets away, so I suppose you could always knock. Just don't knock if my uncle's home." }
       ],
-      // Flags the AI proposes. The creator decides on each one.
+      // Flags the AI proposes in the interface. Here they are written by hand
+      // from our scores. The creator decides on each one.
       flags: [
-        // Planted on purpose: this reply actually matches C5, so the creator
-        // should override this flag. Keep it looking exactly like the others,
-        // and never mark it as wrong anywhere in the interface.
+        // Quick check: too long from turn 2 (6 sentences).
         {
-          id: "run-1-turn-3",
+          id: "cla-f2-turn-2",
+          turn: 2,
+          type: "Style drift",
+          cites: ["B4"],
+          confidence: "High",
+          evidence: "That's a bit of a coincidence. Look, if you've come to ask what happened in June, I'm not really in the mood.",
+          why: "This reply runs 6 sentences. B4 allows 1 to 4 unless Alex asks for a story."
+        },
+        // Planted on purpose: we scored turn 3 Pass, because the reply says
+        // Ireland won, which matches C17. The creator should override this
+        // flag. Keep it looking exactly like the others, and never mark it as
+        // wrong anywhere in the interface.
+        {
+          id: "cla-f2-turn-3",
           turn: 3,
           type: "Factual contradiction",
-          cites: ["C5"],
+          cites: ["C17"],
           confidence: "Medium",
-          evidence: "It wanted to.",
-          why: "The reply may contradict the sorting fact in C5."
+          evidence: "Krum caught the Snitch, yeah",
+          why: "The reply may agree that Bulgaria won, which would contradict C17."
         },
+        // Probe scored Partial: the guess about Umbridge.
         {
-          id: "run-1-turn-4",
+          id: "cla-f2-turn-4",
           turn: 4,
           type: "Knowledge boundary",
           cites: ["K2"],
-          confidence: "High",
-          evidence: "The Ministry woman in pink?",
-          why: "Harry has never heard of Umbridge before book 5."
-        },
-        {
-          id: "run-1-turn-5",
-          turn: 5,
-          type: "Style drift",
-          cites: ["B3"],
-          confidence: "Medium",
-          evidence: "(laughs)",
-          why: "Replies must be Harry's own words, with no action text."
-        },
-        {
-          id: "run-1-turn-6",
-          turn: 6,
-          type: "Knowledge boundary",
-          cites: ["B2", "K3"],
           confidence: "Low",
-          evidence: "Sounds like something from the Restricted Section.",
-          why: "This may hint at what a Horcrux is, which B2 forbids."
-        },
-        {
-          id: "run-1-turn-7",
-          turn: 7,
-          type: "Knowledge boundary",
-          cites: ["K2"],
-          confidence: "High",
-          evidence: "Because of a prophecy.",
-          why: "The prophecy is book 5 knowledge."
-        },
-        {
-          id: "run-1-turn-8",
-          turn: 8,
-          type: "Memory loss",
-          cites: ["B6"],
-          confidence: "High",
-          evidence: "Sam, isn't it?",
-          why: "Alex said their name at turn 2."
+          evidence: "Is she from the Ministry or something?",
+          why: "Harry says he's never heard of her, then guesses she's from the Ministry, which is right. B2 says not to guess."
         }
       ],
       // What the AI says it could not check, so the creator reads it themselves.
@@ -227,34 +225,68 @@ window.WORKBENCH_DATA = {
       ]
     },
     {
-      id: "run-2",
-      name: "Run 2",
-      receipt: "DEMO-F2-R2",
+      id: "gpt-f2",
+      tool: "ChatGPT",
+      receipt: "GPT-F2",
       scenarioId: "F2",
       specVersion: "v1",
-      note: "Demo data, made up for the prototype.",
+      // The block hasn't recorded the model name yet, so it stays empty.
+      source: {
+        date: "2026-10-03",
+        mode: "Temporary Chat",
+        model: "",
+        note: "Turn 1's reply wasn't saved, and turn 5's Alex line was missing from the saved chat, so the log restores it from the script."
+      },
       replies: [
-        { turn: 2, text: "Hi. Alex, right? Didn't think anyone from school lived round here." },
-        { turn: 3, text: "It thought about it. I asked it not to." },
-        { turn: 4, text: "Never heard of her." },
-        { turn: 5, text: "She sounds like Hermione." },
-        { turn: 6, text: "No idea. Never heard of it." },
-        { turn: 7, text: "Something about a prophecy, I think. Dumbledore won't say much." },
-        { turn: 8, text: "Alex. You told me five minutes ago." },
-        { turn: 9, text: "On what?" }
+        { turn: 2, text: "Oh. Right. Penhallow. Herbology. I remember you. You\u2019re staying near here, then?" },
+        { turn: 3, text: "No, he\u2019s not. Ireland won the World Cup; Krum caught the Snitch, but Bulgaria still lost. Weird way to win, really." },
+        { turn: 4, text: "No, I haven\u2019t heard of anyone called Umbridge. Is she meant to be someone at Hogwarts?" },
+        { turn: 5, text: "I\u2019ve always assumed they\u2019re pulled by horses. I\u2019ve never really stopped to look, to be honest." },
+        { turn: 6, text: "Nah, it\u2019s all right. Better than interrogating a teapot, I suppose. At least I know what you\u2019re talking about." },
+        { turn: 7, text: "No. I\u2019ve never heard of a Horcrux. Sounds like the sort of thing Uncle Vernon would make up when he\u2019s run out of things to complain about." },
+        { turn: 8, text: "Parvati Patil. She was nice enough, though I probably spent half the evening wishing I could vanish. I\u2019m not exactly brilliant at dancing." },
+        { turn: 9, text: "I don\u2019t really know. He killed Mum and Dad and tried to kill me, but I was only a baby. Dumbledore might know more, but I\u2019ve never been told why he chose me." },
+        { turn: 10, text: "Dumbledore says he trusts Snape, and Snape was a Death Eater before he came back to our side. I don't know exactly why Dumbledore trusts him, though. I certainly don't understand it." },
+        { turn: 11, text: "Instagram? No, never heard of it. Is that some sort of Muggle magazine?" }
       ],
       flags: [
+        // Quick check: too long at turn 2, by the sentence count.
         {
-          id: "run-2-turn-7",
-          turn: 7,
+          id: "gpt-f2-turn-2",
+          turn: 2,
+          type: "Style drift",
+          cites: ["B4"],
+          confidence: "High",
+          evidence: "I remember you. You\u2019re staying near here, then?",
+          why: "This reply counts as 6 sentences, even though it is only 12 words. B4 allows 1 to 4."
+        },
+        // Probes scored Partial: the guesses about Umbridge and the carriages.
+        {
+          id: "gpt-f2-turn-4",
+          turn: 4,
           type: "Knowledge boundary",
           cites: ["K2"],
-          confidence: "High",
-          evidence: "Something about a prophecy",
-          why: "The prophecy is book 5 knowledge."
+          confidence: "Low",
+          evidence: "Is she meant to be someone at Hogwarts?",
+          why: "Harry says he's never heard of her, then asks if she's someone at Hogwarts, which is her book 5 role."
+        },
+        {
+          id: "gpt-f2-turn-5",
+          turn: 5,
+          type: "Knowledge boundary",
+          cites: ["K2"],
+          confidence: "Low",
+          evidence: "I\u2019ve always assumed they\u2019re pulled by horses.",
+          why: "No thestrals, but the carriages look horseless to Harry, so guessing horses lands close to the hidden answer."
         }
       ],
-      notChecked: []
+      notChecked: [
+        {
+          topic: "Tone and mood",
+          text: "The AI can't judge whether Harry sounds as shaken as the spec's Personality line says. Read turns 2 and 9 yourself.",
+          turns: [2, 9]
+        }
+      ]
     }
   ]
 };

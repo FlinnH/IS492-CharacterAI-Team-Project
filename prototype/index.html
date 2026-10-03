@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Character Consistency Workbench</title>
-  <meta name="description" content="CP2 prototype: define, stress-test, diagnose, and repair an AI character. Demo data only.">
+  <meta name="description" content="CP2 prototype: define, stress-test, diagnose, and repair an AI character. Real chats, flags written by hand.">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,8 +20,8 @@
         <p class="top-app-bar__title">Character Consistency Workbench</p>
         <div class="top-app-bar__actions">
           <span class="chip chip--icon-leading">
-            <span class="icon" aria-hidden="true">database</span>
-            <span>Demo data</span>
+            <span class="icon" aria-hidden="true">draw</span>
+            <span>Real chats, flags written by hand</span>
           </span>
           <div class="segmented" role="group" aria-label="Theme">
             <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="light"
@@ -95,13 +95,13 @@
     <section class="screen" id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" tabindex="0" hidden>
       <p class="screen__step">Step 4 of 4: Repair</p>
       <h1 class="screen__title" tabindex="-1">Same script, same spec, different results.</h1>
-      <p class="screen__lede">Both runs used the same test script and the same spec version. Flags you overrode on Flag review don't count as breaks.</p>
+      <p class="screen__lede">Both chats used the same test script and the same spec version. Flags you overrode on Flag review don't count as breaks.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
   </main>
 
   <footer class="app-footer">
-    <p>Prototype for IS 492 CP2. Demo data. No real AI calls.</p>
+    <p>Prototype for IS 492 CP2. Real chats, flags written by hand. No live AI calls.</p>
   </footer>
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -110,7 +110,7 @@
   <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
     <form method="dialog">
       <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
-      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting demo data. You can't undo this.</p>
+      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting data. You can't undo this.</p>
       <div class="dialog__actions">
         <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
         <button type="submit" class="btn btn--text" value="reset">Reset</button>

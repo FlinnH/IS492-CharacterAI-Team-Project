@@ -23,7 +23,7 @@
 
   if (!window.WORKBENCH_DATA) {
     main.innerHTML =
-      '<p class="load-error">The demo data did not load. Check that data.js is in the same folder as index.html.</p>';
+      '<p class="load-error">The data did not load. Check that data.js is in the same folder as index.html.</p>';
     return;
   }
 
@@ -31,8 +31,8 @@
   // and change `state`, which is a copy; "Reset demo" makes a fresh one.
   const DATA = deepFreeze(window.WORKBENCH_DATA);
 
-  // Run a conversation: the scenarios in the prompting study (only F2 has
-  // demo data) and the tools you can pick, which are demo only.
+  // Run a conversation: the scenarios and tools in the prompting study. Each
+  // tool ran each scenario once; the prototype holds the F2 chats only.
   const SCENARIO_IDS = ["T1", "T2", "E1", "E2", "F1", "F2"];
   const TOOLS = ["ChatGPT", "Claude", "Gemini"];
 
@@ -47,10 +47,9 @@
       specQuery: "",
       // Set by "Go to flag" on the Spec editor; Flag review opens at this flag.
       openFlagId: null,
-      // Run a conversation: the chosen scenario, tool, and run, and how far
-      // the playback has got. Flag review shows the same run.
-      scenarioId: DATA.scenario.id,
-      tool: TOOLS[0],
+      // The chat that Run a conversation plays and Flag review shows, and how
+      // far its playback has got. The Tool dropdown picks it, and its
+      // scenario sets the Scenario dropdown.
       runId: DATA.runs[0].id,
       playback: { status: "idle", shown: 0 },
       // Flag review. Every map is keyed by flag ID unless noted.
@@ -126,9 +125,14 @@
     return allFlags().find(({ flag }) => flag.id === flagId) || null;
   }
 
-  // Where a flag sits, for example "Run 1, turn 4".
+  // How the interface names a chat: its tool and receipt, like "Claude (CLA-F2)".
+  function runLabel(run) {
+    return `${run.tool} (${run.receipt})`;
+  }
+
+  // Where a flag sits, for example "Claude (CLA-F2), turn 4".
   function flagPlace(run, flag) {
-    return `${run.name}, turn ${flag.turn}`;
+    return `${runLabel(run)}, turn ${flag.turn}`;
   }
 
   const CONFIDENCE_ICONS = {
@@ -167,7 +171,7 @@
 
   // 3.1 Spec editor (Define) ------------------------------------------------
   // The spec as one card per section. A search filters the lines, each ID
-  // chip opens a side sheet with the demo flags that cite that line, and
+  // chip opens a side sheet with the flags that cite that line, and
   // "Edit spec" says that only the creator can change the spec (DESIGN_SPEC
   // 7.1). Runs stay pinned to the version they used.
 
@@ -333,12 +337,12 @@
     return line ? line.text : "";
   }
 
-  // Side sheet body: the line itself, then every demo flag that cites it.
+  // Side sheet body: the line itself, then every flag that cites it.
   function renderCitingFlags(lineId) {
     const citing = allFlags().filter(({ flag }) => flag.cites.includes(lineId));
-    let summary = `${citing.length} demo flags cite this line.`;
-    if (citing.length === 0) summary = "No demo flags cite this line.";
-    if (citing.length === 1) summary = "1 demo flag cites this line.";
+    let summary = `${citing.length} flags cite this line.`;
+    if (citing.length === 0) summary = "No flags cite this line.";
+    if (citing.length === 1) summary = "1 flag cites this line.";
 
     return `
       <div class="cited-line">
@@ -410,10 +414,10 @@
   };
 
   // 3.2 Run a conversation (Stress-test) ------------------------------------
-  // Pick a scenario, tool, and run, then play the run one message at a time,
-  // the way a live conversation arrives, with the turn count and a way to
-  // skip ahead (DESIGN_SPEC section 4). Playback keeps going if you switch
-  // screens. Choosing a different scenario, tool, or run stops it.
+  // The Tool dropdown picks one real chat of the scenario, and Start run plays
+  // it one message at a time, the way a live conversation arrives, with the
+  // turn count and a way to skip ahead (DESIGN_SPEC section 4). Playback keeps
+  // going if you switch screens. Picking another chat stops it.
 
   const PLAYBACK_STEP_MS = 500;
   let playbackTimer = 0;
@@ -422,7 +426,7 @@
     return state.runs.find((run) => run.id === state.runId) || state.runs[0];
   }
 
-  // A new scenario, tool, or run is a new run to play, so the chat clears.
+  // Picking another chat starts over, so the chat area clears.
   function changeRunSetup(change) {
     stopPlayback();
     Object.assign(state, change);
@@ -450,28 +454,37 @@
     return count === 1 ? "1 possible break" : `${count} possible breaks`;
   }
 
+  // Where the chat came from, as its block records it, for example
+  // "Saved 2026-10-01 (Incognito). Model shown: Sonnet 5.5."
+  function sourceText(run) {
+    const { date, mode, model, note } = run.source;
+    return [`Saved ${date} (${mode}).`, model ? `Model shown: ${model}.` : "", note].filter(Boolean).join(" ");
+  }
+
   function renderRun(body) {
     const run = selectedRun();
     const items = chatItems(state.scenario, run);
 
+    // The Scenario dropdown shows this chat's scenario. Scenarios with no chat
+    // in the prototype can't be picked.
     const scenarioOptions = SCENARIO_IDS.map((id) => {
-      const hasData = id === state.scenario.id;
-      const label = hasData ? state.scenario.name : `${id} (no demo data)`;
-      return `<option value="${id}"${hasData ? "" : " disabled"}${id === state.scenarioId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      const hasChats = state.runs.some((chat) => chat.scenarioId === id);
+      const label = id === state.scenario.id ? state.scenario.name : `${id} (not in this prototype)`;
+      return `<option value="${id}"${hasChats ? "" : " disabled"}${id === run.scenarioId ? " selected" : ""}>${escapeHtml(label)}</option>`;
     }).join("");
-    const toolOptions = TOOLS.map(
-      (tool) => `<option value="${tool}"${tool === state.tool ? " selected" : ""}>${tool} (demo)</option>`,
-    ).join("");
-    const runOptions = state.runs.map(
-      (option) => `<option value="${escapeHtml(option.id)}"${option.id === run.id ? " selected" : ""}>${escapeHtml(option.name)}</option>`,
-    ).join("");
+    // The Tool dropdown picks the chat. A tool without a chat of this
+    // scenario says so and can't be picked.
+    const toolOptions = TOOLS.map((tool) => {
+      const chat = state.runs.find((candidate) => candidate.tool === tool && candidate.scenarioId === run.scenarioId);
+      if (!chat) return `<option value="" disabled>${escapeHtml(tool)} (no chat yet)</option>`;
+      return `<option value="${escapeHtml(chat.id)}"${chat.id === run.id ? " selected" : ""}>${escapeHtml(tool)}</option>`;
+    }).join("");
 
     body.innerHTML = `
       <div class="run-screen">
         <div class="run-setup">
           ${selectField("run-scenario", "Scenario", scenarioOptions)}
-          ${selectField("run-tool", "Tool", toolOptions, "Demo only. Every tool plays the same demo run.")}
-          ${selectField("run-run", "Run", runOptions)}
+          ${selectField("run-tool", "Tool", toolOptions, "Each tool ran this scenario once. Pick one to play its chat.")}
           <button type="button" class="btn btn--filled btn--icon-leading" data-action="start-run" data-focus-key="start-run">
             <span class="icon" aria-hidden="true">play_arrow</span>
             <span>Start run</span>
@@ -490,6 +503,7 @@
               <span>Spec ${escapeHtml(run.specVersion)}</span>
             </span>
           </div>
+          <p class="transcript__source">${escapeHtml(sourceText(run))}</p>
           <div class="run-progress" hidden>
             <p class="run-progress__label" id="run-progress-label"></p>
             <progress class="linear-progress" aria-labelledby="run-progress-label"></progress>
@@ -506,15 +520,7 @@
         <div class="run-result" role="status"></div>
       </div>`;
 
-    body.querySelector("#run-scenario").addEventListener("change", (event) => {
-      changeRunSetup({ scenarioId: event.target.value });
-      refresh();
-    });
     body.querySelector("#run-tool").addEventListener("change", (event) => {
-      changeRunSetup({ tool: event.target.value });
-      refresh();
-    });
-    body.querySelector("#run-run").addEventListener("change", (event) => {
       changeRunSetup({ runId: event.target.value });
       refresh();
     });
@@ -550,7 +556,7 @@
           <span class="bubble__speaker">${escapeHtml(speaker)}</span>
           <span class="bubble__turn">Turn ${item.turn}<span class="visually-hidden">:</span></span>
         </p>
-        <p class="bubble__text">${escapeHtml(item.text)}</p>
+        <p class="bubble__text keep-lines">${escapeHtml(item.text)}</p>
       </li>`;
   }
 
@@ -860,7 +866,7 @@
       </p>
       <p class="context-line">
         <span class="context-line__speaker">${escapeHtml(state.scenario.characterName)}, turn ${flag.turn}</span>
-        ${highlight(reply ? reply.text : "", [flag.evidence.toLowerCase()])}
+        <span class="keep-lines">${highlight(reply ? reply.text : "", [flag.evidence.toLowerCase()])}</span>
       </p>
       ${specLines.join("")}`;
   }
@@ -982,7 +988,7 @@
             ${status ? `<span class="convo-turn__status">${status}</span>` : ""}
           </p>
           <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.userName)}:</span> ${escapeHtml(line.text)}</p>
-          <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.characterName)}:</span> ${highlight(reply ? reply.text : "", evidence)}</p>
+          <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.characterName)}:</span> <span class="keep-lines">${highlight(reply ? reply.text : "", evidence)}</span></p>
         </li>`;
     });
 
@@ -990,7 +996,7 @@
       <div class="review__conversation">
         <div class="review__convo-head">
           <h2 class="review__convo-title" id="review-convo-title">Conversation</h2>
-          <p class="review__convo-run">${escapeHtml(run.name)} &middot; ${escapeHtml(run.receipt)}</p>
+          <p class="review__convo-run">${escapeHtml(runLabel(run))}</p>
         </div>
         <div class="review__convo-scroll" tabindex="0" role="region" aria-labelledby="review-convo-title"
           data-scroll-key="review-convo">
@@ -1096,11 +1102,11 @@
   };
 
   // 3.4 Compare runs (Repair) -----------------------------------------------
-  // Same script, same spec, different results: where each run broke, the
-  // replies side by side, and a next step for every spec line that broke in
-  // both runs, which leads back to the Spec editor (Repair closes the loop to
-  // Define). A break is any flag the creator hasn't overridden on Flag review,
-  // so the creator's calls shape this screen.
+  // Same script, same spec, different results: where each tool's chat broke,
+  // the replies side by side, and a next step for every spec line that broke
+  // in both chats, which leads back to the Spec editor (Repair closes the loop
+  // to Define). A break is any flag the creator hasn't overridden on Flag
+  // review, so the creator's calls shape this screen.
 
   // "break" when a flag on the turn still stands, "overridden" when the
   // creator overrode every flag on it, "clean" when nothing was flagged.
@@ -1139,7 +1145,7 @@
     body.innerHTML = `
       <div class="compare">
         <section aria-labelledby="drift-title">
-          <h2 class="compare__heading" id="drift-title">Where each run broke</h2>
+          <h2 class="compare__heading" id="drift-title">Where each chat broke</h2>
           <div class="drift">${runs.map(renderDriftRow).join("")}</div>
           <ul class="drift__legend">
             <li><span class="drift__turn drift__turn--sample" aria-hidden="true"></span>Clean turn</li>
@@ -1160,7 +1166,7 @@
         <div class="compare__next">
           ${broken.length > 0
             ? broken.map(renderNextStep).join("")
-            : '<p class="card card--outlined">No spec line broke in both runs.</p>'}
+            : '<p class="card card--outlined">No spec line broke in both chats.</p>'}
         </div>
       </div>`;
   }
@@ -1181,22 +1187,17 @@
     const range = `turns ${lines[0].turn} to ${lines[lines.length - 1].turn}`;
     return `
       <div class="drift__row">
-        <p class="drift__run">
-          <span>${escapeHtml(run.name)}</span>
-          <span class="drift__receipt">${escapeHtml(run.receipt)}</span>
-        </p>
-        <ol class="drift__strip" aria-label="${escapeHtml(run.name)}, ${range}">${squares.join("")}</ol>
+        <p class="drift__run">${escapeHtml(runLabel(run))}</p>
+        <ol class="drift__strip" aria-label="${escapeHtml(runLabel(run))}, ${range}">${squares.join("")}</ol>
         <p class="drift__first">${firstBreakText(run, state.decisions)}</p>
       </div>`;
   }
 
-  // The runs side by side: one row per turn with Alex's line, then each
-  // run's reply. Replies that broke are highlighted, with the evidence
+  // The chats side by side: one row per turn with Alex's line, then each
+  // chat's reply. Replies that broke are highlighted, with the evidence
   // underlined.
   function renderCompareTable(runs) {
-    const heads = runs.map(
-      (run) => `<th scope="col">${escapeHtml(run.name)} <span class="compare-table__receipt">(${escapeHtml(run.receipt)})</span></th>`,
-    );
+    const heads = runs.map((run) => `<th scope="col">${escapeHtml(runLabel(run))}</th>`);
     const rows = state.scenario.userLines.map(
       (line) => `
         <tr>
@@ -1238,7 +1239,7 @@
     return `
       <td class="compare-reply${status === "break" ? " compare-reply--break" : ""}">
         ${label}
-        <p>${highlight(reply ? reply.text : "", evidence)}</p>
+        <p class="keep-lines">${highlight(reply ? reply.text : "", evidence)}</p>
       </td>`;
   }
 
@@ -1249,7 +1250,7 @@
           <span class="icon" aria-hidden="true">lightbulb</span>
           <span>Next step</span>
         </h2>
-        <p>${escapeHtml(lineId)} broke in both runs. Consider making it more specific in ${nextVersion(state.spec.version)}.</p>
+        <p>${escapeHtml(lineId)} broke in both chats. Consider making it more specific in ${nextVersion(state.spec.version)}.</p>
         <button type="button" class="btn btn--filled btn--icon-leading" data-action="open-spec-line"
           data-line="${escapeHtml(lineId)}" data-focus-key="open-${escapeHtml(lineId)}">
           <span class="icon" aria-hidden="true">edit_note</span>
@@ -1259,7 +1260,7 @@
   }
 
   actions["open-spec-line"] = (button) => {
-    state.specHighlight = { lineId: button.dataset.line, note: "From Compare runs: this line broke in both runs." };
+    state.specHighlight = { lineId: button.dataset.line, note: "From Compare runs: this line broke in both chats." };
     goToScreen("define");
   };
 
