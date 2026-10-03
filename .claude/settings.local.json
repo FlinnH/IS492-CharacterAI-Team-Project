@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node '/Users/huynhminhnhat/.claude/plugins/cache/impeccable/impeccable/4.1.1/skills/impeccable/scripts/hook-admin.mjs' --help)",
+      "Bash(cd *)",
+      "Bash(claude doctor *)"
+    ]
+  }
+}
