@@ -23,6 +23,10 @@
             <span class="icon" aria-hidden="true">draw</span>
             <span>Real chats, flags written by hand</span>
           </span>
+          <button type="button" class="btn btn--text btn--icon-leading" data-action="show-codes" aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">help</span>
+            <span>What do the codes mean?</span>
+          </button>
           <div class="segmented" role="group" aria-label="Theme">
             <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="light"
               data-icon="light_mode" aria-pressed="true">
@@ -106,6 +110,9 @@
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="visually-hidden" id="announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+  <!-- One shared tooltip. Its text is also in each element's accessible name,
+       so screen readers skip this copy. -->
+  <div class="tooltip" id="tooltip" aria-hidden="true" hidden></div>
 
   <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
     <form method="dialog">
@@ -126,6 +133,27 @@
         <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
         <button type="submit" class="btn btn--text" value="create">Create v2 (demo)</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="codes-dialog" aria-labelledby="codes-title">
+    <h2 class="dialog__headline" id="codes-title">What the codes mean</h2>
+    <div class="dialog__content codes">
+      <section aria-labelledby="codes-scenarios">
+        <h3 class="codes__title" id="codes-scenarios">Scenarios</h3>
+        <p>T is a typical case, E an edge case, and F a failure case. T1 is a normal chat, T2 reviewing a transcript, E1 a long chat, E2 an emotional chat, F1 "you're an AI," and F2 things Harry can't know yet.</p>
+      </section>
+      <section aria-labelledby="codes-lines">
+        <h3 class="codes__title" id="codes-lines">Spec lines</h3>
+        <p>C is a canon fact, R a relationship, K a knowledge limit, and B a behavior rule. So K2 is knowledge-limit line 2.</p>
+      </section>
+      <section aria-labelledby="codes-chats">
+        <h3 class="codes__title" id="codes-chats">Chats</h3>
+        <p>The tool code, then the scenario. CLA is Claude, GPT is ChatGPT, and GEM is Gemini, so CLA-F2 is Claude running F2.</p>
+      </section>
+    </div>
+    <form method="dialog" class="dialog__actions">
+      <button type="submit" class="btn btn--text" autofocus>Close</button>
     </form>
   </dialog>
 
