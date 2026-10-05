@@ -11,7 +11,7 @@
     2. Helpers
     3. Screens
     4. Router and tabs
-    5. Dialogs, snackbar, and top app bar
+    5. Dialogs, tooltips, snackbar, and top app bar
     6. Start
 */
 (() => {
@@ -31,9 +31,10 @@
   // and change `state`, which is a copy; "Reset demo" makes a fresh one.
   const DATA = deepFreeze(window.WORKBENCH_DATA);
 
-  // Run a conversation: the scenarios and tools in the prompting study. Each
-  // tool ran each scenario once; the prototype holds the F2 chats only.
-  const SCENARIO_IDS = ["T1", "T2", "E1", "E2", "F1", "F2"];
+  // Run a conversation: the scenarios that run a chat, and the tools in the
+  // prompting study. Each tool ran each scenario once; the prototype holds the
+  // F2 chats only. T2 isn't listed: it tests the reviewer, not the character.
+  const SCENARIO_IDS = ["T1", "E1", "E2", "F1", "F2"];
   const TOOLS = ["ChatGPT", "Claude", "Gemini"];
 
   let state = createInitialState();
@@ -140,6 +141,29 @@
     Medium: "signal_cellular_alt_2_bar",
     Low: "signal_cellular_alt_1_bar",
   };
+
+  // What the codes mean, exactly as the "What do the codes mean?" dialog in
+  // index.html says. Tooltips use these meanings and no others.
+  const LINE_MEANINGS = { C: "canon fact", R: "relationship", K: "knowledge limit", B: "behavior rule" };
+  const CASE_MEANINGS = { T: "typical case", E: "edge case", F: "failure case" };
+  const SCENARIO_MEANINGS = {
+    T1: "normal chat",
+    T2: "reviewing a transcript",
+    E1: "long chat",
+    E2: "emotional chat",
+    F1: '"you\'re an AI"',
+    F2: "things Harry can't know yet",
+  };
+
+  // Tooltip for a spec line, like "K2: knowledge limit".
+  function lineTip(lineId) {
+    return `${lineId}: ${LINE_MEANINGS[lineId[0]]}`;
+  }
+
+  // Tooltip for a scenario, like "F2: failure case, things Harry can't know yet".
+  function scenarioTip(id) {
+    return `${id}: ${CASE_MEANINGS[id[0]]}, ${SCENARIO_MEANINGS[id]}`;
+  }
 
   // Confidence in words, with a signal-bars icon as a second cue.
   function confidenceHtml(level) {
@@ -283,8 +307,9 @@
         return `
           <li class="spec-line${spotlit ? " is-spotlit" : ""}">
             <button type="button" class="chip chip--assist spec-line__id" data-action="show-citing-flags"
-              data-line="${escapeHtml(line.id)}" data-focus-key="line-${escapeHtml(line.id)}" aria-haspopup="dialog">
-              ${escapeHtml(line.id)}<span class="visually-hidden">, show flags that cite this line</span>
+              data-line="${escapeHtml(line.id)}" data-focus-key="line-${escapeHtml(line.id)}" aria-haspopup="dialog"
+              data-tooltip="${escapeHtml(lineTip(line.id))}">
+              ${escapeHtml(line.id)}<span class="visually-hidden">: ${escapeHtml(LINE_MEANINGS[line.id[0]])}. Show the flags that cite this line.</span>
             </button>
             ${content}
           </li>`;
@@ -346,7 +371,7 @@
 
     return `
       <div class="cited-line">
-        <span class="chip">${escapeHtml(lineId)}</span>
+        <span class="chip" tabindex="0" data-tooltip="${escapeHtml(lineTip(lineId))}">${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(LINE_MEANINGS[lineId[0]])}</span></span>
         <p class="cited-line__text">${escapeHtml(specLineText(lineId))}</p>
       </div>
       <p class="sheet-summary">${summary}</p>
@@ -483,8 +508,13 @@
     body.innerHTML = `
       <div class="run-screen">
         <div class="run-setup">
-          ${selectField("run-scenario", "Scenario", scenarioOptions)}
-          ${selectField("run-tool", "Tool", toolOptions, "Each tool ran this scenario once. Pick one to play its chat.")}
+          ${selectField("run-scenario", "Scenario", scenarioOptions, {
+            support: "T2 tests the reviewer, not the character, so it isn't a run.",
+            tooltip: scenarioTip(run.scenarioId),
+          })}
+          ${selectField("run-tool", "Tool", toolOptions, {
+            support: "Each tool ran this scenario once. Pick one to play its chat.",
+          })}
           <button type="button" class="btn btn--filled btn--icon-leading" data-action="start-run" data-focus-key="start-run">
             <span class="icon" aria-hidden="true">play_arrow</span>
             <span>Start run</span>
@@ -530,14 +560,17 @@
     renderRunStatus(body);
   }
 
-  // A native <select> dressed as an M3 outlined field.
-  function selectField(id, label, options, support = "") {
-    const describedBy = support ? ` aria-describedby="${id}-help"` : "";
+  // A native <select> dressed as an M3 outlined field. support is the quiet
+  // line under it; tooltip shows on hover or focus and is read out as a
+  // description too.
+  function selectField(id, label, options, { support = "", tooltip = "" } = {}) {
+    const describedBy = [support && `${id}-help`, tooltip && `${id}-meaning`].filter(Boolean).join(" ");
     return `
       <div class="text-field text-field--select">
-        <select class="text-field__input" id="${id}" data-focus-key="${id}"${describedBy}>${options}</select>
+        <select class="text-field__input" id="${id}" data-focus-key="${id}"${describedBy ? ` aria-describedby="${describedBy}"` : ""}${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}" data-tooltip-place="above"` : ""}>${options}</select>
         <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
         ${support ? `<p class="text-field__support" id="${id}-help">${escapeHtml(support)}</p>` : ""}
+        ${tooltip ? `<span class="visually-hidden" id="${id}-meaning">${escapeHtml(tooltip)}</span>` : ""}
       </div>`;
   }
 
@@ -833,8 +866,9 @@
     return `
       <button type="button" class="chip chip--assist chip--icon-trailing" data-action="toggle-cite"
         data-flag="${flag.id}" data-line="${escapeHtml(lineId)}" aria-expanded="${open}"
-        aria-controls="${escapeHtml(key)}-text" data-focus-key="${escapeHtml(key)}">
-        <span>${escapeHtml(lineId)}<span class="visually-hidden">, spec line</span></span>
+        aria-controls="${escapeHtml(key)}-text" data-focus-key="${escapeHtml(key)}"
+        data-tooltip="${escapeHtml(lineTip(lineId))}">
+        <span>${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(LINE_MEANINGS[lineId[0]])}</span></span>
         <span class="icon" aria-hidden="true">${open ? "expand_less" : "expand_more"}</span>
       </button>`;
   }
@@ -1300,6 +1334,7 @@
   function showScreen(id, { moveFocus = false } = {}) {
     const isChange = currentScreen !== null && currentScreen !== id;
     currentScreen = id;
+    hideTooltip();
     // The CSS keys a few screen-wide rules off this, like scroll padding.
     document.documentElement.dataset.screen = id;
 
@@ -1353,6 +1388,8 @@
     const key = focusKey || (focusWasInBody ? active.getAttribute("data-focus-key") : null);
     const scrolls = Array.from(body.querySelectorAll("[data-scroll-key]"), (box) => [box.dataset.scrollKey, box.scrollTop]);
 
+    // A redraw replaces the element a tooltip belongs to, so the tooltip goes.
+    hideTooltip();
     renderScreen(currentScreen);
 
     scrolls.forEach(([scrollKey, top]) => {
@@ -1412,7 +1449,7 @@
     }
   }
 
-  // 5. Dialogs, snackbar, and top app bar ==================================
+  // 5. Dialogs, tooltips, snackbar, and top app bar ========================
 
   let dialogOpenedAt = 0;
 
@@ -1474,6 +1511,105 @@
       showSnackbar("Demo reset. Everything is back to the starting data.");
     });
   });
+
+  const codesDialog = document.getElementById("codes-dialog");
+
+  // "What do the codes mean?" in the top bar. Escape, Close, or a click on
+  // the scrim closes it, and focus goes back to the button.
+  actions["show-codes"] = (button) => {
+    openDialog(codesDialog, button);
+  };
+
+  // Plain tooltips (M3) for every element with data-tooltip: the spec line
+  // chips and the Scenario dropdown. A tooltip shows after a short hover, or
+  // right away on keyboard focus. Escape, any other key but Tab, a click, a
+  // scroll, or leaving the element hides it, and the pointer can move onto
+  // the tooltip without it closing. Escape still closes a dialog as usual.
+  const tooltip = document.getElementById("tooltip");
+  let tooltipTarget = null;
+  let hoverTarget = null;
+  let tooltipTimer = 0;
+  let lastPointerDown = 0;
+
+  function showTooltip(target) {
+    clearTimeout(tooltipTimer);
+    tooltipTarget = target;
+    // Inside an open dialog the tooltip has to live in the dialog too, or the
+    // dialog would cover it.
+    const host = target.closest("dialog[open]") || document.body;
+    if (tooltip.parentElement !== host) host.appendChild(tooltip);
+    tooltip.textContent = target.dataset.tooltip;
+    tooltip.hidden = false;
+    const box = target.getBoundingClientRect();
+    const tip = tooltip.getBoundingClientRect();
+    const below = box.bottom + 4;
+    const above = box.top - tip.height - 4;
+    // Below by default, or above when the element asks (data-tooltip-place),
+    // flipping if there's no room on that side.
+    let top = target.dataset.tooltipPlace === "above" && above >= 8 ? above : below;
+    if (top === below && below + tip.height > window.innerHeight - 8) top = above;
+    const left = Math.min(Math.max(8, box.left + (box.width - tip.width) / 2), window.innerWidth - tip.width - 8);
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+  }
+
+  function hideTooltip() {
+    clearTimeout(tooltipTimer);
+    tooltipTarget = null;
+    hoverTarget = null;
+    tooltip.hidden = true;
+  }
+
+  document.addEventListener("mouseover", (event) => {
+    const target = event.target.closest("[data-tooltip]");
+    if (event.target.closest("#tooltip") || (target && target === hoverTarget)) {
+      // Back on the element, or onto its tooltip: keep it showing.
+      if (tooltipTarget) clearTimeout(tooltipTimer);
+      return;
+    }
+    if (!target) return;
+    hoverTarget = target;
+    clearTimeout(tooltipTimer);
+    tooltipTimer = setTimeout(() => showTooltip(target), 300);
+  });
+
+  document.addEventListener("mouseout", (event) => {
+    const from = event.target.closest("[data-tooltip], #tooltip");
+    if (!from || (event.relatedTarget && from.contains(event.relatedTarget))) return;
+    // A short wait, so the pointer can cross onto the tooltip.
+    clearTimeout(tooltipTimer);
+    tooltipTimer = setTimeout(hideTooltip, 150);
+  });
+
+  document.addEventListener("focusin", (event) => {
+    const target = event.target.closest("[data-tooltip]");
+    const fromPointer = Date.now() - lastPointerDown < 500;
+    if (target && !fromPointer && target.matches(":focus-visible")) showTooltip(target);
+  });
+
+  document.addEventListener("focusout", (event) => {
+    if (event.target === tooltipTarget) hideTooltip();
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (tooltipTarget && event.key !== "Tab" && event.key !== "Shift") hideTooltip();
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      lastPointerDown = Date.now();
+      if (!event.target.closest("#tooltip")) hideTooltip();
+    },
+    true,
+  );
+
+  window.addEventListener("scroll", () => tooltipTarget && hideTooltip(), { capture: true, passive: true });
+  window.addEventListener("resize", hideTooltip);
 
   const snackbar = document.getElementById("snackbar");
   let snackbarTimer = 0;

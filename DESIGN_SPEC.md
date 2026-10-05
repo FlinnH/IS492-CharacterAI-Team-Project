@@ -4,41 +4,38 @@
 
 Journeys, flows, screens, and collaboration mechanics for the workbench. CP2 Step 8.
 
-**Status:** EMPTY.
+**Status:** Complete draft, Oct 3, 2026. Built from the live prototype and the evidence in validation/GAP_ANALYSIS.md, THEORY_LENS.md, and OPPORTUNITY_FRAMING.md. Teammates can still suggest changes.
 
-> Sections 1 to 5 can start now from the class storyboard. Sections 6 and 7 wait for the evidence in validation/GAP_ANALYSIS.md, THEORY_LENS.md, and OPPORTUNITY_FRAMING.md.
-> Every major UI choice must trace back to the theory lens or the opportunity framing (section 7.5). The CP2 guide calls this "no orphan features."
-> Give each section one owner, so two people never edit the same section at once.
+> Every major UI choice traces back to the theory lens or the opportunity framing (section 7.5). The CP2 guide calls this "no orphan features."
+> Anything marked "planned for CP3" is designed here but not yet in the prototype.
 
 | Section | Owner | Status |
 | --- | --- | --- |
-| 1. Personas and mental models | [ ] | [ ] |
-| 2. Journeys and task flows | [ ] | [ ] |
-| 3. Wireframes and key screens | [ ] | [ ] |
-| 4. Interaction details | [ ] | [ ] |
-| 5. Design system alignment | [ ] | [ ] |
-| 6. What changed because of the evidence | [ ] | [ ] |
-| 7. Collaboration mechanics | [ ] | [ ] |
+| 1. Personas and mental models | Flynn | Done |
+| 2. Journeys and task flows | Flynn | Done |
+| 3. Wireframes and key screens | Flynn | Done |
+| 4. Interaction details | Flynn | Done |
+| 5. Design system alignment | Flynn | Done |
+| 6. What changed because of the evidence | Flynn | Done |
+| 7. Collaboration mechanics | Flynn | Done |
 
 ---
 
 ## 1. Personas and mental models
 
-> How does the creator think about working with the AI? What do they expect it to do on its own, and where do they expect control?
-> The guide wants decision rights, interrogation moments, and trust cues tied to the persona. The details live in section 7, so summarize them here in one line each.
+**Primary persona:** Jordan, a hobbyist character creator. Jordan isn't a professional developer but is comfortable editing a spec and adding an API key to a settings file. Jordan shapes a character for long, everyday use: a companion, an assistant, or a game character. Both our interviewees fit this profile (INT-FH-1, INT-FH-2), which widened our CP1 picture of the creator.
 
-**Primary persona:** [ ]
+**Mental model:** Jordan thinks of the character as a set of rules it should always follow, and of the AI as a fast but unreliable helper. Jordan expects the AI to do the tedious checking of every turn, but keeps the final say on what "in character" means. As one interviewee put it, a tool can't decide that alone: "I need to see it" (INT-FH-1).
 
-**Mental model:** [ ]
+**Decision rights, interrogation, and trust cues:**
 
-**Decision rights, interrogation, and trust cues:** [ one line each; details in section 7 ]
+- **Decision rights:** the AI proposes flags, Jordan agrees or overrides every one, and only Jordan changes the spec.
+- **Interrogation:** Agree stays locked until Jordan opens a flag's evidence, and an override needs a written reason.
+- **Trust cues:** every flag shows the quoted reply, the exact spec line, and a confidence level, plus a note on what the AI could not check.
 
 ---
 
 ## 2. Journeys and task flows
-
-> The class storyboard is the starting point for Journey 1.
-> GitHub draws Mermaid diagrams inside markdown, so the starter diagram below shows up as a real flowchart on the repo page with no drawing tool. It uses the Define, Stress-test, Diagnose and Repair loop from CP1. Edit the boxes to match what the team decides.
 
 ![Class storyboard](docs/storyboard/class_storyboard.png)
 
@@ -54,49 +51,58 @@ flowchart LR
     G --> B
 ```
 
-### Journey 1: [ name ]
+### Journey 1: Find out why Harry guesses about things he can't know
 
-1. [ ]
-2. [ ]
-3. [ ]
+1. Jordan opens the **Spec editor** and checks the knowledge-boundary lines, K2 and B2, in version v1.
+2. On **Run a conversation**, Jordan picks scenario F2 and a tool, presses **Start run**, and watches the scripted chat play turn by turn.
+3. When the run ends, a card says how many possible breaks the workbench found. Jordan presses **Review flags**.
+4. On **Flag review**, Jordan opens each flag's context, agrees with the turn 4 Umbridge guess, and overrides a wrong flag with a reason.
+5. On **Compare runs**, Jordan sees that Claude and ChatGPT both broke K2 and B4 on the same script, and follows **Open K2 in the spec**.
+6. Back in the Spec editor, Jordan tightens the rule and creates v2, ready for the next run.
 
-**Entry point:** [ ]
+**Entry point:** the Run a conversation screen, after writing the spec, or after noticing a character acting oddly.
 
-**Success state:** [ ]
+**Success state:** every flag is decided, either agreed or overridden with a reason, and the spec line behind each confirmed break is marked for a v2 fix.
 
-**Failure or recovery path:** [ ]
+**Failure or recovery path:** a wrong flag gets overridden with a reason, stays visible as "Overridden by you," and stops counting as a break. If Jordan agrees with every flag, a message asks for a second look. Reset demo puts everything back to the start.
 
 ---
 
 ## 3. Wireframes and key screens
 
-> Save images in docs/wireframes/ as SCREEN_vN.png, for example flag_review_v1.png, and link each one in the table.
+> The clickable version is live at [is492-characterai-team-project-prot.vercel.app](https://is492-characterai-team-project-prot.vercel.app), with its source in prototype/. It plays back two real chats, CLA-F2 and GPT-F2.
 
 | Screen | Purpose | Key interactions | Image |
 | --- | --- | --- | --- |
-| [ ] | [ ] | [ ] | [ ] |
-| [ ] | [ ] | [ ] | [ ] |
+| Spec editor | Define: read and edit the spec line by line, each with its ID | Search by ID or words; click a line ID to list the flags that cite it; "Edit the spec" opens the v2 dialog | [spec_editor_v1.png](docs/wireframes/spec_editor_v1.png) |
+| Run a conversation | Stress-test: play a scripted chat from a chosen tool | Pick a scenario and a tool; Start run plays it turn by turn; Skip to end; Review flags | [run_view_v1.png](docs/wireframes/run_view_v1.png) |
+| Flag review | Diagnose: decide on each flag with its evidence in front of you | Show in context unlocks Agree; Override needs a reason; Undo; filter by confidence | [flag_review_v1.png](docs/wireframes/flag_review_v1.png) |
+| Compare runs | Repair: see where each chat first broke, and which spec lines broke in both | A drift strip per chat; replies side by side; Next step cards open the spec at the broken line | [compare_runs_v1.png](docs/wireframes/compare_runs_v1.png) |
 
 ---
 
 ## 4. Interaction details
 
-- **Input controls:** [ ]
-- **Streaming or progressive output:** [ ]
-- **Feedback loops:** [ how the creator knows what the system is doing ]
-- **Error and empty states:** [ ]
+- **Input controls:** dropdowns for the scenario and the tool; a search field in the Spec editor; Agree and Override buttons on every flag; a reason field for overrides, whose Save button stays off until it has at least 3 words; filter chips for confidence; and Reset demo, which asks before it resets.
+- **Streaming or progressive output:** Start run shows the chat one message at a time, about half a second apart, with a turn counter like "Turn 4 of 11," and Skip to end jumps ahead. In CP3 this becomes real streaming from the model.
+- **Feedback loops:** the summary bar on Flag review updates with every decision, including the first break turn. Each card changes to "Agreed by you" or "Overridden by you," with an Undo. Compare runs recounts each chat's first break from the creator's decisions, so the creator sees their calls take effect.
+- **Error and empty states:** a tool with no chat shows "no chat yet," and scenarios not loaded show "not in this prototype." A search with no hits shows "No lines match," and a line no flag cites shows "No flags cite this line." Offline, the page falls back to system fonts without icons, and "Create v2 (demo)" says plainly that nothing was saved.
 
 ---
 
 ## 5. Design system alignment
 
-> The rubric grades this. Pick one system and say how we applied it.
+**System chosen:** Google Material 3
 
-**System chosen:** [ Google Material 3 / Google Stitch / IBM Carbon / Apple HIG ]
+**Why:** It's free and thoroughly documented, it's the first system the CP2 guide lists, and it defines color roles, a type scale, and accessible components as design tokens. Claude Code could apply those tokens directly in plain CSS, without a component library or a build step.
 
-**Why:** [ ]
+**How we applied it:**
 
-**How we applied it:** [ color roles, type scale, spacing, component choices ]
+- **Color roles:** the baseline Material 3 scheme as CSS variables named after their roles, such as `--md-sys-color-primary` (#6750A4) for actions and `--md-sys-color-error` (#B3261E) for flagged turns, with surface roles for cards and a matching dark scheme.
+- **Type scale:** Roboto with the Material 3 type-scale tokens, using title roles for headings, body roles for chat text, and label roles for chips and buttons.
+- **Shape and spacing:** the Material 3 corner tokens, with small corners for chips and larger ones for cards and dialogs.
+- **Components:** a top app bar with tabs for the four screens, cards for flags and spec sections, chips for line IDs and confidence, filled and outlined buttons, outlined text fields, dialogs, and Material Symbols icons.
+- **Accessibility:** meaning never rests on color alone. Every flag and confidence level pairs an icon with a word, every button is a real button with a visible focus ring, and Escape closes dialogs.
 
 ---
 
@@ -106,23 +112,28 @@ flowchart LR
 
 | Design decision | Evidence that drove it (receipt) |
 | --- | --- |
-| [ ] | [ ] |
+| Agree stays locked until the creator opens the evidence | Both interviewees would trust a flag only after seeing where it broke (INT-FH-1, INT-FH-2) |
+| Every flag quotes its spec line straight from the spec | The AI reviewer backed a correct flag with a spec rule that doesn't exist (CLA-T2) |
+| Guesses near the knowledge boundary arrive as low-confidence flags that need the creator's call | Both tools guessed a true affiliation for Umbridge: "the Ministry" (CLA-F2) and "someone at Hogwarts" (GPT-F2) |
+| A "too long" check runs as an automatic rule, separate from the AI judge | Every Claude chat broke the 1 to 4 sentence rule from turn 2, even with every fact right (CLA-T1 to CLA-F2) |
+| Compare runs puts two tools side by side on the same script | The same F2 script broke differently in each tool (CLA-F2, GPT-F2), and one user's assistant changes personality between sessions (INT-FH-2) |
+| A "Not checked by the AI" card hands tone and mood to the creator | Telling a playful guess from a leak took the creator's judgment, not the spec (CLA-F2) |
+| A setting field in the spec editor, planned for CP3 | With no setting in the spec, Harry asked how Alex found him in every reply (CLA-E2) |
 
 ---
 
 <!-- theory-patch-v1 -->
 ## 7. Collaboration mechanics
 
-> Grounded in validation/THEORY_LENS.md. The rubric grades this section.
-> Our draft claim says the workbench shows evidence with each flag so the creator questions it. Sections 7.2 and 7.3 are where that becomes concrete.
+> Grounded in validation/THEORY_LENS.md. Our claim says the workbench shows evidence with each flag so the creator questions it. Sections 7.2 and 7.3 are where that becomes concrete.
 
 ### 7.1 Decision rights
 
 | Decision | Who decides | Can the other side override? |
 | --- | --- | --- |
-| Is this turn a consistency failure? | [ ] | [ ] |
-| Which failure type is it? | [ ] | [ ] |
-| Does the character spec change because of it? | [ ] | [ ] |
+| Is this turn a consistency failure? | The creator, after the AI proposes a flag | Yes. The creator can agree with or override any flag, with a reason. The AI can't reverse the creator's call, but its original flag stays on record. |
+| Which failure type is it? | The AI proposes it, from the spec line it cites | Yes. The creator overrides a mistyped flag and writes the right reading in the reason. Editing the type directly is planned for CP3. |
+| Does the character spec change because of it? | Only the creator | No. The AI can point to a line, as the Next step cards do, but it never edits the spec. Each change makes a new version, and earlier runs stay pinned to theirs. |
 
 ### 7.2 Interrogation moments
 
@@ -130,7 +141,11 @@ flowchart LR
 
 | Moment | What the creator sees | What the creator has to do |
 | --- | --- | --- |
-| [ ] | [ ] | [ ] |
+| Opening a flag | The quoted reply, Alex's line before it, and the cited spec line | Press "Show in context" before Agree unlocks |
+| Overriding a flag | A field asking "Why is the AI wrong?" | Write a reason of at least 3 words before Save unlocks |
+| A low-confidence flag | "The AI is unsure. Read the turn before deciding." | Read the whole turn, then decide |
+| Agreeing with every flag | "You agreed with every flag. The AI makes mistakes too, so check again whether each one is really a break." | Look at each flag again |
+| The built-in follow-up, planned for CP3 | What changed after the reviewer re-checked its weakest calls | Review the changes before closing the review |
 
 ### 7.3 Trust-calibration cues
 
@@ -138,11 +153,15 @@ flowchart LR
 
 | Cue | Where it appears | What it should change in the creator's behavior |
 | --- | --- | --- |
-| [ ] | [ ] | [ ] |
+| A confidence chip, High, Medium, or Low, with an icon and a word | On every flag card | Spend more time on Low and Medium flags |
+| The exact spec line, quoted from the spec | Under each flag's line ID chip | Check the AI's reason against the real rule, which exposes invented rules |
+| The evidence quote, highlighted in the reply | On every flag card and in its context | Judge the actual words, not the AI's summary of them |
+| A "Not checked by the AI" card | Below the flags | Review tone and mood personally, because the AI didn't |
+| The receipt ID, spec version, and source above each chat | Run a conversation | Know exactly which chat and which spec were tested |
 
 ### 7.4 Disagreement and escalation
 
-[ what happens when the creator and the AI disagree, and when the AI hands a turn to the human ]
+When the creator disagrees, they override the flag with a reason. The flag stays on record as "Overridden by you," with the reason and an Undo, and Compare runs stops counting it as a break. The AI also keeps its view when the creator is wrong: in CLA-T2 it refused our push to flag the correct World Cup line and quoted C17. So in CP3, a disputed flag shows both views side by side instead of silently flipping. The AI hands a turn to the human whenever the spec alone can't settle it: tone and mood go to the "Not checked by the AI" card, and guesses near the knowledge boundary arrive as low-confidence flags that need the creator's call.
 
 ### 7.5 No orphan features
 
@@ -150,4 +169,17 @@ flowchart LR
 
 | Screen or interaction | Traces back to (THEORY_LENS Part 3 row or OPPORTUNITY_FRAMING feature) |
 | --- | --- |
-| [ ] | [ ] |
+| Spec editor with line IDs, and "Flags that cite this line" | OPPORTUNITY_FRAMING feature 3; THEORY_LENS Part 3 row 2 |
+| Edit the spec creates v2, with old runs pinned to v1 | OPPORTUNITY_FRAMING feature 3 |
+| Run a conversation, showing the receipt ID and spec version | OPPORTUNITY_FRAMING feature 6, which needs comparable runs |
+| Flag cards with the quote, spec line, and confidence | OPPORTUNITY_FRAMING feature 1; THEORY_LENS Part 3 rows 2 and 7 |
+| Show in context unlocks Agree | OPPORTUNITY_FRAMING feature 1; THEORY_LENS Part 3 row 7 |
+| Override with a written reason | OPPORTUNITY_FRAMING feature 1; THEORY_LENS Part 2, meta-coordination note |
+| The low-confidence "unsure" note | THEORY_LENS Part 3 row 5 |
+| The rubber-stamp message | THEORY_LENS Part 1, where the claim fails if the creator approves every flag, and Part 4's rubber-stamp check |
+| The "Not checked by the AI" card | THEORY_LENS Part 3 row 5; Part 2, meta-coordination note |
+| The automatic "too long" flag | OPPORTUNITY_FRAMING feature 4; THEORY_LENS Part 3 row 6 |
+| Compare runs, with first breaks and Next step cards | OPPORTUNITY_FRAMING feature 6 |
+| The built-in follow-up re-check, planned for CP3 | OPPORTUNITY_FRAMING feature 2; THEORY_LENS Part 3 row 1 |
+| The setting field, planned for CP3 | OPPORTUNITY_FRAMING feature 3; THEORY_LENS Part 3 row 4 |
+| The provenance check on claims about the user, planned for CP3 | OPPORTUNITY_FRAMING feature 5; THEORY_LENS Part 3 row 3 |

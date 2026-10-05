@@ -1186,6 +1186,29 @@ button.chip:active::before {
   transform: translate(-50%, 0);
 }
 
+/* Plain tooltip (M3) ------------------------------------------------------- */
+/* One shared element that app.js places next to whatever has data-tooltip. */
+
+.tooltip {
+  position: fixed;
+  z-index: 40;
+  max-width: min(280px, calc(100vw - 16px));
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  animation: tooltip-enter var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+  }
+}
+
 /* 4. Screens =============================================================== */
 
 /* Spec editor -------------------------------------------------------------- */
@@ -2169,6 +2192,20 @@ button.chip:active::before {
 
 .next-step__title .icon {
   color: var(--md-sys-color-primary);
+}
+
+/* What the codes mean (dialog from the top bar) ----------------------------- */
+
+.codes {
+  display: grid;
+  gap: 16px;
+}
+
+.codes__title {
+  margin-bottom: 4px;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
 }
 
 /* 5. Window sizes and reduced motion ======================================= */
