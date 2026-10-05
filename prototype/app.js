@@ -759,6 +759,7 @@
       <div class="review">
         <div class="review__main">
           <div class="review__bar-wrap">
+            ${renderChatSwitcher(run)}
             <div class="review__bar">
               <p class="review__summary">${escapeHtml(reviewSummary(flags, state.decisions))}</p>
               ${agreedWithEvery(flags, state.decisions)
@@ -805,6 +806,44 @@
     revealTurn(body);
     return body.querySelector(`#${cardId(target)}`);
   }
+
+  // "1 of 3 decided", or "All 3 decided" once every flag has a call.
+  function decidedText(run) {
+    const decided = run.flags.filter((flag) => verdictOf(state.decisions, flag)).length;
+    const total = run.flags.length;
+    return decided === total ? `All ${total} decided` : `${decided} of ${total} decided`;
+  }
+
+  // Switches between the chats of this scenario without leaving the screen.
+  // Each option shows how far the review has got, so an unreviewed chat
+  // stands out. It shares the chosen chat with Run a conversation.
+  function renderChatSwitcher(run) {
+    const chats = state.runs.filter((chat) => chat.scenarioId === run.scenarioId);
+    if (chats.length < 2) return "";
+    const buttons = chats.map((chat) => {
+      const selected = chat.id === run.id;
+      const done = chat.flags.every((flag) => verdictOf(state.decisions, flag));
+      return `
+        <button type="button" class="segmented__button chat-switcher__button" aria-pressed="${selected}"
+          data-action="pick-chat" data-run="${escapeHtml(chat.id)}" data-focus-key="chat-${escapeHtml(chat.id)}">
+          <span class="icon${done ? " icon--filled" : ""}" aria-hidden="true">${selected ? "check" : done ? "task_alt" : "forum"}</span>
+          <span class="chat-switcher__text">
+            <span class="chat-switcher__name">${escapeHtml(runLabel(chat))}</span>
+            <span class="chat-switcher__count">${decidedText(chat)}</span>
+          </span>
+        </button>`;
+    });
+    return `<div class="segmented chat-switcher" role="group" aria-label="Chat to review">${buttons.join("")}</div>`;
+  }
+
+  actions["pick-chat"] = (button) => {
+    if (button.dataset.run === state.runId) return;
+    changeRunSetup({ runId: button.dataset.run });
+    state.reviewTurn = null;
+    refresh({ focusKey: `chat-${button.dataset.run}` });
+    const run = selectedRun();
+    announce(`Showing ${runLabel(run)}. ${reviewSummary(run.flags, state.decisions)}`);
+  };
 
   function renderFlagFilters() {
     const chips = CONFIDENCE_FILTERS.map((filter) => {
