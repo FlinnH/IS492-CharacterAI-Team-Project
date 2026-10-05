@@ -807,33 +807,71 @@
     return body.querySelector(`#${cardId(target)}`);
   }
 
-  // "1 of 3 decided", or "All 3 decided" once every flag has a call.
-  function decidedText(run) {
-    const decided = run.flags.filter((flag) => verdictOf(state.decisions, flag)).length;
-    const total = run.flags.length;
-    return decided === total ? `All ${total} decided` : `${decided} of ${total} decided`;
+  // The human-in-the-loop to-do. Every flag needs the creator's call, agree
+  // or override, before the review is done. The cues below count calls made,
+  // never agreements, so they push the creator to decide, not to agree
+  // quickly (the rubber-stamp risk in THEORY_LENS Part 1). They show in four
+  // places: the badge on the Flag review tab, each chat in the chat switcher,
+  // a "Needs your call" label on each open card, and a notice on Compare runs.
+
+  // Every chat of the scenario on screen, one per tool.
+  function scenarioChats() {
+    const scenarioId = selectedRun().scenarioId;
+    return state.runs.filter((run) => run.scenarioId === scenarioId);
   }
 
-  // Switches between the chats of this scenario without leaving the screen.
-  // Each option shows how far the review has got, so an unreviewed chat
-  // stands out. It shares the chosen chat with Run a conversation.
+  // Flags still waiting for the creator's call, in every chat of the scenario.
+  function openFlags() {
+    return scenarioChats().flatMap((run) =>
+      run.flags.filter((flag) => !verdictOf(state.decisions, flag)).map((flag) => ({ run, flag })),
+    );
+  }
+
+  // "2 need your call", or "All 3 decided" once every flag has a call.
+  function decidedText(run) {
+    const total = run.flags.length;
+    const open = run.flags.filter((flag) => !verdictOf(state.decisions, flag)).length;
+    if (total === 0) return "No flags";
+    if (open > 0) return `${open} ${open === 1 ? "needs" : "need"} your call`;
+    return total === 1 ? "Decided" : `All ${total} decided`;
+  }
+
+  // Switches between the chats of this scenario without leaving the screen,
+  // one button per tool. Each shows how many calls are left, with a progress
+  // bar, so a chat nobody has reviewed stands out. It shares the chosen chat
+  // with Run a conversation. On phones the buttons stack (see styles.css).
   function renderChatSwitcher(run) {
-    const chats = state.runs.filter((chat) => chat.scenarioId === run.scenarioId);
+    const chats = scenarioChats();
     if (chats.length < 2) return "";
     const buttons = chats.map((chat) => {
       const selected = chat.id === run.id;
-      const done = chat.flags.every((flag) => verdictOf(state.decisions, flag));
+      const total = chat.flags.length;
+      const decided = chat.flags.filter((flag) => verdictOf(state.decisions, flag)).length;
+      const done = decided === total;
+      const icon = selected ? "check" : done ? "task_alt" : "pending";
       return `
         <button type="button" class="segmented__button chat-switcher__button" aria-pressed="${selected}"
           data-action="pick-chat" data-run="${escapeHtml(chat.id)}" data-focus-key="chat-${escapeHtml(chat.id)}">
-          <span class="icon${done ? " icon--filled" : ""}" aria-hidden="true">${selected ? "check" : done ? "task_alt" : "forum"}</span>
+          <span class="icon${done && !selected ? " icon--filled" : ""}" aria-hidden="true">${icon}</span>
           <span class="chat-switcher__text">
             <span class="chat-switcher__name">${escapeHtml(runLabel(chat))}</span>
             <span class="chat-switcher__count">${decidedText(chat)}</span>
+            <progress class="linear-progress chat-switcher__progress" max="${Math.max(total, 1)}" value="${total ? decided : 1}" aria-hidden="true"></progress>
           </span>
         </button>`;
     });
     return `<div class="segmented chat-switcher" role="group" aria-label="Chat to review">${buttons.join("")}</div>`;
+  }
+
+  // The badge on the Flag review tab: how many calls are left across every
+  // chat of the scenario, so the open work shows from any screen.
+  function updateTodoBadge() {
+    const open = openFlags().length;
+    const badge = document.querySelector("[data-todo-badge]");
+    badge.hidden = open === 0;
+    badge.textContent = String(open);
+    document.querySelector("[data-todo-label]").textContent =
+      open === 0 ? "" : `, ${open} ${open === 1 ? "flag needs" : "flags need"} your call`;
   }
 
   actions["pick-chat"] = (button) => {
@@ -866,7 +904,12 @@
 
     return `
       <article class="${classes}" id="${id}" tabindex="-1" aria-labelledby="${id}-title">
-        <h3 class="flag-card__title" id="${id}-title">${escapeHtml(flagTitle(flag))}</h3>
+        <div class="flag-card__head">
+          <h3 class="flag-card__title" id="${id}-title">${escapeHtml(flagTitle(flag))}</h3>
+          ${verdict
+            ? ""
+            : '<span class="needs-call"><span class="icon" aria-hidden="true">pending</span><span>Needs your call</span></span>'}
+        </div>
         <figure class="flag-card__evidence">
           <blockquote><p><q>${escapeHtml(flag.evidence)}</q></p></blockquote>
           <figcaption>From ${escapeHtml(state.scenario.characterName)}'s reply</figcaption>
@@ -1177,8 +1220,9 @@
   // 3.4 Compare runs (Repair) -----------------------------------------------
   // Same script, same spec, different results: where each tool's chat broke,
   // the replies side by side, and a next step for every spec line that broke
-  // in both chats, which leads back to the Spec editor (Repair closes the loop
-  // to Define). A break is any flag the creator hasn't overridden on Flag
+  // in every chat, which leads back to the Spec editor (Repair closes the loop
+  // to Define). It compares the chats of the scenario on screen, however many
+  // tools ran it. A break is any flag the creator hasn't overridden on Flag
   // review, so the creator's calls shape this screen.
 
   // "break" when a flag on the turn still stands, "overridden" when the
@@ -1210,13 +1254,43 @@
     return Number.isNaN(number) ? "the next version" : `v${number + 1}`;
   }
 
+  // "both chats" for two, "all 3 chats" for three or more.
+  function chatsText(count) {
+    if (count === 1) return "the one chat";
+    return count === 2 ? "both chats" : `all ${count} chats`;
+  }
+
+  // While any flag is still open, this comparison counts it as a break, so
+  // the creator hears that before trusting the numbers.
+  function renderReviewNotice() {
+    const open = openFlags().length;
+    if (open === 0) {
+      return `
+        <p class="compare-done">
+          <span class="icon icon--filled" aria-hidden="true">task_alt</span>
+          <span>Every flag has your call, so this comparison reflects your review.</span>
+        </p>`;
+    }
+    const one = open === 1;
+    return `
+      <div class="card card--filled compare-todo">
+        <span class="icon" aria-hidden="true">pending_actions</span>
+        <p class="compare-todo__text">
+          ${open} ${one ? "flag still needs" : "flags still need"} your call on Flag review.
+          Until you decide, ${one ? "it counts as a break" : "they count as breaks"} here.
+        </p>
+        <button type="button" class="btn btn--filled" data-action="review-open-flags">${one ? "Review it" : "Review them"}</button>
+      </div>`;
+  }
+
   function renderCompare(body) {
-    const runs = state.runs;
+    const runs = scenarioChats();
     const specOrder = state.spec.sections.flatMap((section) => section.lines.map((line) => line.id));
     const broken = linesBrokenInAll(runs, state.decisions, specOrder);
 
     body.innerHTML = `
       <div class="compare">
+        ${renderReviewNotice()}
         <section aria-labelledby="drift-title">
           <h2 class="compare__heading" id="drift-title">Where each chat broke</h2>
           <div class="drift">${runs.map(renderDriftRow).join("")}</div>
@@ -1238,8 +1312,8 @@
 
         <div class="compare__next">
           ${broken.length > 0
-            ? broken.map(renderNextStep).join("")
-            : '<p class="card card--outlined">No spec line broke in both chats.</p>'}
+            ? broken.map((lineId) => renderNextStep(lineId, runs.length)).join("")
+            : `<p class="card card--outlined">No spec line broke in ${chatsText(runs.length)}.</p>`}
         </div>
       </div>`;
   }
@@ -1283,7 +1357,7 @@
     );
     return `
       <div class="compare-table-wrap" tabindex="0" role="region" aria-labelledby="side-by-side-title">
-        <table class="compare-table">
+        <table class="compare-table" style="min-width: ${12 + runs.length * 14}rem">
           <thead><tr><th scope="col">Turn</th>${heads.join("")}</tr></thead>
           <tbody>${rows.join("")}</tbody>
         </table>
@@ -1316,14 +1390,14 @@
       </td>`;
   }
 
-  function renderNextStep(lineId) {
+  function renderNextStep(lineId, chatCount) {
     return `
       <article class="card card--filled next-step" aria-labelledby="next-step-${escapeHtml(lineId)}">
         <h2 class="next-step__title" id="next-step-${escapeHtml(lineId)}">
           <span class="icon" aria-hidden="true">lightbulb</span>
           <span>Next step</span>
         </h2>
-        <p>${escapeHtml(lineId)} broke in both chats. Consider making it more specific in ${nextVersion(state.spec.version)}.</p>
+        <p>${escapeHtml(lineId)} broke in ${chatsText(chatCount)}. Consider making it more specific in ${nextVersion(state.spec.version)}.</p>
         <button type="button" class="btn btn--filled btn--icon-leading" data-action="open-spec-line"
           data-line="${escapeHtml(lineId)}" data-focus-key="open-${escapeHtml(lineId)}">
           <span class="icon" aria-hidden="true">edit_note</span>
@@ -1333,8 +1407,18 @@
   }
 
   actions["open-spec-line"] = (button) => {
-    state.specHighlight = { lineId: button.dataset.line, note: "From Compare runs: this line broke in both chats." };
+    const note = `From Compare runs: this line broke in ${chatsText(scenarioChats().length)}.`;
+    state.specHighlight = { lineId: button.dataset.line, note };
     goToScreen("define");
+  };
+
+  // "Review them": Flag review opens at the first flag still waiting for a call.
+  actions["review-open-flags"] = () => {
+    const [first] = openFlags();
+    if (!first) return;
+    if (first.run.id !== state.runId) changeRunSetup({ runId: first.run.id });
+    state.openFlagId = first.flag.id;
+    goToScreen("diagnose");
   };
 
   // 4. Router and tabs =====================================================
@@ -1400,8 +1484,11 @@
     }
   }
 
+  // Every redraw also refreshes the to-do badge on the Flag review tab.
   function renderScreen(id) {
-    return SCREENS[id].render(panelFor(id).querySelector("[data-screen-body]"));
+    const landing = SCREENS[id].render(panelFor(id).querySelector("[data-screen-body]"));
+    updateTodoBadge();
+    return landing;
   }
 
   // Scrolls the page so an element sits just below the sticky header, and

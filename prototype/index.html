@@ -58,6 +58,9 @@
         <button type="button" class="tab" role="tab" id="tab-diagnose" data-screen="diagnose" aria-controls="panel-diagnose" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">flag</span>
           <span>Flag review</span>
+          <!-- How many flags still need the creator's call. app.js fills it. -->
+          <span class="badge" data-todo-badge aria-hidden="true" hidden></span>
+          <span class="visually-hidden" data-todo-label></span>
         </button>
         <button type="button" class="tab" role="tab" id="tab-compare" data-screen="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">compare_arrows</span>
@@ -99,7 +102,7 @@
     <section class="screen" id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" tabindex="0" hidden>
       <p class="screen__step">Step 4 of 4: Repair</p>
       <h1 class="screen__title" tabindex="-1">Same script, same spec, different results.</h1>
-      <p class="screen__lede">Both chats used the same test script and the same spec version. Flags you overrode on Flag review don't count as breaks.</p>
+      <p class="screen__lede">Each chat used the same test script and the same spec version. Flags you overrode on Flag review don't count as breaks.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
   </main>

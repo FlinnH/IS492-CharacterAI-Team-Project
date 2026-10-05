@@ -574,6 +574,22 @@ mark {
   font-variation-settings: "FILL" 1;
 }
 
+/* Badge (M3 large badge): the number of open items, in the error role.
+   Here it counts the flags that still need the creator's call. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+  font: var(--type-label-small);
+  letter-spacing: var(--md-sys-typescale-label-small-tracking);
+}
+
 .tab[aria-selected="true"]::after {
   content: "";
   position: absolute;
@@ -1634,7 +1650,13 @@ button.chip:active::before {
 
 .chat-switcher__text {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
+}
+
+.chat-switcher__progress {
+  height: 4px;
+  margin-top: 6px;
 }
 
 .chat-switcher__count {
@@ -1714,9 +1736,37 @@ button.chip:active::before {
   border-color: var(--md-sys-color-outline);
 }
 
+.flag-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  justify-self: stretch;
+  gap: 4px 12px;
+}
+
 .flag-card__title {
   font: var(--type-title-medium);
   letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* "Needs your call" on every flag still waiting for a decision. Tertiary is
+   this prototype's color for "your judgment is needed", next to the AI-unsure
+   note and the rubber-stamp check; the icon and words carry the meaning. */
+.needs-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 6px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.needs-call .icon {
+  font-size: 16px;
 }
 
 /* The quote marks and the caption set the evidence apart; no accent bar */
@@ -2006,6 +2056,34 @@ button.chip:active::before {
   gap: 32px;
 }
 
+/* While flags are open: they still count as breaks here */
+.compare-todo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.compare-todo__text {
+  flex: 1 1 20rem;
+}
+
+/* Once every flag has a call */
+.compare-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.compare-done .icon {
+  color: var(--md-sys-color-primary);
+}
+
 .compare__heading {
   margin-bottom: 12px;
   font: var(--type-title-large);
@@ -2257,6 +2335,16 @@ button.chip:active::before {
 
   .tabs {
     --tab-padding: 12px;
+  }
+
+  /* Three or more chats don't fit side by side on a phone, so they stack */
+  .chat-switcher {
+    flex-direction: column;
+  }
+
+  .chat-switcher__button + .chat-switcher__button {
+    border-left: 0;
+    border-top: 1px solid var(--md-sys-color-outline);
   }
 
   .screen__title {
