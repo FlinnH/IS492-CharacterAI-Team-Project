@@ -1615,6 +1615,38 @@ button.chip:active::before {
   gap: 24px;
 }
 
+/* Chat switcher: segmented buttons, one per chat, each with its progress */
+.chat-switcher {
+  display: flex;
+  width: 100%;
+  margin-bottom: 12px;
+  border-radius: var(--md-sys-shape-corner-large);
+}
+
+.chat-switcher__button {
+  flex: 1 1 0;
+  justify-content: flex-start;
+  min-height: 56px;
+  padding: 8px 16px 8px 12px;
+  white-space: normal;
+  text-align: left;
+}
+
+.chat-switcher__text {
+  display: grid;
+  min-width: 0;
+}
+
+.chat-switcher__count {
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.chat-switcher__button[aria-pressed="true"] .chat-switcher__count {
+  color: inherit;
+}
+
 .review__bar {
   display: grid;
   gap: 12px;
