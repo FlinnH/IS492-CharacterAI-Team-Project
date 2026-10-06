@@ -46,8 +46,8 @@ Where current tools fail, with receipts, read through our theory lens. CP2 Steps
 | INT-FH-2 | Slightly technical user who builds his own assistant agent with Obsidian notes | It invented his mom's birthday, and its personality changes between sessions for reasons he can't trace | Accuracy & hallucinations; Cost & efficiency | [Flynn](reflections/huynh_flynn_validation.md) |
 | INT-GL-1 | [ ] | [ ] | [ ] | [Gawon](reflections/lim_gawon_validation.md) |
 | INT-GL-2 | [ ] | [ ] | [ ] | [Gawon](reflections/lim_gawon_validation.md) |
-| INT-KG-1 | [ ] | [ ] | [ ] | [Kiara](reflections/gao_kiara_validation.md) |
-| INT-KG-2 | [ ] | [ ] | [ ] | [Kiara](reflections/gao_kiara_validation.md) |
+| INT-KG-1 | Target user who role-plays game and anime characters with ChatGPT as a companion | Her character drifts right after she gives it feedback, because it over-weights the new request. She trusts her own judgment over any flag, since some out-of-character behavior is what she wants. | Reliability & consistency; UX friction | [Kiara](reflections/gao_kiara_validation.md) |
+| INT-KG-2 | Technically fluent peer who writes personas and system prompts | Alone, he caught 0 of the 7 planted mistakes in the seeded transcript (human-alone). He would trust flags that come with a reason and a confidence level. | UX friction; Accuracy & hallucinations | [Kiara](reflections/gao_kiara_validation.md) |
 
 ---
 
