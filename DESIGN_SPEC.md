@@ -9,15 +9,15 @@ Journeys, flows, screens, and collaboration mechanics for the workbench. CP2 Ste
 > Every major UI choice traces back to the theory lens or the opportunity framing (section 7.5). The CP2 guide calls this "no orphan features."
 > Anything marked "planned for CP3" is designed here but not yet in the prototype.
 
-| Section | Owner | Status |
-| --- | --- | --- |
-| 1. Personas and mental models | Flynn | Done |
-| 2. Journeys and task flows | Flynn | Done |
-| 3. Wireframes and key screens | Flynn | Done |
-| 4. Interaction details | Flynn | Done |
-| 5. Design system alignment | Flynn | Done |
-| 6. What changed because of the evidence | Flynn | Done |
-| 7. Collaboration mechanics | Flynn | Done |
+| Section | Status |
+| --- | --- |
+| 1. Personas and mental models | Done |
+| 2. Journeys and task flows | Done |
+| 3. Wireframes and key screens | Done |
+| 4. Interaction details | Done |
+| 5. Design system alignment | Done |
+| 6. What changed because of the evidence | Done |
+| 7. Collaboration mechanics | Done |
 
 ---
 
