@@ -8,3 +8,5 @@ venv/
 .venv/
 node_modules/
 *.log
+.claude/settings.local.json
+.claude/launch.json

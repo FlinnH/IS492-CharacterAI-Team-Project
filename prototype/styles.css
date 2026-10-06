@@ -1,0 +1,2419 @@
+/*
+  Character Consistency Workbench: CP2 prototype styles
+
+  Built on Google Material 3 (m3.material.io):
+    1. Tokens: baseline light color scheme, type scale, shape, elevation,
+       state layers, and motion, named after the M3 tokens
+    2. Base and layout
+    3. Components: top app bar, tabs, buttons, cards, chips, outlined text
+       field, dialog, side sheet, snackbar
+    4. Screens: layout that belongs to one screen
+    5. Window sizes and reduced motion
+*/
+
+/* 1. Tokens ================================================================ */
+
+:root {
+  /* Native controls (select lists, scrollbars, checkboxes) follow the theme */
+  color-scheme: light;
+
+  /* Color: M3 baseline scheme, light (values from Material Web's baseline tokens) */
+  --md-sys-color-primary: #6750a4;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #eaddff;
+  --md-sys-color-on-primary-container: #21005d;
+  --md-sys-color-primary-fixed: #eaddff;
+  --md-sys-color-primary-fixed-dim: #d0bcff;
+  --md-sys-color-on-primary-fixed: #21005d;
+  --md-sys-color-on-primary-fixed-variant: #4f378b;
+  --md-sys-color-inverse-primary: #d0bcff;
+  --md-sys-color-secondary: #625b71;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #e8def8;
+  --md-sys-color-on-secondary-container: #1d192b;
+  --md-sys-color-secondary-fixed: #e8def8;
+  --md-sys-color-secondary-fixed-dim: #ccc2dc;
+  --md-sys-color-on-secondary-fixed: #1d192b;
+  --md-sys-color-on-secondary-fixed-variant: #4a4458;
+  --md-sys-color-tertiary: #7d5260;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffd8e4;
+  --md-sys-color-on-tertiary-container: #31111d;
+  --md-sys-color-tertiary-fixed: #ffd8e4;
+  --md-sys-color-tertiary-fixed-dim: #efb8c8;
+  --md-sys-color-on-tertiary-fixed: #31111d;
+  --md-sys-color-on-tertiary-fixed-variant: #633b48;
+  --md-sys-color-error: #b3261e;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #f9dedc;
+  --md-sys-color-on-error-container: #410e0b;
+  --md-sys-color-background: #fef7ff;
+  --md-sys-color-on-background: #1d1b20;
+  --md-sys-color-surface: #fef7ff;
+  --md-sys-color-on-surface: #1d1b20;
+  --md-sys-color-surface-variant: #e7e0ec;
+  --md-sys-color-on-surface-variant: #49454f;
+  --md-sys-color-surface-dim: #ded8e1;
+  --md-sys-color-surface-bright: #fef7ff;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f7f2fa;
+  --md-sys-color-surface-container: #f3edf7;
+  --md-sys-color-surface-container-high: #ece6f0;
+  --md-sys-color-surface-container-highest: #e6e0e9;
+  --md-sys-color-surface-tint: #6750a4;
+  --md-sys-color-inverse-surface: #322f35;
+  --md-sys-color-inverse-on-surface: #f5eff7;
+  --md-sys-color-outline: #79747e;
+  --md-sys-color-outline-variant: #cac4d0;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+
+  /* Typeface: Roboto, with system fallbacks */
+  --md-ref-typeface-brand: "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --md-ref-typeface-plain: "Roboto", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+
+  /* Type scale: size, line height, weight, and tracking for each M3 role */
+  --md-sys-typescale-display-large-size: 3.5625rem;
+  --md-sys-typescale-display-large-line-height: 4rem;
+  --md-sys-typescale-display-large-weight: 400;
+  --md-sys-typescale-display-large-tracking: -0.25px;
+  --md-sys-typescale-display-medium-size: 2.8125rem;
+  --md-sys-typescale-display-medium-line-height: 3.25rem;
+  --md-sys-typescale-display-medium-weight: 400;
+  --md-sys-typescale-display-medium-tracking: 0;
+  --md-sys-typescale-display-small-size: 2.25rem;
+  --md-sys-typescale-display-small-line-height: 2.75rem;
+  --md-sys-typescale-display-small-weight: 400;
+  --md-sys-typescale-display-small-tracking: 0;
+  --md-sys-typescale-headline-large-size: 2rem;
+  --md-sys-typescale-headline-large-line-height: 2.5rem;
+  --md-sys-typescale-headline-large-weight: 400;
+  --md-sys-typescale-headline-large-tracking: 0;
+  --md-sys-typescale-headline-medium-size: 1.75rem;
+  --md-sys-typescale-headline-medium-line-height: 2.25rem;
+  --md-sys-typescale-headline-medium-weight: 400;
+  --md-sys-typescale-headline-medium-tracking: 0;
+  --md-sys-typescale-headline-small-size: 1.5rem;
+  --md-sys-typescale-headline-small-line-height: 2rem;
+  --md-sys-typescale-headline-small-weight: 400;
+  --md-sys-typescale-headline-small-tracking: 0;
+  --md-sys-typescale-title-large-size: 1.375rem;
+  --md-sys-typescale-title-large-line-height: 1.75rem;
+  --md-sys-typescale-title-large-weight: 400;
+  --md-sys-typescale-title-large-tracking: 0;
+  --md-sys-typescale-title-medium-size: 1rem;
+  --md-sys-typescale-title-medium-line-height: 1.5rem;
+  --md-sys-typescale-title-medium-weight: 500;
+  --md-sys-typescale-title-medium-tracking: 0.15px;
+  --md-sys-typescale-title-small-size: 0.875rem;
+  --md-sys-typescale-title-small-line-height: 1.25rem;
+  --md-sys-typescale-title-small-weight: 500;
+  --md-sys-typescale-title-small-tracking: 0.1px;
+  --md-sys-typescale-body-large-size: 1rem;
+  --md-sys-typescale-body-large-line-height: 1.5rem;
+  --md-sys-typescale-body-large-weight: 400;
+  --md-sys-typescale-body-large-tracking: 0.5px;
+  --md-sys-typescale-body-medium-size: 0.875rem;
+  --md-sys-typescale-body-medium-line-height: 1.25rem;
+  --md-sys-typescale-body-medium-weight: 400;
+  --md-sys-typescale-body-medium-tracking: 0.25px;
+  --md-sys-typescale-body-small-size: 0.75rem;
+  --md-sys-typescale-body-small-line-height: 1rem;
+  --md-sys-typescale-body-small-weight: 400;
+  --md-sys-typescale-body-small-tracking: 0.4px;
+  --md-sys-typescale-label-large-size: 0.875rem;
+  --md-sys-typescale-label-large-line-height: 1.25rem;
+  --md-sys-typescale-label-large-weight: 500;
+  --md-sys-typescale-label-large-tracking: 0.1px;
+  --md-sys-typescale-label-medium-size: 0.75rem;
+  --md-sys-typescale-label-medium-line-height: 1rem;
+  --md-sys-typescale-label-medium-weight: 500;
+  --md-sys-typescale-label-medium-tracking: 0.5px;
+  --md-sys-typescale-label-small-size: 0.6875rem;
+  --md-sys-typescale-label-small-line-height: 1rem;
+  --md-sys-typescale-label-small-weight: 500;
+  --md-sys-typescale-label-small-tracking: 0.5px;
+
+  /* Shape: corner radius scale */
+  --md-sys-shape-corner-none: 0;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* Elevation: M3 shadow levels */
+  --md-sys-elevation-level0: none;
+  --md-sys-elevation-level1: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level2: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
+  --md-sys-elevation-level3: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 4px 8px 3px rgb(0 0 0 / 0.15);
+
+  /* State layers: opacity of the overlay on hover, focus, and press */
+  --md-sys-state-hover-state-layer-opacity: 0.08;
+  --md-sys-state-focus-state-layer-opacity: 0.1;
+  --md-sys-state-pressed-state-layer-opacity: 0.1;
+
+  /* Motion */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-duration-short2: 100ms;
+  --md-sys-motion-duration-short4: 200ms;
+  --md-sys-motion-duration-medium2: 300ms;
+  --md-sys-motion-duration-medium4: 400ms;
+
+  /* App helpers (not M3 tokens) ------------------------------------------- */
+
+  /* Shorthands for the font property, built from the type scale above */
+  --type-display-large: var(--md-sys-typescale-display-large-weight) var(--md-sys-typescale-display-large-size) / var(--md-sys-typescale-display-large-line-height) var(--md-ref-typeface-brand);
+  --type-display-medium: var(--md-sys-typescale-display-medium-weight) var(--md-sys-typescale-display-medium-size) / var(--md-sys-typescale-display-medium-line-height) var(--md-ref-typeface-brand);
+  --type-display-small: var(--md-sys-typescale-display-small-weight) var(--md-sys-typescale-display-small-size) / var(--md-sys-typescale-display-small-line-height) var(--md-ref-typeface-brand);
+  --type-headline-large: var(--md-sys-typescale-headline-large-weight) var(--md-sys-typescale-headline-large-size) / var(--md-sys-typescale-headline-large-line-height) var(--md-ref-typeface-brand);
+  --type-headline-medium: var(--md-sys-typescale-headline-medium-weight) var(--md-sys-typescale-headline-medium-size) / var(--md-sys-typescale-headline-medium-line-height) var(--md-ref-typeface-brand);
+  --type-headline-small: var(--md-sys-typescale-headline-small-weight) var(--md-sys-typescale-headline-small-size) / var(--md-sys-typescale-headline-small-line-height) var(--md-ref-typeface-brand);
+  --type-title-large: var(--md-sys-typescale-title-large-weight) var(--md-sys-typescale-title-large-size) / var(--md-sys-typescale-title-large-line-height) var(--md-ref-typeface-brand);
+  --type-title-medium: var(--md-sys-typescale-title-medium-weight) var(--md-sys-typescale-title-medium-size) / var(--md-sys-typescale-title-medium-line-height) var(--md-ref-typeface-plain);
+  --type-title-small: var(--md-sys-typescale-title-small-weight) var(--md-sys-typescale-title-small-size) / var(--md-sys-typescale-title-small-line-height) var(--md-ref-typeface-plain);
+  --type-body-large: var(--md-sys-typescale-body-large-weight) var(--md-sys-typescale-body-large-size) / var(--md-sys-typescale-body-large-line-height) var(--md-ref-typeface-plain);
+  --type-body-medium: var(--md-sys-typescale-body-medium-weight) var(--md-sys-typescale-body-medium-size) / var(--md-sys-typescale-body-medium-line-height) var(--md-ref-typeface-plain);
+  --type-body-small: var(--md-sys-typescale-body-small-weight) var(--md-sys-typescale-body-small-size) / var(--md-sys-typescale-body-small-line-height) var(--md-ref-typeface-plain);
+  --type-label-large: var(--md-sys-typescale-label-large-weight) var(--md-sys-typescale-label-large-size) / var(--md-sys-typescale-label-large-line-height) var(--md-ref-typeface-plain);
+  --type-label-medium: var(--md-sys-typescale-label-medium-weight) var(--md-sys-typescale-label-medium-size) / var(--md-sys-typescale-label-medium-line-height) var(--md-ref-typeface-plain);
+  --type-label-small: var(--md-sys-typescale-label-small-weight) var(--md-sys-typescale-label-small-size) / var(--md-sys-typescale-label-small-line-height) var(--md-ref-typeface-plain);
+
+  /* Layout: page margin follows the M3 window size classes (see section 5) */
+  --app-margin: 16px;
+  --app-content-max: 1120px;
+
+  /* Height of the sticky header. app.js measures it and keeps this current. */
+  --app-header-height: 7rem;
+
+  /* The floating label of a text field covers the outline with this color,
+     so it has to match whatever the field sits on. Cards and dialogs reset it. */
+  --field-label-bg: var(--md-sys-color-surface);
+}
+
+/* Dark theme: the M3 baseline dark scheme. app.js sets data-theme on <html>
+   from the system setting, or from the Light and Dark buttons in the top bar.
+   Every color below the tokens comes from these roles, so nothing else
+   needs a dark version. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --md-sys-color-primary: #d0bcff;
+  --md-sys-color-on-primary: #381e72;
+  --md-sys-color-primary-container: #4f378b;
+  --md-sys-color-on-primary-container: #eaddff;
+  --md-sys-color-primary-fixed: #eaddff;
+  --md-sys-color-primary-fixed-dim: #d0bcff;
+  --md-sys-color-on-primary-fixed: #21005d;
+  --md-sys-color-on-primary-fixed-variant: #4f378b;
+  --md-sys-color-inverse-primary: #6750a4;
+  --md-sys-color-secondary: #ccc2dc;
+  --md-sys-color-on-secondary: #332d41;
+  --md-sys-color-secondary-container: #4a4458;
+  --md-sys-color-on-secondary-container: #e8def8;
+  --md-sys-color-secondary-fixed: #e8def8;
+  --md-sys-color-secondary-fixed-dim: #ccc2dc;
+  --md-sys-color-on-secondary-fixed: #1d192b;
+  --md-sys-color-on-secondary-fixed-variant: #4a4458;
+  --md-sys-color-tertiary: #efb8c8;
+  --md-sys-color-on-tertiary: #492532;
+  --md-sys-color-tertiary-container: #633b48;
+  --md-sys-color-on-tertiary-container: #ffd8e4;
+  --md-sys-color-tertiary-fixed: #ffd8e4;
+  --md-sys-color-tertiary-fixed-dim: #efb8c8;
+  --md-sys-color-on-tertiary-fixed: #31111d;
+  --md-sys-color-on-tertiary-fixed-variant: #633b48;
+  --md-sys-color-error: #f2b8b5;
+  --md-sys-color-on-error: #601410;
+  --md-sys-color-error-container: #8c1d18;
+  --md-sys-color-on-error-container: #f9dedc;
+  --md-sys-color-background: #141218;
+  --md-sys-color-on-background: #e6e0e9;
+  --md-sys-color-surface: #141218;
+  --md-sys-color-on-surface: #e6e0e9;
+  --md-sys-color-surface-variant: #49454f;
+  --md-sys-color-on-surface-variant: #cac4d0;
+  --md-sys-color-surface-dim: #141218;
+  --md-sys-color-surface-bright: #3b383e;
+  --md-sys-color-surface-container-lowest: #0f0d13;
+  --md-sys-color-surface-container-low: #1d1b20;
+  --md-sys-color-surface-container: #211f26;
+  --md-sys-color-surface-container-high: #2b2930;
+  --md-sys-color-surface-container-highest: #36343b;
+  --md-sys-color-surface-tint: #d0bcff;
+  --md-sys-color-inverse-surface: #e6e0e9;
+  --md-sys-color-inverse-on-surface: #322f35;
+  --md-sys-color-outline: #938f99;
+  --md-sys-color-outline-variant: #49454f;
+  --md-sys-color-shadow: #000000;
+  --md-sys-color-scrim: #000000;
+}
+
+/* Typescale utility classes, named like Material Web's */
+.md-typescale-display-large { font: var(--type-display-large); letter-spacing: var(--md-sys-typescale-display-large-tracking); }
+.md-typescale-display-medium { font: var(--type-display-medium); letter-spacing: var(--md-sys-typescale-display-medium-tracking); }
+.md-typescale-display-small { font: var(--type-display-small); letter-spacing: var(--md-sys-typescale-display-small-tracking); }
+.md-typescale-headline-large { font: var(--type-headline-large); letter-spacing: var(--md-sys-typescale-headline-large-tracking); }
+.md-typescale-headline-medium { font: var(--type-headline-medium); letter-spacing: var(--md-sys-typescale-headline-medium-tracking); }
+.md-typescale-headline-small { font: var(--type-headline-small); letter-spacing: var(--md-sys-typescale-headline-small-tracking); }
+.md-typescale-title-large { font: var(--type-title-large); letter-spacing: var(--md-sys-typescale-title-large-tracking); }
+.md-typescale-title-medium { font: var(--type-title-medium); letter-spacing: var(--md-sys-typescale-title-medium-tracking); }
+.md-typescale-title-small { font: var(--type-title-small); letter-spacing: var(--md-sys-typescale-title-small-tracking); }
+.md-typescale-body-large { font: var(--type-body-large); letter-spacing: var(--md-sys-typescale-body-large-tracking); }
+.md-typescale-body-medium { font: var(--type-body-medium); letter-spacing: var(--md-sys-typescale-body-medium-tracking); }
+.md-typescale-body-small { font: var(--type-body-small); letter-spacing: var(--md-sys-typescale-body-small-tracking); }
+.md-typescale-label-large { font: var(--type-label-large); letter-spacing: var(--md-sys-typescale-label-large-tracking); }
+.md-typescale-label-medium { font: var(--type-label-medium); letter-spacing: var(--md-sys-typescale-label-medium-tracking); }
+.md-typescale-label-small { font: var(--type-label-small); letter-spacing: var(--md-sys-typescale-label-small-tracking); }
+
+/* 2. Base and layout ======================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Keeps anything scrolled into view clear of the sticky header */
+  scroll-padding-top: calc(var(--app-header-height) + 16px);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* Reply text from the chat logs keeps its line breaks. Only put this on an
+   element that holds nothing but that text, or template newlines show too. */
+.keep-lines {
+  white-space: pre-line;
+}
+
+/* Search matches and quoted evidence */
+mark {
+  border-radius: 2px;
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Keyboard focus: the M3 focus ring, 3px in the secondary color */
+:focus-visible {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Material Symbols. Icons are decorative (aria-hidden) and always sit next to
+   visible text. They stay hidden until app.js confirms the icon font loaded,
+   so an offline page never shows raw names like "restart_alt". */
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  font-variation-settings: "FILL" 0;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  visibility: hidden;
+}
+
+.icons-ready .icon {
+  visibility: visible;
+}
+
+.icon--filled {
+  font-variation-settings: "FILL" 1;
+}
+
+/* Screens: one per tab */
+.screen {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 24px var(--app-margin) 48px;
+}
+
+/* The panel can take focus (it starts with plain text), so its ring sits inside */
+.screen:focus-visible {
+  outline-offset: -3px;
+}
+
+.screen__step {
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  color: var(--md-sys-color-primary);
+}
+
+.screen__title {
+  margin-top: 4px;
+  font: var(--type-headline-medium);
+  letter-spacing: var(--md-sys-typescale-headline-medium-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* A heading followed by a chip, like "Character spec v1" */
+.screen__title--with-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* The heading takes focus after a screen change, but it is not a control */
+.screen__title:focus {
+  outline: none;
+}
+
+.screen__lede {
+  max-width: 70ch;
+  margin-top: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.screen__body {
+  margin-top: 24px;
+}
+
+.load-error {
+  max-width: var(--app-content-max);
+  margin: 24px auto;
+  padding: 0 var(--app-margin);
+  color: var(--md-sys-color-error);
+}
+
+/* Footer on every screen */
+.app-footer {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 0 var(--app-margin) 32px;
+}
+
+.app-footer p {
+  padding-top: 16px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* 3. Components ============================================================ */
+
+/* Top app bar (M3 small) and tabs share one sticky header ------------------ */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  transition: background-color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+/* M3: the bar changes to surface-container once content scrolls under it */
+.app-header.is-scrolled {
+  background: var(--md-sys-color-surface-container);
+}
+
+.app-header__inner {
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 0 var(--app-margin);
+}
+
+.top-app-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 64px;
+  padding: 8px 0;
+}
+
+.top-app-bar__icon {
+  color: var(--md-sys-color-primary);
+}
+
+.top-app-bar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+.top-app-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Primary tabs ------------------------------------------------------------- */
+/* The selected tab shows a 3px indicator and a filled icon, not just a color. */
+
+.tabs {
+  --tab-padding: 16px;
+  position: relative;
+  display: flex;
+  margin: 0 calc(var(--tab-padding) * -1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 var(--tab-padding);
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+}
+
+.tab:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.tab:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+/* The tab row clips anything outside it, so the ring goes inside the tab */
+.tab:focus-visible {
+  outline-offset: -3px;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--md-sys-color-primary);
+}
+
+.tab[aria-selected="true"] .icon {
+  font-variation-settings: "FILL" 1;
+}
+
+/* Badge (M3 large badge): the number of open items, in the error role.
+   Here it counts the flags that still need the creator's call. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+  font: var(--type-label-small);
+  letter-spacing: var(--md-sys-typescale-label-small-tracking);
+}
+
+.tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: var(--tab-padding);
+  bottom: 0;
+  left: var(--tab-padding);
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--md-sys-color-primary);
+}
+
+/* Buttons: filled, outlined, text ------------------------------------------ */
+/* Add btn--icon-leading when the label starts with an icon. */
+
+.btn {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+/* State layer: a tint in the label color that shows hover, focus, and press */
+.btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+.btn:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.btn:focus-visible::before {
+  opacity: var(--md-sys-state-focus-state-layer-opacity);
+}
+
+.btn:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+.btn .icon {
+  font-size: 18px;
+}
+
+.btn--icon-leading {
+  padding-left: 16px;
+}
+
+.btn--filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.btn--filled:hover {
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.btn--outlined {
+  border: 1px solid var(--md-sys-color-outline);
+  color: var(--md-sys-color-primary);
+}
+
+.btn--text {
+  padding: 0 12px;
+  color: var(--md-sys-color-primary);
+}
+
+.btn--text.btn--icon-leading {
+  padding: 0 16px 0 12px;
+}
+
+/* aria-disabled="true" looks the same as disabled but stays focusable, for a
+   button whose hint explains when it turns on (like Agree on Flag review). */
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  box-shadow: none;
+  cursor: default;
+}
+
+.btn:disabled::before,
+.btn[aria-disabled="true"]::before {
+  display: none;
+}
+
+.btn--filled:disabled,
+.btn--filled[aria-disabled="true"] {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+}
+
+.btn--outlined:disabled,
+.btn--outlined[aria-disabled="true"] {
+  border-color: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+}
+
+/* Cards: outlined, filled, elevated ---------------------------------------- */
+
+.card {
+  display: block;
+  padding: 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+}
+
+.card--outlined {
+  border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.card--filled {
+  --field-label-bg: var(--md-sys-color-surface-container-highest);
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.card--elevated {
+  --field-label-bg: var(--md-sys-color-surface-container-low);
+  background: var(--md-sys-color-surface-container-low);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+/* Chips -------------------------------------------------------------------- */
+/* <span class="chip"> is a static label. <button class="chip chip--assist">
+   is an action. <button class="chip chip--filter" aria-pressed="..."> is a
+   toggle; when selected it should also show a check icon, so the state is
+   never shown by color alone. Add chip--icon-leading when it starts with an icon. */
+
+.chip {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.chip .icon {
+  font-size: 18px;
+  color: var(--md-sys-color-primary);
+}
+
+.chip--icon-leading {
+  padding-left: 8px;
+}
+
+.chip--icon-trailing {
+  padding-right: 8px;
+}
+
+button.chip {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.chip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+button.chip:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+button.chip:focus-visible::before {
+  opacity: var(--md-sys-state-focus-state-layer-opacity);
+}
+
+button.chip:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+.chip--filter {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.chip--filter[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.chip--filter[aria-pressed="true"] .icon {
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+/* Segmented buttons (M3), used for the Light and Dark theme picker. The
+   selected one shows a check icon as well as a fill. */
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  overflow: hidden;
+}
+
+.segmented__button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmented__button + .segmented__button {
+  border-left: 1px solid var(--md-sys-color-outline);
+}
+
+.segmented__button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+.segmented__button:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.segmented__button:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
+}
+
+/* The group clips its rounded corners, so the ring goes inside the button */
+.segmented__button:focus-visible {
+  outline-offset: -3px;
+}
+
+.segmented__button[aria-pressed="true"] {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.segmented__button .icon {
+  font-size: 18px;
+}
+
+/* Outlined text field ------------------------------------------------------ */
+/* Markup: the label comes after the field, and the field needs placeholder=" "
+   so the label can tell when the field is empty.
+     <div class="text-field">
+       <textarea class="text-field__input" id="x" placeholder=" "></textarea>
+       <label class="text-field__label" for="x">Label</label>
+       <p class="text-field__support">Supporting text</p>
+     </div>
+   Add text-field--error for an error; say what is wrong in the supporting text too.
+   For a leading icon, add text-field--icon-leading and put
+   <span class="icon text-field__icon" aria-hidden="true"> before the field. */
+
+.text-field {
+  position: relative;
+  display: block;
+}
+
+.text-field__input {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  margin: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  caret-color: var(--md-sys-color-primary);
+  resize: vertical;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.text-field__input:hover {
+  border-color: var(--md-sys-color-on-surface);
+}
+
+/* Focus shows as a 2px primary outline (M3), instead of the focus ring */
+.text-field__input:focus,
+.text-field__input:focus-visible {
+  outline: none;
+  border-color: var(--md-sys-color-primary);
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-primary);
+}
+
+.text-field__label {
+  position: absolute;
+  top: 16px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  padding: 0 4px;
+  overflow: hidden;
+  background: var(--field-label-bg);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transition:
+    top var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    left var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    font-size var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.text-field__input:focus + .text-field__label,
+.text-field__input:not(:placeholder-shown) + .text-field__label {
+  top: -8px;
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.text-field__input:focus + .text-field__label {
+  color: var(--md-sys-color-primary);
+}
+
+.text-field__support {
+  margin: 4px 16px 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.text-field--error .text-field__input,
+.text-field--error .text-field__input:focus {
+  border-color: var(--md-sys-color-error);
+}
+
+.text-field--error .text-field__input:focus {
+  box-shadow: inset 0 0 0 1px var(--md-sys-color-error);
+}
+
+.text-field--error .text-field__label,
+.text-field--error .text-field__support {
+  color: var(--md-sys-color-error);
+}
+
+.text-field__icon {
+  position: absolute;
+  top: 16px;
+  left: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  pointer-events: none;
+}
+
+.text-field--icon-leading .text-field__input {
+  padding-left: 52px;
+}
+
+/* Resting, the label sits after the icon; floating, it moves to the outline's start */
+.text-field--icon-leading .text-field__label {
+  left: 48px;
+  max-width: calc(100% - 60px);
+}
+
+.text-field--icon-leading .text-field__input:focus + .text-field__label,
+.text-field--icon-leading .text-field__input:not(:placeholder-shown) + .text-field__label {
+  left: 12px;
+  max-width: calc(100% - 24px);
+}
+
+/* Outlined select: a native <select> in the same field. A select always has a
+   value, so its label always floats. The dropdown arrow is a CSS triangle, so
+   it shows even without the icon font.
+     <div class="text-field text-field--select">
+       <select class="text-field__input" id="x">...</select>
+       <label class="text-field__label" for="x">Label</label>
+     </div> */
+
+.text-field--select .text-field__input {
+  padding-right: 44px;
+  cursor: pointer;
+}
+
+.text-field--select .text-field__label {
+  top: -8px;
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.text-field--select::after {
+  content: "";
+  position: absolute;
+  top: 26px;
+  right: 19px;
+  border-top: 5px solid var(--md-sys-color-on-surface-variant);
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  pointer-events: none;
+}
+
+/* Dialog (M3 basic dialog on the native <dialog> element) ------------------ */
+
+.dialog {
+  --field-label-bg: var(--md-sys-color-surface-container-high);
+  width: min(560px, calc(100vw - 48px));
+  max-width: none;
+  max-height: calc(100vh - 48px);
+  padding: 24px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level3);
+}
+
+/* Scrim: M3 uses the scrim color (black) at 32% */
+.dialog::backdrop {
+  background: rgb(0 0 0 / 0.32);
+}
+
+.dialog[open] {
+  animation: dialog-enter var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+}
+
+.dialog__headline {
+  font: var(--type-headline-small);
+  letter-spacing: var(--md-sys-typescale-headline-small-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+.dialog__content {
+  margin-top: 16px;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+/* Side sheet (M3 modal side sheet on the native <dialog> element) ---------- */
+/* Slides in from the right edge, at most 400px wide, and keeps a strip of
+   scrim visible on phones so it reads as a layer over the page. */
+
+.side-sheet {
+  --field-label-bg: var(--md-sys-color-surface-container-low);
+  inset: 0 0 0 auto;
+  width: min(400px, calc(100vw - 56px));
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-large) 0 0 var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.side-sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: side-sheet-enter var(--md-sys-motion-duration-medium4) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+.side-sheet::backdrop {
+  background: rgb(0 0 0 / 0.32);
+}
+
+@keyframes side-sheet-enter {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+.side-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 12px 8px 24px;
+}
+
+.side-sheet__title {
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* min-height: 0 lets the body shrink and scroll instead of spilling out */
+.side-sheet__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 24px 24px;
+}
+
+/* Linear progress indicator (M3, determinate, on the native <progress>) ---- */
+
+.linear-progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-highest);
+  overflow: hidden;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.linear-progress::-webkit-progress-bar {
+  border-radius: inherit;
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+/* No width transition: the bar moves one turn at a time, so a step is honest
+   and avoids animating a layout property. */
+.linear-progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
+}
+
+.linear-progress::-moz-progress-bar {
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
+}
+
+/* Snackbar ----------------------------------------------------------------- */
+/* Hidden with opacity, not display, so it stays a live region for screen readers */
+
+.snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  max-width: min(600px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  box-shadow: var(--md-sys-elevation-level3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 16px);
+  transition:
+    opacity var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.snackbar.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Plain tooltip (M3) ------------------------------------------------------- */
+/* One shared element that app.js places next to whatever has data-tooltip. */
+
+.tooltip {
+  position: fixed;
+  z-index: 40;
+  max-width: min(280px, calc(100vw - 16px));
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  animation: tooltip-enter var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+@keyframes tooltip-enter {
+  from {
+    opacity: 0;
+  }
+}
+
+/* 4. Screens =============================================================== */
+
+/* Spec editor -------------------------------------------------------------- */
+
+/* One readable column: spec lines get hard to read past about 90 characters */
+.spec-editor {
+  max-width: 52rem;
+}
+
+.spec-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.spec-toolbar__search {
+  flex: 1 1 18rem;
+}
+
+/* Lines the 40px button up with the middle of the 56px field */
+.spec-toolbar .btn {
+  margin-top: 8px;
+}
+
+.spec-status {
+  margin-top: 16px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.spec-results {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.spec-card__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.spec-lines {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.spec-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* Every ID chip gets the same width, so the line text lines up */
+.spec-line__id {
+  flex: none;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: 0 12px;
+}
+
+.spec-line__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+/* Lines without an ID: the opening instruction and the labeled fields */
+.spec-line--intro,
+.spec-line--field {
+  display: block;
+}
+
+.spec-line--intro .spec-line__text,
+.spec-line--field .spec-line__text {
+  padding-top: 0;
+}
+
+.spec-line--intro .spec-line__text {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.spec-line__label {
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* The line opened from Compare runs: tinted, with a note saying why */
+.spec-line.is-spotlit {
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.spec-line__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.spec-line__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.spec-line__note .icon {
+  font-size: 16px;
+}
+
+.spec-empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+/* The line shown at the top of the "Flags that cite" side sheet */
+.cited-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cited-line__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 6px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.sheet-summary {
+  margin-top: 20px;
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+/* Flag summaries: short flag cards in the side sheet -------------------- */
+
+.flag-list {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag-summary {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.flag-summary__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.flag-summary__place {
+  display: block;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-summary__details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.flag-summary__details dt {
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-summary__details dd {
+  margin: 2px 0 0;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+/* Confidence shows as words plus a signal-bars icon, never color alone */
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.confidence .icon {
+  font-size: 18px;
+  color: var(--md-sys-color-primary);
+}
+
+/* Run a conversation ------------------------------------------------------- */
+
+.run-screen {
+  max-width: 52rem;
+}
+
+.run-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.run-setup .text-field {
+  flex: 1 1 11rem;
+}
+
+/* Lines the 40px button up with the middle of the 56px fields */
+.run-setup .btn {
+  margin-top: 8px;
+}
+
+.transcript {
+  margin-top: 24px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.transcript__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.transcript__title {
+  margin-right: auto;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* Where the chat came from: date, chat mode, model, and any gaps in the log */
+.transcript__source {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* "Turn 4 of 9", the progress bar, and Skip to end, while a run plays */
+.run-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.run-progress__label {
+  min-width: 6.5rem;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.run-progress .linear-progress {
+  flex: 1 1 8rem;
+  width: auto;
+}
+
+/* The chat scrolls on its own, so the controls above it stay in view */
+.chat {
+  height: min(60vh, 34rem);
+  min-height: 18rem;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--md-sys-color-surface-container-lowest);
+}
+
+.chat:focus-visible {
+  outline-offset: -3px;
+}
+
+.chat__empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  text-align: center;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.chat__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The small system line, "Turn 1: character spec v1 loaded" */
+.chat__system {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.chat__system .icon {
+  font-size: 16px;
+}
+
+/* Chat bubbles: the script's lines (Alex) on the right, the character's
+   replies on the left. Every bubble names its speaker, so side and color are
+   never the only cue. */
+.bubble {
+  max-width: min(85%, 36rem);
+  padding: 8px 14px 10px;
+  border-radius: var(--md-sys-shape-corner-large);
+  animation: bubble-enter var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-emphasized-decelerate);
+}
+
+.bubble--user {
+  align-self: flex-end;
+  border-top-right-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.bubble--character {
+  align-self: flex-start;
+  border-top-left-radius: var(--md-sys-shape-corner-extra-small);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+@keyframes bubble-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.bubble__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.bubble__turn {
+  font-weight: 400;
+}
+
+.bubble__text {
+  margin-top: 2px;
+}
+
+.run-result__card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 16px;
+}
+
+.run-result__card .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.run-result__text {
+  flex: 1 1 16rem;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* Flag review -------------------------------------------------------------- */
+/* Phones get one column: the flags, then the conversation. From 840px (see
+   section 5) the conversation sits on the left and the flags on the right,
+   and both keep their top part in view while the cards scroll. */
+
+.review {
+  display: grid;
+  gap: 24px;
+}
+
+/* Chat switcher: segmented buttons, one per chat, each with its progress */
+.chat-switcher {
+  display: flex;
+  width: 100%;
+  margin-bottom: 12px;
+  border-radius: var(--md-sys-shape-corner-large);
+}
+
+.chat-switcher__button {
+  flex: 1 1 0;
+  justify-content: flex-start;
+  min-height: 56px;
+  padding: 8px 16px 8px 12px;
+  white-space: normal;
+  text-align: left;
+}
+
+.chat-switcher__text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chat-switcher__progress {
+  height: 4px;
+  margin-top: 6px;
+}
+
+.chat-switcher__count {
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.chat-switcher__button[aria-pressed="true"] .chat-switcher__count {
+  color: inherit;
+}
+
+.review__bar {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container);
+}
+
+.review__summary {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* The rubber-stamp check */
+.review__nudge {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.flag-cards {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flag-cards__empty {
+  margin-top: 16px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+/* A card takes focus only when "Go to flag" lands on it, so the ring shows
+   for mouse users too */
+.flag-card:focus {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.flag-card.is-agreed {
+  border-color: var(--md-sys-color-primary);
+}
+
+.flag-card.is-overridden {
+  border-style: dashed;
+  border-color: var(--md-sys-color-outline);
+}
+
+.flag-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  justify-self: stretch;
+  gap: 4px 12px;
+}
+
+.flag-card__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+/* "Needs your call" on every flag still waiting for a decision. Tertiary is
+   this prototype's color for "your judgment is needed", next to the AI-unsure
+   note and the rubber-stamp check; the icon and words carry the meaning. */
+.needs-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 6px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.needs-call .icon {
+  font-size: 16px;
+}
+
+/* The quote marks and the caption set the evidence apart; no accent bar */
+.flag-card__evidence {
+  margin: 0;
+}
+
+.flag-card__evidence blockquote {
+  margin: 0;
+}
+
+.flag-card__evidence figcaption {
+  margin-top: 2px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The confidence chip is a label, not a control, so it has no outline */
+.flag-card__confidence {
+  border-color: transparent;
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.flag-card__label {
+  font-weight: 500;
+}
+
+.flag-card__cite-text,
+.flag-card__why,
+.flag-card__unsure,
+.flag-card__reason,
+.context-line {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.flag-card__cite-text {
+  justify-self: stretch;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+/* "The AI is unsure" on low-confidence flags */
+.flag-card__unsure {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.flag-card__unsure .icon {
+  font-size: 20px;
+}
+
+.flag-card__context {
+  display: grid;
+  justify-self: stretch;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.context-line__speaker {
+  display: block;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.flag-card__hint,
+.flag-card__reason {
+  flex-basis: 100%;
+}
+
+.flag-card__hint {
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.flag-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.flag-card.is-agreed .flag-card__status .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.flag-card__override {
+  display: grid;
+  justify-self: stretch;
+  gap: 8px;
+}
+
+/* Not checked by the AI */
+.not-checked {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.not-checked__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.not-checked__title .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.not-checked__item {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+/* Checkbox: the native control in the M3 primary color, on a 40px row */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--md-sys-color-primary);
+  cursor: pointer;
+}
+
+/* The compact conversation */
+.review__conversation {
+  display: flex;
+  flex-direction: column;
+  max-height: 28rem;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-lowest);
+  overflow: hidden;
+}
+
+.review__convo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.review__convo-title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.review__convo-run {
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* position: relative makes each turn's offsetTop relative to this box,
+   which revealTurn() in app.js relies on */
+.review__convo-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.review__convo-scroll:focus-visible {
+  outline-offset: -3px;
+}
+
+.convo {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.convo__system {
+  justify-self: center;
+  margin-bottom: 4px;
+  padding: 2px 10px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-small);
+  letter-spacing: var(--md-sys-typescale-label-small-tracking);
+}
+
+.convo-turn {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 8px 12px;
+  border-left: 4px solid transparent;
+  border-radius: 0 var(--md-sys-shape-corner-small) var(--md-sys-shape-corner-small) 0;
+}
+
+/* Flagged: a colored border, a flag icon, and the word "Flagged" */
+.convo-turn--flagged {
+  border-left-color: var(--md-sys-color-error);
+}
+
+/* Overridden: the creator says it isn't a break, so the border goes quiet */
+.convo-turn--overridden {
+  border-left-style: dashed;
+  border-left-color: var(--md-sys-color-outline);
+}
+
+/* The turn the creator is looking at, after "Show in context" */
+.convo-turn[aria-current="true"] {
+  background: var(--md-sys-color-secondary-container);
+}
+
+.convo-turn__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.convo-turn__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--md-sys-color-error);
+}
+
+.convo-turn__flag .icon {
+  font-size: 16px;
+}
+
+.convo-turn--overridden .convo-turn__flag {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.convo-turn__line {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.convo-turn__speaker {
+  font-weight: 500;
+}
+
+/* Compare runs ------------------------------------------------------------- */
+
+.compare {
+  display: grid;
+  gap: 32px;
+}
+
+/* While flags are open: they still count as breaks here */
+.compare-todo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.compare-todo__text {
+  flex: 1 1 20rem;
+}
+
+/* Once every flag has a call */
+.compare-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.compare-done .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.compare__heading {
+  margin-bottom: 12px;
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+}
+
+/* Drift strips: one small square per turn */
+.drift {
+  display: grid;
+  gap: 16px;
+}
+
+.drift__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.drift__run {
+  min-width: 8rem;
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.drift__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Clean: outlined. Break: filled, with a flag icon. Overridden: dashed.
+   The turn number shows on every square. */
+.drift__turn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.drift__turn .icon {
+  font-size: 16px;
+}
+
+.drift__turn--break {
+  border-color: var(--md-sys-color-error);
+  background: var(--md-sys-color-error);
+  color: var(--md-sys-color-on-error);
+}
+
+.drift__turn--overridden {
+  border-style: dashed;
+}
+
+.drift__first {
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.drift__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.drift__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drift__turn--sample {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+}
+
+.drift__turn--sample .icon {
+  font-size: 12px;
+}
+
+/* Side by side. The table scrolls sideways on narrow screens. */
+.compare-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+.compare-table-wrap:focus-visible {
+  outline-offset: -3px;
+}
+
+.compare-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  text-align: left;
+  vertical-align: top;
+}
+
+.compare-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.compare-table thead th {
+  background: var(--md-sys-color-surface-container);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.compare-table thead th:first-child {
+  width: 30%;
+}
+
+.compare-table tbody th,
+.compare-reply {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.compare-table__turn {
+  display: block;
+  margin-bottom: 2px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.compare-table__speaker {
+  font-weight: 500;
+}
+
+/* A reply that broke: tinted, labeled, with the evidence underlined */
+.compare-reply--break {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+/* Dark theme: a solid dark red behind long replies is hard on the eyes, so
+   broken replies get a soft red tint instead. The flag label and the
+   underlined evidence still mark them. */
+:root[data-theme="dark"] .compare-reply--break {
+  background: color-mix(in srgb, var(--md-sys-color-error) 20%, var(--md-sys-color-surface-container-lowest));
+  color: var(--md-sys-color-on-surface);
+}
+
+:root[data-theme="dark"] .compare-reply--break .compare-reply__label {
+  color: var(--md-sys-color-error);
+}
+
+.compare-reply__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.compare-reply__label .icon {
+  font-size: 16px;
+}
+
+.compare-reply__label--quiet {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.compare-reply mark {
+  background: none;
+  color: inherit;
+  text-decoration: underline wavy var(--md-sys-color-error);
+  text-underline-offset: 3px;
+}
+
+/* Next step: a spec line that broke in both runs */
+.next-step {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.next-step + .next-step {
+  margin-top: 16px;
+}
+
+.next-step__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.next-step__title .icon {
+  color: var(--md-sys-color-primary);
+}
+
+/* What the codes mean (dialog from the top bar) ----------------------------- */
+
+.codes {
+  display: grid;
+  gap: 16px;
+}
+
+.codes__title {
+  margin-bottom: 4px;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+/* 5. Window sizes and reduced motion ======================================= */
+/* M3 window size classes: compact below 600px, medium from 600px,
+   expanded from 840px. */
+
+@media (max-width: 599px) {
+  /* On phones the top bar wraps to several rows, so it scrolls away instead
+     of covering a third of the screen. */
+  .app-header {
+    position: static;
+  }
+
+  html {
+    scroll-padding-top: 16px;
+  }
+
+  .tabs {
+    --tab-padding: 12px;
+  }
+
+  /* Three or more chats don't fit side by side on a phone, so they stack */
+  .chat-switcher {
+    flex-direction: column;
+  }
+
+  .chat-switcher__button + .chat-switcher__button {
+    border-left: 0;
+    border-top: 1px solid var(--md-sys-color-outline);
+  }
+
+  .screen__title {
+    font: var(--type-headline-small);
+    letter-spacing: var(--md-sys-typescale-headline-small-tracking);
+  }
+}
+
+@media (min-width: 600px) {
+  :root {
+    --app-margin: 24px;
+  }
+}
+
+@media (min-width: 840px) {
+  .screen {
+    padding-top: 32px;
+  }
+
+  /* Flag review: the conversation on the left, the flags on the right */
+  .review {
+    grid-template-columns: minmax(15rem, 21rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .review__conversation {
+    grid-row: 1;
+    grid-column: 1;
+    position: sticky;
+    top: calc(var(--app-header-height) + 16px);
+    max-height: calc(100vh - var(--app-header-height) - 32px);
+  }
+
+  .review__main {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  /* The summary, the rubber-stamp check, and the filters stay in view. The
+     surface-colored padding hides cards as they scroll under the bar. */
+  .review__bar-wrap {
+    position: sticky;
+    top: var(--app-header-height);
+    z-index: 2;
+    margin-top: -16px;
+    padding: 16px 0 8px;
+    background: var(--md-sys-color-surface);
+  }
+
+  /* Keyboard focus scrolls clear of that bar too (app.js measures it) */
+  html[data-screen="diagnose"] {
+    scroll-padding-top: calc(var(--app-header-height) + var(--review-bar-height, 0px) + 16px);
+  }
+}
+
+/* Large monitors: a little more room for Flag review and Compare runs */
+@media (min-width: 1600px) {
+  :root {
+    --app-content-max: 1280px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

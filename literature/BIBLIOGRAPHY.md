@@ -13,8 +13,8 @@ license permits.
 | 1 | Li et al. 2024 – Persona Drift | Flynn | [x] `li2024_persona_drift.pdf` | [x] |
 | 2 | Zhang et al. 2025 – Dark Side of AI Companionship | Flynn | [x] `zhang2025_dark_side.pdf` | [x] |
 | 3 | Maples et al. 2024 – Loneliness & Suicide Mitigation | Flynn | [x] `maples2024_loneliness.pdf` | [x] |
-| 4 | Du et al. 2026 – HER | Gawon | [ ] | [x] |
-| 5 | [ TBD ] | Gawon | [ ] | [ ] |
+| 4 | Du et al. 2026 – HER | Gawon | [x] `Du2025_HER.pdf` | [x] |
+| 5 | Wu et al. 2025 - LongMemEval | Gawon | [x] `Wu2025-LongMemEval.pdf` | [x] |
 | 6 | Yang et al. 2025 – SimsChat | Kiara | [x] `yang2025_simschat.pdf` | [x] |
 | 7 | Tu et al. 2024 – CharacterEval | Kiara | [x] `tu2024_charactereval.pdf` | [x] |
 | 8 | Wang et al. 2024 – RoleLLM | Kiara | [x] `wang2024_rolellm.pdf` | [x] |
@@ -45,7 +45,7 @@ still occurs on frontier models.
 
 4. Du, C., Wang, X., Chen, A., Li, W., Xu, R., Liu, J., Huang, Z., Tian, R., Sun, Z., Li, Y., Feng, L., Ding, D., Zhao, P., & Xiao, Y. (2026). HER: Human-like reasoning and reinforcement learning for LLM role-playing. In M. Liakata, V. P. Moreira, J. Zhang, & D. Jurgens (Eds.), *Findings of the Association for Computational Linguistics: ACL 2026* (pp. 25725–25762). Association for Computational Linguistics. https://doi.org/10.18653/v1/2026.findings-acl.1283
 
-5. [ TBD – Gawon ]
+5. Wu, D., Wang, H., Yu, W., Zhang, Y., Chang, K.-W., & Yu, D. (2025). LongMemEval: Benchmarking chat assistants on long-term interactive memory. International Conference on Learning Representations (ICLR 2025). https://arxiv.org/abs/2410.10813
 
 6. Yang, B., Liu, D., Xiao, C., Zhao, K., Tang, C., Li, C., Yuan, L., Yang, G., & Lin, C. (2025). Crafting customisable characters with LLMs: A persona-driven role-playing agent framework. In *Findings of the Association for Computational Linguistics: EMNLP 2025* (pp. 20216–20240). Association for Computational Linguistics. https://aclanthology.org/2025.findings-emnlp.1100
 
