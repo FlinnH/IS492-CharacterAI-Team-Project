@@ -18,9 +18,9 @@ How we tested existing AI tools to validate our concept and expose gaps. CP2 Ste
 
 | Tool | Code | Model shown in the UI | Plan (free or paid) | Tester | Dates run |
 | --- | --- | --- | --- | --- | --- |
-| ChatGPT | GPT | [ ] | [ ] | [ ] | [ ] |
+| ChatGPT | GPT | Medium (picker label; GPT-T1, GPT-T2, GPT-E1, GPT-E2, and GPT-F1). GPT-F2's model name was not saved. | signed in; plan not opened | Kiara (GPT-T1, GPT-T2, GPT-E1, GPT-E2, GPT-F1), Flynn (GPT-F2) | 3 Oct 2026 (F2), 5 Oct 2026 (T1, T2, E1, E2, F1) |
 | Claude | CLA | Sonnet 5.5 | free | Flynn | 1 Oct 2026 |
-| Gemini | GEM | [ ] | [ ] | [ ] | [ ] |
+| Gemini | GEM | Flash-Lite, on the signed-in mode picker, extended thinking off. Pro Extended returned no text on the spec. | signed in; plan not opened | Gawon (GEM-T1, GEM-F1) | 5 Oct 2026 |
 
 ---
 
