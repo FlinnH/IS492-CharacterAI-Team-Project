@@ -4,7 +4,7 @@
 
 Journeys, flows, screens, and collaboration mechanics for the workbench. CP2 Step 8.
 
-**Status:** Complete draft, Oct 3, 2026, updated Oct 5 with the chat switcher, the "needs your call" cues, and the codes dialog and tooltips. Built from the live prototype and the evidence in validation/GAP_ANALYSIS.md, THEORY_LENS.md, and OPPORTUNITY_FRAMING.md. Teammates can still suggest changes.
+**Status:** Final for CP2, Oct 8, 2026. Updated Oct 5 with the chat switcher, the "needs your call" cues, and the codes dialog and tooltips. Built from the live prototype and the evidence in validation/GAP_ANALYSIS.md, THEORY_LENS.md, and OPPORTUNITY_FRAMING.md.
 
 > Every major UI choice traces back to the theory lens or the opportunity framing (section 7.5). The CP2 guide calls this "no orphan features."
 > Anything marked "planned for CP3" is designed here but not yet in the prototype.
