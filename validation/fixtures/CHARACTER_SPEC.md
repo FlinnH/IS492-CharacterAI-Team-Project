@@ -2,7 +2,7 @@
 
 The one character every tool gets in the prompting study. CP2 Steps 2 and 3.
 
-**Status:** DRAFT
+**Status:** Final. Frozen since the first run on Oct 1, 2026.
 
 **Version:** v1
 
