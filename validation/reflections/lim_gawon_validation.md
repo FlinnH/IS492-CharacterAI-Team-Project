@@ -87,4 +87,3 @@ GEM-F1 stayed in character when told it was an AI, while GPT-F1 left character o
 
 ![Class storyboard](../../docs/storyboard/class_storyboard.png)
 
-[ one or two sentences: what the storyboard shows, and what you took from it ]
