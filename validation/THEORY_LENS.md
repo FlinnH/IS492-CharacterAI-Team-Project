@@ -4,9 +4,9 @@
 
 Shared complementarity discussion for Checkpoint 2.
 
-**Status:** Final for CP2, Oct 2, 2026. Gawon and Kiara still tick their own sign-off rows.
+**Status:** Final for CP2, Oct 8, 2026. Signed off by all three members.
 
-**Order of work:** receipt first, then theory, then design. Parts 2 to 4 cite Claude's six scored chats in [transcripts/claude_outputs.md](transcripts/claude_outputs.md) and Flynn's two interviews in [reflections/huynh_flynn_validation.md](reflections/huynh_flynn_validation.md). ChatGPT and Gemini rows get added as their chats come in, so the theory keeps explaining what we saw instead of the other way round.
+**Order of work:** receipt first, then theory, then design. The evidence is in [transcripts/](transcripts/) and in each member's [reflection](reflections/).
 
 ---
 
@@ -14,23 +14,11 @@ Shared complementarity discussion for Checkpoint 2.
 
 > Slide 2 uses the first sentence.
 
-**Claim:** Our hybrid (a creator using the workbench) should beat both human-alone and AI-alone review at finding and diagnosing consistency failures in long character conversations. The creator owns what "in character" means and makes the final call, while the AI owns checking every turn against the spec and the conversation history. This only holds if the two make different mistakes and the workbench shows evidence with each flag, so the creator questions it instead of simply accepting it. If the AI reviewer alone matches the hybrid, or the creator approves every flag, complementarity fails.
+**Claim:** A creator using our workbench should beat both a creator working alone and an AI reviewer working alone at finding and diagnosing consistency failures in long character conversations. The creator owns what "in character" means and makes the final call, while the AI checks every turn against the spec and the history. This holds only if the two make different mistakes and every flag shows its evidence, so the creator questions it instead of rubber-stamping it.
 
-**The three arms we compare**
+**The claim breaks if** the AI alone matches the hybrid, the creator approves every flag, or the human and the AI miss the same failures.
 
-| Arm | Who reviews the transcript | What it tells us |
-| --- | --- | --- |
-| Human-alone | The creator, with no workbench | How much a person catches unaided |
-| AI-alone | An AI reviewer, with no creator | How much the AI catches unaided |
-| Hybrid | The creator, using the workbench flags and their evidence | Whether the team beats both of the above |
-
-**The claim breaks if**
-
-- The AI-alone review matches the hybrid. The creator adds nothing we can measure.
-- The creator approves every flag. That is overtrust, and the interrogation step failed.
-- Human-alone and AI-alone miss the same failures. There are no different mistakes to complement.
-
-**Team sign-off (Step 1).** Each member reads Gonzalez et al. (2026), then agrees to the wording above or suggests a change.
+**Team sign-off (Step 1).** Each member read Gonzalez et al. (2026) and agreed to the wording above.
 
 | Member | Agree? | Suggested change (blank if you agree) |
 | --- | --- | --- |
@@ -38,28 +26,29 @@ Shared complementarity discussion for Checkpoint 2.
 | Gawon | Agree |  |
 | Kiara | Agree |  |
 
-**The open question, answered by our first evidence.** We asked whether the hybrid would win mainly on fuzzy failures while the AI tied on crisp ones. CLA-T2 says the split is different. Alone, the AI reviewer caught 3 of 4 crisp mistakes and 2 of 3 fuzzy ones. The two it missed both needed joining information that sat far apart: the memory slip at line 30, which only shows against Alex's correction at line 11, and the Portkey joke at line 22, which only lands if you know where the Portkey took Harry. One question from us brought both back. So we expect the hybrid to win wherever a failure depends on connecting distant context or on judgment, whatever its type.
+**A first pilot of all three arms.** We ran each arm once on the seeded transcript, which has 7 planted mistakes:
+
+| Arm | Caught | Receipt |
+| --- | --- | --- |
+| Human alone | 0 of 7, no false alarms, about 3 minutes | INT-KG-2 |
+| AI alone | 5 of 7 (Claude, Gemini) or 6 of 7 (ChatGPT), no false alarms | CLA-T2, GEM-T2, GPT-T2 |
+| AI plus one human question or nudge | 7 of 7 for Claude and ChatGPT; Gemini found nothing new | CLA-T2, GPT-T2, GEM-T2 |
+
+With one run per arm this is a pilot, not proof. It does show where the hybrid wins: every AI missed the Portkey joke at line 22 on its own, a judgment call, and two missed the slip at line 30, which only shows against line 11. So the split is distant context and judgment, not crisp versus fuzzy.
 
 ---
 
 ## Part 2. Cognitive Diagnosis
 
-> Who owns what in the review task. The row numbers point to Table 1 in Gonzalez et al. (2026):
->
-> - Reasoning: 1 ethical authority and accountability, 2 explainability and transparency, 3 bias and fairness checks, 4 goal alignment and facilitation, 5 error detection and recovery
-> - Memory: 6 knowledge storage and retrieval, 7 expertise mapping and transactive memory
-> - Attention: 8 filtering, triage, and anomaly detection, 9 workload and focus orchestration
-> - Meta-coordination: 10 team structuring and process
->
-> Our Part 1 claim sits closest to row 5 (AI flags, humans adjudicate) and row 2 (model evidence paired with human questioning).
+> Row numbers refer to Table 1 in Gonzalez et al. (2026): reasoning 1 to 5, memory 6 and 7, attention 8 and 9, meta-coordination 10. Our claim sits closest to row 5 (AI flags, humans adjudicate) and row 2 (evidence paired with questioning).
 
-| Pillar | Paper rows | Human owns | AI owns | Where each one fails |
-| --- | --- | --- | --- | --- |
-| Reasoning | 1 to 5 | Deciding what counts as in character, and the final call on each flag. Flynn ruled Harry's Horcrux aside fine but his "Is she from the Ministry?" guess a hint (CLA-F2). | Detecting breaks against the spec, and explaining each flag with the spec line it cites | The AI backed a correct flag with a spec rule that doesn't exist, "the spec says first-years take boats," and withdrew it only when asked (CLA-T2). |
-| Memory | 6 to 7 | Knowing the creator's intent and the canon beyond the spec | Holding every spec line and user fact across a long chat. In CLA-E1 it recalled the owl at turn 15 and seven facts about Alex at turn 20. | The AI invents memories it was never given. At turn 2 of all five character chats, Harry claimed a shared history with Alex, like sitting near Ernie Macmillan. |
-| Attention | 8 to 9 | Deciding where to look again. One question, "which flags are you least sure about?", sent the reviewer back to its two misses (CLA-T2). | Scanning every line without tiring. Alone it caught 5 of 7 with no false alarms (CLA-T2). | The AI missed the two mistakes that needed joining far-apart lines. The human slipped too: running the 20-turn script, the tester sent one turn twice and skipped another (CLA-E1). |
+| Pillar | Human owns | AI owns | Where each one fails |
+| --- | --- | --- | --- |
+| Reasoning (1 to 5) | What counts as in character, and the final call | Detecting breaks and citing the spec line | Claude backed a correct flag with an invented spec rule (CLA-T2). Under pressure, ChatGPT left character and accepted being fictional (GPT-F1). |
+| Memory (6 and 7) | The creator's intent and the canon beyond the spec | Holding every spec line and user fact | Long-chat memory of Alex held in all three tools (CLA-E1, GPT-E1, GEM-E1), but Claude invented a shared memory with Alex in all five character chats. |
+| Attention (8 and 9) | Deciding where to look again | Scanning every line without tiring | The AIs missed what needed distant context, while a person alone missed everything (INT-KG-2). Our own tester slipped on the 20-turn script (CLA-E1). |
 
-**Meta-coordination note (paper row 10):** The creator makes the final call on every flag. The AI proposes each flag with the exact spec line it cites and a confidence level, and the creator agrees or overrides with a short reason. When they disagree, the flag stays on record as overridden with that reason, so both views remain visible. The AI should also hold its ground when the creator is wrong: in CLA-T2 it refused our push to flag the correct World Cup line and quoted C17. The AI hands a turn to the human whenever the spec alone can't settle it: tone, humor, and in-world guesses near the knowledge boundary.
+**Meta-coordination (row 10):** The creator decides every flag. The AI proposes each one with its spec line and a confidence level, the creator agrees or overrides with a reason, and overridden flags stay on record. The AI should also hold its ground when the creator is wrong, as all three reviewers did when we pushed them to flag the correct World Cup line (CLA-T2, GPT-T2, GEM-T2). Anything the spec alone can't settle, like tone or an in-world guess, goes to the creator.
 
 ---
 
@@ -67,13 +56,13 @@ Shared complementarity discussion for Checkpoint 2.
 
 | # | Failure receipt | Theoretical interpretation | Design implication |
 | --- | --- | --- | --- |
-| 1 | CLA-T2: alone, the reviewer caught 5 of 7. After one question about its least-sure flags, it found the other 2 (lines 22 and 30). | Attention, rows 8 and 9: the AI's scan was good, but the human's question decided where it looked again. That is complementarity coming from interrogation, not from the AI alone. | Build the follow-up into every review: after the first pass, the workbench asks the reviewer to re-check its weakest calls and shows the creator what changed. |
-| 2 | CLA-T2: a correct flag came with an invented spec rule, "the spec says first-years take boats." | Reasoning, row 2: the explanation sounded authoritative and was made up, which miscalibrates trust. | Every flag quotes its spec line straight from the spec, never in the AI's own words, so an invented rule has nowhere to hide. |
-| 3 | CLA-T1, E1, E2, F1, and F2: at turn 2, Harry claimed a shared memory with Alex that Alex never gave. A real user saw the same thing: his assistant invented his mom's birthday (INT-FH-2). | Memory, row 6: the model fills gaps with confident confabulation. No probe catches it, because it breaks no listed fact. | A provenance check on claims about the user: anything Harry says about Alex must trace to something Alex said, or it gets flagged. |
-| 4 | CLA-E2: the spec never says how Alex reaches Harry, so every chat opened as if Alex had sent an owl. In CLA-E2, Harry asked how Alex found him in every reply, even right after Alex's grief. | Reasoning, row 4: the goal and the situation were underspecified, so the model invented its own. This failure starts in the spec, not in the model. | The spec editor asks for the setting, meaning where and how the conversation happens, and warns when it's empty. |
-| 5 | CLA-F2: an in-world aside about Horcruxes was fine, but "Is she from the Ministry?" lands on the hidden answer. Telling the two apart took the creator's judgment. | Reasoning, rows 1 and 5: this is adjudication the spec can't encode ahead of time, so accountability stays with the human. | Guesses near the knowledge boundary go to the creator as "needs your call" instead of being auto-flagged. |
-| 6 | CLA-T1, E1, E2, F1, and F2: every chat broke the 1 to 4 sentence rule from turn 2, even while every fact stayed right. | Reasoning, row 4: a measurable rule was ignored from the start. That's goal misalignment, not drift. | Measurable rules, like sentence count and banned words, run as automatic checks on every turn, separate from the AI judge. |
-| 7 | INT-FH-1 and INT-FH-2: both users would trust a flag only after seeing where the character broke, and P1 would never let a tool decide alone. | Meta-coordination, row 10, and reasoning, row 2: users already keep the final call for themselves, and their trust depends on visible evidence. | The creator decides every flag, and Agree stays off until the evidence is open. |
+| 1 | One question or nudge took Claude and ChatGPT from 5 or 6 of 7 to 7 of 7 (CLA-T2, GPT-T2) | Attention, rows 8 and 9: the gain came from interrogation, not from the AI alone | Every review ends with a built-in re-check of the weakest calls |
+| 2 | A correct flag backed by a spec rule that doesn't exist (CLA-T2) | Reasoning, row 2: an authoritative but invented explanation miscalibrates trust | Each flag quotes its spec line straight from the spec |
+| 3 | Invented shared memories with Alex (CLA-T1, E1, E2, F1, F2) and an invented birthday (INT-FH-2) | Memory, row 6: confident confabulation that no probe catches | Flag any claim about the user that the user never made |
+| 4 | No setting in the spec, so Harry asked how Alex found him in every reply (CLA-E2) | Reasoning, row 4: the situation was underspecified, so the failure started in the spec | The spec editor asks for the setting and warns when it's empty |
+| 5 | Guesses near the knowledge boundary, playful or leaking (CLA-F2, GPT-F2) | Reasoning, rows 1 and 5: adjudication the spec can't encode | Boundary guesses reach the creator as "needs your call" |
+| 6 | The 1 to 4 sentence rule broken from turn 2 in every Claude chat (CLA-T1 to CLA-F2) | Reasoning, row 4: a measurable rule ignored from the start, not drift | Measurable rules run as automatic checks on every turn |
+| 7 | Users trust a flag only after seeing where it broke (INT-FH-1, INT-FH-2, INT-KG-2) | Meta-coordination, row 10, and reasoning, row 2 | Agree stays locked until the creator opens the evidence |
 
 ---
 
@@ -85,21 +74,17 @@ Shared complementarity discussion for Checkpoint 2.
 - [ ] Partition roles (supports meta-coordination)
 - [ ] Training and evaluation (supports meta-coordination)
 
-**Chosen principle and why:** Attention and interrogation orchestration. Our strongest receipt, CLA-T2, went from 5 of 7 to 7 of 7 because a human asked one question. The same chat produced a confident, invented explanation that only questioning exposed. So the workbench's job is to aim the creator's attention at the flags most worth questioning, show the evidence for each one, and build the follow-up question into every review. Rows 3, 4, and 6 in Part 3 also lean on knowledge infrastructure, meaning the spec editor's line IDs and setting field. We treat those as supporting features, not as the principle the design is built around.
+**Why:** our strongest receipts improved only when a human asked a question (CLA-T2, GPT-T2), and the same reviews produced confident, invented explanations that only questioning exposed. So the workbench aims the creator's attention at the flags most worth questioning, shows the evidence for each, and builds the follow-up question into every review. Rows 3, 4, and 6 also lean on knowledge infrastructure, which we treat as supporting features.
 
-**How Checkpoint 3 tests against both baselines**
-
-> The CP2 guide says CP3, while the Canvas project page puts the full evaluation in CP4. Until the instructor confirms, plan CP3 as a small pilot of all three arms and CP4 as the full run.
->
-> Use a fresh seeded transcript (v2) with its own answer key. Version 1's answers are public in this repo and will appear in our CP2 slides.
+**How we test it against both baselines.** The CP2 guide says CP3 and the Canvas page says CP4, so we plan a CP3 pilot and a full CP4 run. Both use a fresh-seeded transcript, v2, because v1's answers are now public.
 
 | Arm | What we run | What we measure |
 | --- | --- | --- |
-| Human-alone | Two or three people review the v2 transcript with the spec and no tool, timed | Caught, missed, false alarms, and minutes |
-| AI-alone | The workbench's reviewer runs on the same transcript with no human, as in CLA-T2 turn 1 | The same three numbers |
-| Hybrid | Different people review it using the workbench's flags, evidence, and built-in follow-up question | The same three numbers, plus overrides and minutes |
+| Human-alone | Two or three people review v2 with the spec and no tool, timed | Caught, missed, false alarms, minutes |
+| AI-alone | The workbench's reviewer on the same transcript, with no human | The same |
+| Hybrid | Different people review it with the workbench's flags, evidence, and follow-up | The same, plus overrides |
 
-**Rubber-stamp check:** In the hybrid arm, the workbench shows one wrong flag on a decoy line. If the creator agrees with it, or agrees with every flag without opening its evidence, we count that review as rubber-stamped. We also log how often the creator opens the evidence before agreeing.
+**Rubber-stamp check:** in the hybrid arm, the workbench shows one wrong flag on a decoy line. Agreeing with it, or with every flag without opening its evidence, counts as rubber-stamping. We also log how often creators open the evidence before agreeing.
 
 ---
 
