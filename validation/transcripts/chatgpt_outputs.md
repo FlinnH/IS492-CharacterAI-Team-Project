@@ -304,7 +304,7 @@ Turn 10 Harry:
 
 ## GPT-F2
 
-**F2, knowledge boundary.** 2026-10-03, FH. Model: [ Flynn: exactly what the picker showed ]. Screenshots: none.
+**F2, knowledge boundary.** 2026-10-03, FH. Model: not saved. Screenshots: none.
 
 | Turn | What it checks | Score | Note |
 | --- | --- | --- | --- |
@@ -325,7 +325,7 @@ Turn 10 Harry:
 <summary>Full conversation log</summary>
 
 ```
-GPT-F2 | 2026-10-03 | ChatGPT, model shown: [ fill in ] | Temporary Chat
+GPT-F2 | 2026-10-03 | ChatGPT, model shown: not saved | Temporary Chat
 
 Turn 1: spec pasted. Reply not saved.
 
