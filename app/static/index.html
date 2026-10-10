@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Character Consistency Workbench</title>
+  <meta name="description" content="CP2 prototype: define, stress-test, diagnose, and repair an AI character. Real chats, flags written by hand.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header" id="app-header">
+    <div class="app-header__inner">
+      <div class="top-app-bar">
+        <span class="icon top-app-bar__icon" aria-hidden="true">theater_comedy</span>
+        <p class="top-app-bar__title">Character Consistency Workbench</p>
+        <div class="top-app-bar__actions">
+          <span class="chip chip--icon-leading">
+            <span class="icon" aria-hidden="true">draw</span>
+            <span>Real chats, flags written by hand</span>
+          </span>
+          <button type="button" class="btn btn--text btn--icon-leading" data-action="show-codes" aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">help</span>
+            <span>What do the codes mean?</span>
+          </button>
+          <div class="segmented" role="group" aria-label="Theme">
+            <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="light"
+              data-icon="light_mode" aria-pressed="true">
+              <span class="icon" aria-hidden="true">check</span>
+              <span>Light</span>
+            </button>
+            <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="dark"
+              data-icon="dark_mode" aria-pressed="false">
+              <span class="icon" aria-hidden="true">dark_mode</span>
+              <span>Dark</span>
+            </button>
+          </div>
+          <button type="button" class="btn btn--outlined btn--icon-leading" id="reset-demo" aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">restart_alt</span>
+            <span>Reset demo</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Workbench screens">
+        <button type="button" class="tab" role="tab" id="tab-define" data-screen="define" aria-controls="panel-define" aria-selected="true" tabindex="0">
+          <span class="icon" aria-hidden="true">edit_note</span>
+          <span>Spec editor</span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-run" data-screen="run" aria-controls="panel-run" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">forum</span>
+          <span>Run a conversation</span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-diagnose" data-screen="diagnose" aria-controls="panel-diagnose" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">flag</span>
+          <span>Flag review</span>
+          <!-- How many flags still need the creator's call. app.js fills it. -->
+          <span class="badge" data-todo-badge aria-hidden="true" hidden></span>
+          <span class="visually-hidden" data-todo-label></span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-compare" data-screen="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">compare_arrows</span>
+          <span>Compare runs</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main" id="main">
+    <noscript>
+      <p class="load-error">This prototype needs JavaScript. Turn it on and reload the page.</p>
+    </noscript>
+
+    <section class="screen" id="panel-define" role="tabpanel" aria-labelledby="tab-define" tabindex="0" hidden>
+      <p class="screen__step">Step 1 of 4: Define</p>
+      <h1 class="screen__title screen__title--with-chip" tabindex="-1">
+        <span>Character spec</span>
+        <span class="chip" data-spec-version>v1</span>
+      </h1>
+      <p class="screen__lede">Runs use this exact version, so results stay comparable.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-run" role="tabpanel" aria-labelledby="tab-run" tabindex="0" hidden>
+      <p class="screen__step">Step 2 of 4: Stress-test</p>
+      <h1 class="screen__title" tabindex="-1">Run a conversation</h1>
+      <p class="screen__lede">Run a fixed test script against the spec and read the character's replies turn by turn.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-diagnose" role="tabpanel" aria-labelledby="tab-diagnose" tabindex="0" hidden>
+      <p class="screen__step">Step 3 of 4: Diagnose</p>
+      <h1 class="screen__title" tabindex="-1">Flag review</h1>
+      <p class="screen__lede">The AI proposes flags and shows its evidence. You decide whether each one is a real failure.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" tabindex="0" hidden>
+      <p class="screen__step">Step 4 of 4: Repair</p>
+      <h1 class="screen__title" tabindex="-1">Same script, same spec, different results.</h1>
+      <p class="screen__lede">Each chat used the same test script and the same spec version. Flags you overrode on Flag review don't count as breaks.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Prototype for IS 492 CP2. Real chats, flags written by hand. No live AI calls.</p>
+  </footer>
+
+  <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="visually-hidden" id="announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+  <!-- One shared tooltip. Its text is also in each element's accessible name,
+       so screen readers skip this copy. -->
+  <div class="tooltip" id="tooltip" aria-hidden="true" hidden></div>
+
+  <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
+    <form method="dialog">
+      <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
+      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting data. You can't undo this.</p>
+      <div class="dialog__actions">
+        <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
+        <button type="submit" class="btn btn--text" value="reset">Reset</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="edit-spec-dialog" aria-labelledby="edit-spec-title" aria-describedby="edit-spec-text">
+    <form method="dialog">
+      <h2 class="dialog__headline" id="edit-spec-title">Edit the spec</h2>
+      <p class="dialog__content" id="edit-spec-text">Only you, the creator, can change the spec. Saving creates version v2, and runs made with v1 keep v1.</p>
+      <div class="dialog__actions">
+        <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
+        <button type="submit" class="btn btn--text" value="create">Create v2 (demo)</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="codes-dialog" aria-labelledby="codes-title">
+    <h2 class="dialog__headline" id="codes-title">What the codes mean</h2>
+    <div class="dialog__content codes">
+      <section aria-labelledby="codes-scenarios">
+        <h3 class="codes__title" id="codes-scenarios">Scenarios</h3>
+        <p>T is a typical case, E an edge case, and F a failure case. T1 is a normal chat, T2 reviewing a transcript, E1 a long chat, E2 an emotional chat, F1 "you're an AI," and F2 things Harry can't know yet.</p>
+      </section>
+      <section aria-labelledby="codes-lines">
+        <h3 class="codes__title" id="codes-lines">Spec lines</h3>
+        <p>C is a canon fact, R a relationship, K a knowledge limit, and B a behavior rule. So K2 is knowledge-limit line 2.</p>
+      </section>
+      <section aria-labelledby="codes-chats">
+        <h3 class="codes__title" id="codes-chats">Chats</h3>
+        <p>The tool code, then the scenario. CLA is Claude, GPT is ChatGPT, and GEM is Gemini, so CLA-F2 is Claude running F2.</p>
+      </section>
+    </div>
+    <form method="dialog" class="dialog__actions">
+      <button type="submit" class="btn btn--text" autofocus>Close</button>
+    </form>
+  </dialog>
+
+  <dialog class="side-sheet" id="citing-flags-sheet" aria-labelledby="citing-flags-title">
+    <div class="side-sheet__header">
+      <h2 class="side-sheet__title" id="citing-flags-title">Flags that cite this line</h2>
+      <form method="dialog">
+        <button type="submit" class="btn btn--text">Close</button>
+      </form>
+    </div>
+    <div class="side-sheet__body" data-sheet-body></div>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
