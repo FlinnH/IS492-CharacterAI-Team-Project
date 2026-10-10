@@ -3,6 +3,7 @@
 .env.local
 __pycache__/
 *.pyc
+.pytest_cache/
 .ipynb_checkpoints/
 venv/
 .venv/
@@ -10,3 +11,5 @@ node_modules/
 *.log
 .claude/settings.local.json
 .claude/launch.json
+app/data/
+private/

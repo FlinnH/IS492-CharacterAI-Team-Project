@@ -6,6 +6,8 @@
 **Institution:** University of Illinois Urbana-Champaign <br>
 **Instructor:** Dr. Yun Huang
 
+**Stack:** Python 3.11 or newer, FastAPI, Uvicorn, and SQLite, with Gemini Flash-Lite through the OpenAI Python library and the prototype's plain HTML, CSS, and JavaScript. To run the app, see [app/INSTALL.md](app/INSTALL.md).
+
 ---
 
 ## Team Members & Roles
@@ -173,7 +175,7 @@ technology and the object of evaluation.
 | --- | --- | --- |
 | **CP1** | Sep 17 *(confirmed)* | Public repo and project board, literature review with individual reflections, formal proposal, and kickoff presentation. |
 | **CP2** | Oct 8 *(confirmed)* | A prompting study of three existing tools (Claude, ChatGPT, and Gemini) covering typical, edge, and failure cases; speed-dating interviews and a gap analysis read through the Gonzalez et al. (2026) complementarity framework; a design spec with user journeys, key screens, and collaboration mechanics; and a clickable prototype of the Define, Stress-test, Diagnose, and Repair loop. |
-| **CP3** | Nov 13 *(estimated)* | A working end-to-end MVP: a character runtime that generates dialogue from a structured specification, and an evaluation layer that reports where and why a character breaks. Demonstrated live on example characters, with setup instructions and an architecture diagram. |
+| **CP3** | Oct 30 *(estimated)* | A working end-to-end MVP: a character runtime that generates dialogue from a structured specification, and an evaluation layer that reports where and why a character breaks. Demonstrated live on example characters, with setup instructions and an architecture diagram. |
 | **CP4** | Dec 4 *(estimated)* | Evaluation comparing the integrated system against baseline prompting on the same characters and scenarios, a user study with character creators, and the final report. |
 
 > Checkpoint 1's date is confirmed. Later dates are our own estimates based on
@@ -208,8 +210,10 @@ tools, models, and prompts used in this project are disclosed here.
 | Anthropic | Competitive landscape research and drafting, bibliography formatting | Kiara |
 | ChatGPT| Refining md writings and slide texts| Gawon |
 | NotebookLM | understanding and extracting key information for Literature Review | Gawon |
-| Anthropic | CP2: planning the workflow + stater files | Flynn |
+| Anthropic | CP2: planning the workflow + starter files | Flynn |
 | Claude Code | CP2: building the clickable prototype in prototype/ from Flynn's prompts | Flynn |
+| Anthropic | CP3: planning the stack, the free model setup, and the step-by-step build prompts | Flynn |
+| Claude Code | CP3: planning and building the working app in app/ from Flynn's prompts | Flynn |
 
 Claude (Sonnet 5.5), ChatGPT, and Gemini (Flash-Lite) were also the subjects of the CP2 prompting study. Their outputs are logged in [validation/transcripts/](validation/transcripts/).
 
