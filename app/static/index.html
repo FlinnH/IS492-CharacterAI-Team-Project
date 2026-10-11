@@ -79,9 +79,9 @@
       <p class="screen__step">Step 1 of 4: Define</p>
       <h1 class="screen__title screen__title--with-chip" tabindex="-1">
         <span>Character spec</span>
-        <span class="chip" data-spec-version>v1</span>
+        <span class="chip" data-spec-version hidden></span>
       </h1>
-      <p class="screen__lede">Runs use this exact version, so results stay comparable.</p>
+      <p class="screen__lede">Each run keeps the version it used, so results stay comparable.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
 
@@ -120,7 +120,7 @@
   <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
     <form method="dialog">
       <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
-      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting data. You can't undo this.</p>
+      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting chats and flags. Saved spec versions stay, and unsaved spec edits are lost. You can't undo this.</p>
       <div class="dialog__actions">
         <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
         <button type="submit" class="btn btn--text" value="reset">Reset</button>
@@ -128,13 +128,13 @@
     </form>
   </dialog>
 
-  <dialog class="dialog" id="edit-spec-dialog" aria-labelledby="edit-spec-title" aria-describedby="edit-spec-text">
+  <dialog class="dialog" id="discard-spec-dialog" aria-labelledby="discard-spec-title" aria-describedby="discard-spec-text">
     <form method="dialog">
-      <h2 class="dialog__headline" id="edit-spec-title">Edit the spec</h2>
-      <p class="dialog__content" id="edit-spec-text">Only you, the creator, can change the spec. Saving creates version v2, and runs made with v1 keep v1.</p>
+      <h2 class="dialog__headline" id="discard-spec-title">Discard your changes?</h2>
+      <p class="dialog__content" id="discard-spec-text">Your edits will be lost. Saved versions stay as they are.</p>
       <div class="dialog__actions">
-        <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
-        <button type="submit" class="btn btn--text" value="create">Create v2 (demo)</button>
+        <button type="submit" class="btn btn--text" value="keep" autofocus>Keep editing</button>
+        <button type="submit" class="btn btn--text" value="discard">Discard</button>
       </div>
     </form>
   </dialog>
@@ -171,6 +171,7 @@
   </dialog>
 
   <script src="data.js"></script>
+  <script src="api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

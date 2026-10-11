@@ -1,4 +1,4 @@
-"""M0 smoke tests: the screens load, health hides the key, run.sh checks Python."""
+"""Smoke tests: the screens load, health hides the key, run.sh checks Python."""
 
 import os
 import shutil
@@ -24,6 +24,18 @@ class TabFinder(HTMLParser):
             self.screens.append(attrs.get("data-screen"))
 
 
+class ScriptFinder(HTMLParser):
+    """Collects the src of every script tag, in page order."""
+
+    def __init__(self):
+        super().__init__()
+        self.sources = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.sources.append(dict(attrs).get("src"))
+
+
 def test_root_serves_four_tabs(make_client):
     client = make_client()
 
@@ -37,12 +49,20 @@ def test_root_serves_four_tabs(make_client):
     for name, content_type in [
         ("styles.css", "text/css"),
         ("data.js", "javascript"),
+        ("api.js", "javascript"),
         ("app.js", "javascript"),
     ]:
         response = client.get(f"/{name}")
         assert response.status_code == 200, name
         assert content_type in response.headers["content-type"], name
         assert response.content == (STATIC_DIR / name).read_bytes(), name
+
+
+def test_scripts_load_in_order(make_client):
+    # app.js uses both of the others as soon as it runs.
+    finder = ScriptFinder()
+    finder.feed(make_client().get("/").text)
+    assert finder.sources == ["data.js", "api.js", "app.js"]
 
 
 def test_health_never_echoes_key(make_client):
