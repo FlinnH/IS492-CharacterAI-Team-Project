@@ -1,10 +1,11 @@
 /*
-  Character Consistency Workbench: CP2 prototype app
+  Character Consistency Workbench: CP3 app, first copied from the CP2 prototype
 
-  A plain script (no modules, no build step), so index.html works when it is
-  opened straight from the file system. Reads window.WORKBENCH_DATA from
-  data.js. Everything the creator changes lives in memory, so "Reset demo" or
-  reloading the page starts over.
+  A plain script (no modules, no build step). The Spec editor loads and saves
+  spec versions through the workbench server, by way of api.js. The other
+  screens still read the CP2 chats from data.js (window.WORKBENCH_DATA), and
+  the calls the creator makes there live in memory until M4, so "Reset demo"
+  or reloading the page starts those over.
 
   Sections:
     1. Data and state
@@ -39,9 +40,25 @@
 
   let state = createInitialState();
 
+  // Counts spec requests, so only the newest one changes the screen. It lives
+  // outside `state`, so Reset demo can't set it back to zero.
+  let specRequest = 0;
+  // Gives each new line in the Spec editor form its own key.
+  let newLineCount = 0;
+
   function createInitialState() {
     return {
+      // The CP2 chats were made with spec v1, so Flag review and Compare runs
+      // quote v1 from data.js until M4 loads chats from the server.
       spec: clone(DATA.spec),
+      // Spec editor: the version on screen, from the server (see loadSpec).
+      // specLoad.status is "loading", "ready", or "failed". specDraft holds
+      // the form while the creator edits, and is null otherwise.
+      specLoad: { status: "loading", message: "" },
+      specView: null,
+      specDraft: null,
+      specSaving: false,
+      specSaveError: null, // { message, field } from the last save that failed
       scenario: clone(DATA.scenario),
       runs: clone(DATA.runs),
       // Spec editor: the text in the search field.
@@ -126,6 +143,11 @@
     return allFlags().find(({ flag }) => flag.id === flagId) || null;
   }
 
+  // Saved spec versions are numbers on the server; the screens say "v2".
+  function specLabel(version) {
+    return `v${version}`;
+  }
+
   // How the interface names a chat: its tool and receipt, like "Claude (CLA-F2)".
   function runLabel(run) {
     return `${run.tool} (${run.receipt})`;
@@ -194,26 +216,88 @@
   const actions = Object.create(null);
 
   // 3.1 Spec editor (Define) ------------------------------------------------
-  // The spec as one card per section. A search filters the lines, each ID
-  // chip opens a side sheet with the flags that cite that line, and
-  // "Edit spec" says that only the creator can change the spec (DESIGN_SPEC
-  // 7.1). Runs stay pinned to the version they used.
+  // The spec as one card per section, loaded from the server. A search
+  // filters the lines, each ID chip opens a side sheet with the flags that
+  // cite that line, and the Version list shows older versions. Only the
+  // creator changes the spec (DESIGN_SPEC 7.1): Edit spec turns the latest
+  // version into a form, and saving makes the next version. Saved versions
+  // never change, so runs stay pinned to the version they used.
 
   const citingSheet = document.getElementById("citing-flags-sheet");
-  const editSpecDialog = document.getElementById("edit-spec-dialog");
+  const discardSpecDialog = document.getElementById("discard-spec-dialog");
   let specCountTimer = 0;
 
-  function renderDefine(body) {
-    // Arriving from "Open K2 in the spec": clear the search so the line
-    // shows, highlight it this once, and land on its chip.
-    const spotlight = state.specHighlight;
-    state.specHighlight = null;
-    if (spotlight) state.specQuery = "";
+  // Loads one version ("latest" or a number), then redraws the screens that
+  // show it, unless the creator is editing. Resolves true when it showed.
+  async function loadSpec(version = "latest", { focusKey = null } = {}) {
+    const ticket = ++specRequest;
+    let shown = false;
+    try {
+      const slug = state.specView ? state.specView.character.slug : await firstCharacterSlug();
+      const view = await WorkbenchApi.getSpec(slug, version);
+      if (ticket !== specRequest) return false;
+      state.specView = view;
+      state.specLoad = { status: "ready", message: "" };
+      shown = true;
+    } catch (error) {
+      if (ticket !== specRequest) return false;
+      // A spotlight waiting for this load would fire much later and clear the search.
+      state.specHighlight = null;
+      // With a version on screen, keep it: only the switch failed.
+      if (state.specView) showSnackbar(`That version didn't load. ${error.message}`);
+      else state.specLoad = { status: "failed", message: error.message };
+    }
+    if (!state.specDraft && (currentScreen === "define" || currentScreen === "compare")) refresh({ focusKey });
+    return shown;
+  }
 
-    panelFor("define").querySelector("[data-spec-version]").textContent = state.spec.version;
+  async function firstCharacterSlug() {
+    const characters = await WorkbenchApi.listCharacters();
+    if (characters.length === 0) throw new Error("The server has no character spec yet.");
+    return characters[0].slug;
+  }
+
+  function renderDefine(body) {
+    const view = state.specView;
+    const chip = panelFor("define").querySelector("[data-spec-version]");
+    chip.hidden = !view;
+    chip.textContent = view ? specLabel(view.version) : "";
+
+    if (!view) {
+      body.innerHTML = state.specLoad.status === "failed"
+        ? `
+          <div class="card card--outlined spec-empty">
+            <p>The spec didn't load. ${escapeHtml(state.specLoad.message)}</p>
+            <button type="button" class="btn btn--text" data-action="retry-spec" data-focus-key="retry-spec">Try again</button>
+          </div>`
+        : '<p class="spec-status">Loading the spec.</p>';
+      return null;
+    }
+    return state.specDraft ? renderSpecEdit(body) : renderSpecView(body);
+  }
+
+  function renderSpecView(body) {
+    const view = state.specView;
+    const isLatest = view.version === view.latest;
+
+    // Arriving from "Open K2 in the spec": clear the search so the line
+    // shows, highlight it this once, and land on its chip. It waits for the
+    // latest version, the one a fix would edit.
+    let spotlight = null;
+    if (state.specHighlight && isLatest) {
+      spotlight = state.specHighlight;
+      state.specHighlight = null;
+      state.specQuery = "";
+      if (!specLineText(spotlight.lineId, view.body)) {
+        showSnackbar(`${spotlight.lineId} isn't in ${specLabel(view.version)}.`);
+        spotlight = null;
+      }
+    }
 
     body.innerHTML = `
       <div class="spec-editor">
+        ${view.warnings.map((warning) => renderSpecWarning(warning, isLatest)).join("")}
+        ${isLatest ? "" : renderOlderVersionNotice(view)}
         <div class="spec-toolbar">
           <div class="text-field text-field--icon-leading spec-toolbar__search">
             <span class="icon text-field__icon" aria-hidden="true">search</span>
@@ -223,12 +307,15 @@
             <label class="text-field__label" for="spec-search">Search lines</label>
             <p class="text-field__support" id="spec-search-help">Type an ID like K2, or words like prophecy.</p>
           </div>
-          <button type="button" class="btn btn--filled btn--icon-leading" data-action="edit-spec"
-            data-focus-key="edit-spec" aria-haspopup="dialog">
-            <span class="icon" aria-hidden="true">edit</span>
-            <span>Edit spec</span>
-          </button>
+          <div class="spec-toolbar__version">${selectField("spec-version", "Version", versionOptions(view))}</div>
+          ${isLatest
+            ? `<button type="button" class="btn btn--filled btn--icon-leading" data-action="edit-spec" data-focus-key="edit-spec">
+                <span class="icon" aria-hidden="true">edit</span>
+                <span>Edit spec</span>
+              </button>`
+            : ""}
         </div>
+        <p class="spec-version-info">${escapeHtml(versionInfo(view))}</p>
         <p class="spec-status">
           <span id="spec-count" role="status"></span>
           Select an ID to see the flags that cite it.
@@ -241,8 +328,51 @@
       state.specQuery = search.value;
       renderSpecResults(body);
     });
+    body.querySelector("#spec-version").addEventListener("change", async (event) => {
+      const version = Number(event.target.value);
+      if (await loadSpec(version)) announce(`Showing ${specLabel(version)}.`);
+    });
     renderSpecResults(body, { announce: false, spotlight });
     return spotlight ? body.querySelector(`[data-focus-key="line-${spotlight.lineId}"]`) : null;
+  }
+
+  // "Saved Oct 10, 2026, 4:12 PM. Note: Added a setting"
+  function versionInfo(view) {
+    const saved = new Date(view.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    return view.note ? `Saved ${saved}. Note: ${view.note}` : `Saved ${saved}.`;
+  }
+
+  // Newest first, with the latest marked.
+  function versionOptions(view) {
+    return view.versions
+      .map(({ version }) => {
+        const label = version === view.latest ? `${specLabel(version)} (latest)` : specLabel(version);
+        return `<option value="${version}"${version === view.version ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
+  }
+
+  // A warning from the server, like an empty setting. On the latest version
+  // it offers the fix.
+  function renderSpecWarning(warning, isLatest) {
+    const fix = isLatest && warning.field === "setting"
+      ? '<button type="button" class="btn btn--filled" data-action="add-setting" data-focus-key="add-setting">Add a setting</button>'
+      : "";
+    return `
+      <div class="card card--filled spec-notice spec-notice--warning">
+        <span class="icon" aria-hidden="true">warning</span>
+        <p class="spec-notice__text">${escapeHtml(warning.message)}</p>
+        ${fix}
+      </div>`;
+  }
+
+  function renderOlderVersionNotice(view) {
+    return `
+      <div class="card card--filled spec-notice">
+        <span class="icon" aria-hidden="true">history</span>
+        <p class="spec-notice__text">You're viewing ${specLabel(view.version)}, an older version. Only the latest version can be edited.</p>
+        <button type="button" class="btn btn--filled" data-action="show-latest-spec" data-focus-key="show-latest-spec">Show ${specLabel(view.latest)} (latest)</button>
+      </div>`;
   }
 
   // Redraws only the cards, so the search field keeps focus while you type.
@@ -251,15 +381,20 @@
     let total = 0;
     let shown = 0;
 
-    const cards = specCards(state.spec).map((card, index) => {
+    const cards = specCards(state.specView.body).map((card, index) => {
       const lines = card.lines.filter((line) => lineMatches(line, terms));
       total += card.lines.length;
       shown += lines.length;
-      if (lines.length === 0) return "";
+      if (lines.length === 0 && terms.length > 0) return "";
+      // A new version can delete every line of a section. Without a search
+      // the section still shows, so the creator can see it is empty.
+      const content = lines.length > 0
+        ? renderSpecLines(lines, terms, spotlight)
+        : '<p class="spec-card__empty">No lines in this version.</p>';
       return `
         <section class="card card--outlined spec-card" aria-labelledby="spec-card-${index}">
           <h2 class="spec-card__title" id="spec-card-${index}">${escapeHtml(card.heading)}</h2>
-          ${renderSpecLines(lines, terms, spotlight)}
+          ${content}
         </section>`;
     });
 
@@ -292,7 +427,7 @@
   // with the note under its text.
   function renderSpecLines(lines, terms, spotlight = null) {
     const items = lines.map((line) => {
-      const text = `<p class="spec-line__text">${highlight(line.text, terms)}</p>`;
+      const text = `<p class="spec-line__text${line.empty ? " spec-line__text--empty" : ""}">${highlight(line.text, terms)}</p>`;
       if (line.id) {
         const spotlit = Boolean(spotlight) && spotlight.lineId === line.id;
         const content = spotlit
@@ -326,8 +461,9 @@
     return `<ul class="spec-lines">${items.join("")}</ul>`;
   }
 
-  // The spec as cards of lines. "Who Harry is" holds the opening instruction
-  // and the labeled fields, which have no IDs. Every other line has an ID.
+  // The spec as cards of lines. "Who Harry is" holds the opening instruction,
+  // the labeled fields, and the setting, which have no IDs. Every other line
+  // has an ID.
   function specCards(spec) {
     return [
       {
@@ -335,6 +471,7 @@
         lines: [
           { text: spec.preamble },
           ...spec.fields.map((field) => ({ label: field.label, text: field.text })),
+          { label: "Setting", text: spec.setting || "Not set yet.", empty: !spec.setting },
         ],
       },
       ...spec.sections.map((section) => ({
@@ -355,14 +492,17 @@
     return terms.every((term) => term === id || words.includes(term));
   }
 
-  function specLineText(lineId) {
-    const line = state.spec.sections
+  // A line's text in a spec. By default that's data.js's v1, the version the
+  // CP2 chats were made with.
+  function specLineText(lineId, spec = state.spec) {
+    const line = spec.sections
       .flatMap((section) => section.lines)
       .find((candidate) => candidate.id === lineId);
     return line ? line.text : "";
   }
 
-  // Side sheet body: the line itself, then every flag that cites it.
+  // Side sheet body: the line as the version on screen has it, then every
+  // flag that cites it, each with the spec version its chat was made with.
   function renderCitingFlags(lineId) {
     const citing = allFlags().filter(({ flag }) => flag.cites.includes(lineId));
     let summary = `${citing.length} flags cite this line.`;
@@ -372,7 +512,7 @@
     return `
       <div class="cited-line">
         <span class="chip" tabindex="0" data-tooltip="${escapeHtml(lineTip(lineId))}">${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(LINE_MEANINGS[lineId[0]])}</span></span>
-        <p class="cited-line__text">${escapeHtml(specLineText(lineId))}</p>
+        <p class="cited-line__text">${escapeHtml(specLineText(lineId, state.specView.body))}</p>
       </div>
       <p class="sheet-summary">${summary}</p>
       ${citing.length > 0 ? `<ul class="flag-list">${citing.map(renderFlagSummary).join("")}</ul>` : ""}`;
@@ -396,6 +536,10 @@
           <div>
             <dt>Why</dt>
             <dd>${escapeHtml(flag.why)}</dd>
+          </div>
+          <div>
+            <dt>Chat made with</dt>
+            <dd>Spec ${escapeHtml(run.specVersion)}</dd>
           </div>
         </dl>
         <button type="button" class="btn btn--outlined" data-action="go-to-flag" data-flag="${escapeHtml(flag.id)}">
@@ -430,12 +574,357 @@
     goToScreen("diagnose");
   };
 
-  actions["edit-spec"] = (button) => {
-    openDialog(editSpecDialog, button, (choice) => {
-      if (choice === "create") {
-        showSnackbar(`This is a demo, so nothing was saved. The spec is still ${state.spec.version}.`);
-      }
+  actions["retry-spec"] = () => {
+    state.specLoad = { status: "loading", message: "" };
+    refresh();
+    loadSpec("latest", { focusKey: "edit-spec" });
+  };
+
+  actions["show-latest-spec"] = async () => {
+    if (await loadSpec("latest", { focusKey: "edit-spec" })) {
+      announce(`Showing ${specLabel(state.specView.version)}, the latest version.`);
+    }
+  };
+
+  // 3.1.1 Editing the spec --------------------------------------------------
+  // The latest version as a form. Typing changes the draft in `state` without
+  // a redraw (see the input listener in section 5); adding, removing, or
+  // restoring a line redraws. The server cleans the text, numbers new lines,
+  // and keeps each line's attributes, so the form only sends IDs and words.
+
+  // Measures the save bar, so the CSS can keep a focused field from hiding
+  // under it (see --spec-save-bar-height in styles.css).
+  const saveBarObserver = "ResizeObserver" in window
+    ? new ResizeObserver((entries) => {
+        document.documentElement.style.setProperty("--spec-save-bar-height", `${entries[0].target.offsetHeight}px`);
+      })
+    : null;
+
+  // Where the browser can grow a textarea to fit its text by itself.
+  const FIELD_SIZING = Boolean(window.CSS && CSS.supports && CSS.supports("field-sizing", "content"));
+
+  function renderSpecEdit(body) {
+    const view = state.specView;
+    const draft = state.specDraft;
+    const next = specLabel(view.version + 1);
+    const error = state.specSaveError;
+    // The field the server named in its last error reads as wrong.
+    const invalid = (key) => Boolean(error && error.field === key);
+
+    body.innerHTML = `
+      <div class="spec-editor">
+        <div class="card card--filled spec-notice">
+          <span class="icon" aria-hidden="true">edit_note</span>
+          <p class="spec-notice__text">Only you can change the spec. Saving makes ${next}. Lines keep their IDs, new lines get the next unused ID, and earlier runs keep the version they used.</p>
+        </div>
+        <div class="spec-results spec-results--editing">
+          <section class="card card--outlined spec-card" aria-labelledby="spec-edit-who">
+            <h2 class="spec-card__title" id="spec-edit-who">Who Harry is</h2>
+            <ul class="spec-lines">
+              <li class="spec-edit-line">${textField("preamble", "Opening instruction", draft.preamble, { invalid: invalid("preamble") })}</li>
+              ${draft.fields
+                .map((field, i) => `<li class="spec-edit-line">${textField(`field-${i}`, field.label, field.text, { invalid: invalid(`field-${i}`) })}</li>`)
+                .join("")}
+              <li class="spec-edit-line">${textField("setting", "Setting", draft.setting, {
+                hint: "Where and how this conversation happens.",
+                invalid: invalid("setting"),
+              })}</li>
+            </ul>
+          </section>
+          ${draft.sections.map((section, s) => renderEditSection(section, s, invalid)).join("")}
+          ${textField("note", "What changed (optional)", draft.note, { single: true, invalid: invalid("note") })}
+        </div>
+        <div class="spec-save-bar">
+          ${error
+            ? `<p class="spec-save-bar__error" id="spec-save-error">
+                <span class="icon" aria-hidden="true">error</span>
+                <span>${escapeHtml(error.message)}</span>
+              </p>`
+            : ""}
+          <div class="spec-save-bar__actions">
+            <button type="button" class="btn btn--text" data-action="cancel-spec-edit" data-focus-key="cancel-spec-edit">Cancel</button>
+            <button type="button" class="btn btn--filled" data-action="save-spec" data-focus-key="save-spec"
+              aria-disabled="${state.specSaving}">${state.specSaving ? "Saving" : `Save as ${next}`}</button>
+          </div>
+        </div>
+      </div>`;
+
+    fitTextareas(Array.from(body.querySelectorAll("textarea[data-draft-key]")));
+    if (saveBarObserver) {
+      saveBarObserver.disconnect();
+      saveBarObserver.observe(body.querySelector(".spec-save-bar"));
+    }
+
+    // Arriving from "Open K2 in the spec" while editing: land on that line's field.
+    const spotlight = state.specHighlight;
+    state.specHighlight = null;
+    if (!spotlight) return null;
+    const field = body.querySelector(`[data-draft-key="line-${spotlight.lineId}"]`);
+    if (!field) showSnackbar(`${spotlight.lineId} isn't in your draft.`);
+    return field;
+  }
+
+  // One outlined field of the form; key is its data-draft-key. single makes a
+  // one-line input, where Enter does nothing, since there is no form to submit.
+  function textField(key, label, text, { hint = "", invalid = false, single = false, labelExtra = "" } = {}) {
+    const id = `spec-${key}`;
+    const describedBy = [hint && `${id}-hint`, invalid && "spec-save-error"].filter(Boolean).join(" ");
+    const attributes = `class="text-field__input" id="${escapeHtml(id)}" placeholder=" " data-draft-key="${escapeHtml(key)}"
+      data-focus-key="${escapeHtml(id)}"${invalid ? ' aria-invalid="true"' : ""}${describedBy ? ` aria-describedby="${escapeHtml(describedBy)}"` : ""}`;
+    // Nothing but the text goes between the textarea tags, or every field
+    // would count as changed.
+    const input = single
+      ? `<input ${attributes} autocomplete="off" value="${escapeHtml(text)}">`
+      : `<textarea ${attributes} rows="1">${escapeHtml(text)}</textarea>`;
+    return `
+      <div class="text-field${invalid ? " text-field--error" : ""}">
+        ${input}
+        <label class="text-field__label" for="${escapeHtml(id)}">${escapeHtml(label)}${labelExtra}</label>
+        ${hint ? `<p class="text-field__support" id="${escapeHtml(id)}-hint">${escapeHtml(hint)}</p>` : ""}
+      </div>`;
+  }
+
+  function renderEditSection(section, s, invalid) {
+    const headingId = `spec-edit-section-${s}`;
+    return `
+      <section class="card card--outlined spec-card" aria-labelledby="${headingId}">
+        <h2 class="spec-card__title" id="${headingId}">${escapeHtml(section.heading)}</h2>
+        <ul class="spec-lines">${section.lines.map((line) => renderEditLine(section, line, invalid)).join("")}</ul>
+        <button type="button" class="btn btn--text btn--icon-leading spec-add-line" data-action="add-spec-line"
+          data-section="${s}" data-focus-key="add-line-${s}">
+          <span class="icon" aria-hidden="true">add</span>
+          <span>Add a line<span class="visually-hidden"> to ${escapeHtml(section.heading)}</span></span>
+        </button>
+      </section>`;
+  }
+
+  // A saved line shows its ID, and a new one waits for its ID. A removed line
+  // stays until Save, with Undo.
+  function renderEditLine(section, line, invalid) {
+    const key = `line-${line.key}`;
+    if (line.removed) {
+      return `
+        <li class="spec-edit-line is-removed">
+          <p class="spec-edit-line__removed">${escapeHtml(line.id)} will be removed when you save.</p>
+          <button type="button" class="btn btn--text" data-action="undo-delete-spec-line" data-line-key="${escapeHtml(line.key)}"
+            data-focus-key="undo-${escapeHtml(line.key)}">Undo<span class="visually-hidden">: keep ${escapeHtml(line.id)}</span></button>
+        </li>`;
+    }
+    const field = line.id
+      ? textField(key, line.id, line.text, {
+          invalid: invalid(key),
+          labelExtra: `<span class="visually-hidden">, ${escapeHtml(LINE_MEANINGS[line.id[0]] || "line")}</span>`,
+        })
+      : textField(key, "New line", line.text, {
+          hint: "Gets its ID when you save.",
+          invalid: invalid(key),
+          labelExtra: `<span class="visually-hidden"> in ${escapeHtml(section.heading)}</span>`,
+        });
+    return `
+      <li class="spec-edit-line">
+        ${field}
+        <button type="button" class="btn btn--text btn--icon-leading" data-action="delete-spec-line"
+          data-line-key="${escapeHtml(line.key)}" data-focus-key="delete-${escapeHtml(line.key)}">
+          <span class="icon" aria-hidden="true">delete</span>
+          <span>Delete<span class="visually-hidden"> ${escapeHtml(line.id || "this new line")}</span></span>
+        </button>
+      </li>`;
+  }
+
+  // The form's starting point. Each line keeps a key that stays the same while
+  // the creator edits, even a new line, which has no ID yet.
+  function draftFrom(view) {
+    const { body } = view;
+    return {
+      parent: view.version,
+      note: "",
+      preamble: body.preamble,
+      fields: body.fields.map(({ label, text }) => ({ label, text })),
+      setting: body.setting,
+      sections: body.sections.map(({ heading, lines }) => ({
+        heading,
+        lines: lines.map(({ id, text }) => ({ key: id, id, text, removed: false })),
+      })),
+    };
+  }
+
+  // What Save sends, plus the draft key of each line sent, so a line the
+  // server names by position ("line-2-5") can be found in the form again.
+  function editPayload(draft) {
+    const lineKeys = {};
+    const sections = draft.sections.map((section, s) => {
+      const lines = section.lines.filter((line) => !line.removed);
+      lines.forEach((line, i) => {
+        lineKeys[`line-${s}-${i}`] = `line-${line.key}`;
+      });
+      return { heading: section.heading, lines: lines.map(({ id, text }) => ({ id, text })) };
     });
+    const edit = {
+      parent: draft.parent,
+      note: draft.note,
+      preamble: draft.preamble,
+      fields: draft.fields.map(({ label, text }) => ({ label, text })),
+      setting: draft.setting,
+      sections,
+    };
+    return { edit, lineKeys };
+  }
+
+  // The server's cleanup (whitespace collapses, zero-width marks go), so the
+  // form counts as changed only when saving would change something.
+  function cleanText(text) {
+    return text.replace(/[\u200b\ufeff]/g, "").split(/\s+/).filter(Boolean).join(" ");
+  }
+
+  function draftChanged() {
+    if (!state.specDraft || !state.specView) return false;
+    const comparable = (edit) =>
+      JSON.stringify([
+        cleanText(edit.preamble),
+        edit.fields.map((field) => cleanText(field.text)),
+        cleanText(edit.setting),
+        edit.sections.map((section) => section.lines.map((line) => [line.id, cleanText(line.text)])),
+      ]);
+    return comparable(editPayload(state.specDraft).edit) !== comparable(editPayload(draftFrom(state.specView)).edit);
+  }
+
+  function findDraftLine(key) {
+    for (const section of state.specDraft.sections) {
+      const line = section.lines.find((candidate) => candidate.key === key);
+      if (line) return { section, line };
+    }
+    return null;
+  }
+
+  // Typing only updates the draft, since the field already shows the text.
+  function setDraftText(key, value) {
+    const draft = state.specDraft;
+    if (key === "preamble" || key === "setting" || key === "note") {
+      draft[key] = value;
+    } else if (key.startsWith("field-")) {
+      draft.fields[Number(key.slice("field-".length))].text = value;
+    } else if (key.startsWith("line-")) {
+      const found = findDraftLine(key.slice("line-".length));
+      if (found) found.line.text = value;
+    }
+  }
+
+  // Grows textareas to fit their text where field-sizing (styles.css) can't.
+  // Every height is cleared, then read, then set, so the page lays out once.
+  function fitTextareas(boxes) {
+    if (FIELD_SIZING) return;
+    boxes.forEach((box) => {
+      box.style.height = "auto";
+    });
+    const heights = boxes.map((box) => box.scrollHeight);
+    // scrollHeight leaves out the 1px borders.
+    boxes.forEach((box, index) => {
+      box.style.height = `${heights[index] + 2}px`;
+    });
+  }
+
+  // After a line is added, removed, or restored: redraw the form, keep the
+  // page where it was, then move focus.
+  function redrawEditor(focusKey) {
+    const top = window.scrollY;
+    refresh();
+    window.scrollTo(0, top);
+    const target = panelFor("define").querySelector(`[data-focus-key="${CSS.escape(focusKey)}"]`);
+    if (target) target.focus();
+  }
+
+  // Redraws the Spec editor and moves focus, or leaves it for when the
+  // creator comes back to that screen.
+  function refreshDefine(focusKey) {
+    if (currentScreen === "define") refresh({ focusKey });
+  }
+
+  function startEditing(focusKey) {
+    const view = state.specView;
+    if (!view || view.version !== view.latest || state.specDraft) return;
+    // A version that is still loading must not swap in under the form.
+    specRequest += 1;
+    state.specDraft = draftFrom(view);
+    state.specSaveError = null;
+    refresh({ focusKey });
+    announce(`Editing ${specLabel(view.version)}. Saving makes ${specLabel(view.version + 1)}.`);
+  }
+
+  function leaveEditing() {
+    state.specDraft = null;
+    state.specSaveError = null;
+    refresh({ focusKey: "edit-spec" });
+  }
+
+  actions["edit-spec"] = () => startEditing("spec-preamble");
+
+  actions["add-setting"] = () => startEditing("spec-setting");
+
+  actions["add-spec-line"] = (button) => {
+    const section = state.specDraft.sections[Number(button.dataset.section)];
+    newLineCount += 1;
+    const key = `new-${newLineCount}`;
+    section.lines.push({ key, id: null, text: "", removed: false });
+    redrawEditor(`spec-line-${key}`);
+    announce(`New line added to ${section.heading}. It gets its ID when you save.`);
+  };
+
+  actions["delete-spec-line"] = (button) => {
+    const { section, line } = findDraftLine(button.dataset.lineKey);
+    if (line.id) {
+      // A saved line stays in the form until Save, so Undo can bring it back.
+      line.removed = true;
+      redrawEditor(`undo-${line.key}`);
+      announce(`${line.id} will be removed when you save.`);
+    } else {
+      section.lines.splice(section.lines.indexOf(line), 1);
+      redrawEditor(`add-line-${state.specDraft.sections.indexOf(section)}`);
+      announce("New line removed.");
+    }
+  };
+
+  actions["undo-delete-spec-line"] = (button) => {
+    const { line } = findDraftLine(button.dataset.lineKey);
+    line.removed = false;
+    redrawEditor(`spec-line-${line.key}`);
+    announce(`${line.id} is back.`);
+  };
+
+  actions["cancel-spec-edit"] = (button) => {
+    if (!draftChanged()) {
+      leaveEditing();
+      return;
+    }
+    // Discarding redraws the screen, so focus goes to Edit spec, not back to
+    // the Cancel button that is gone.
+    openDialog(discardSpecDialog, button, (choice) => {
+      if (choice === "discard") leaveEditing();
+    });
+  };
+
+  actions["save-spec"] = async () => {
+    // A second click while saving would post the same edit again and get a 409.
+    if (state.specSaving || !state.specDraft) return;
+    const { edit, lineKeys } = editPayload(state.specDraft);
+    const slug = state.specView.character.slug;
+    state.specSaving = true;
+    state.specSaveError = null;
+    specRequest += 1;
+    refresh({ focusKey: "save-spec" });
+    try {
+      const saved = await WorkbenchApi.saveSpec(slug, edit);
+      state.specView = saved;
+      state.specDraft = null;
+      state.specSaving = false;
+      refreshDefine("edit-spec");
+      showSnackbar(`Saved ${specLabel(saved.version)}. Earlier runs keep the version they used.`);
+    } catch (error) {
+      state.specSaving = false;
+      const field = error.field ? lineKeys[error.field] || error.field : null;
+      state.specSaveError = { message: error.message, field };
+      refreshDefine(field ? `spec-${field}` : "save-spec");
+      announce(error.message);
+    }
   };
 
   // 3.2 Run a conversation (Stress-test) ------------------------------------
@@ -1254,6 +1743,12 @@
     return Number.isNaN(number) ? "the next version" : `v${number + 1}`;
   }
 
+  // The version a fix would make: one past the latest saved version, once
+  // the spec has loaded from the server.
+  function nextSpecLabel() {
+    return state.specView ? specLabel(state.specView.latest + 1) : nextVersion(state.spec.version);
+  }
+
   // "both chats" for two, "all 3 chats" for three or more.
   function chatsText(count) {
     if (count === 1) return "the one chat";
@@ -1397,7 +1892,7 @@
           <span class="icon" aria-hidden="true">lightbulb</span>
           <span>Next step</span>
         </h2>
-        <p>${escapeHtml(lineId)} broke in ${chatsText(chatCount)}. Consider making it more specific in ${nextVersion(state.spec.version)}.</p>
+        <p>${escapeHtml(lineId)} broke in ${chatsText(chatCount)}. Consider making it more specific in ${nextSpecLabel()}.</p>
         <button type="button" class="btn btn--filled btn--icon-leading" data-action="open-spec-line"
           data-line="${escapeHtml(lineId)}" data-focus-key="open-${escapeHtml(lineId)}">
           <span class="icon" aria-hidden="true">edit_note</span>
@@ -1409,6 +1904,9 @@
   actions["open-spec-line"] = (button) => {
     const note = `From Compare runs: this line broke in ${chatsText(scenarioChats().length)}.`;
     state.specHighlight = { lineId: button.dataset.line, note };
+    // The spotlight lands on the latest version, the one a fix would edit.
+    const view = state.specView;
+    if (view && view.version !== view.latest && !state.specDraft) loadSpec("latest");
     goToScreen("define");
   };
 
@@ -1504,8 +2002,9 @@
 
   // Redraws the current screen after a state change. Boxes marked with
   // data-scroll-key keep their scroll position. Focus goes to focusKey if
-  // given, else back to the control that had it (matched by data-focus-key),
-  // else to the screen heading if that control is gone.
+  // given, else to the element the screen asks to land on, else back to the
+  // control that had it (matched by data-focus-key), else to the screen
+  // heading if that control is gone.
   function refresh({ focusKey = null } = {}) {
     const panel = panelFor(currentScreen);
     const body = panel.querySelector("[data-screen-body]");
@@ -1516,12 +2015,19 @@
 
     // A redraw replaces the element a tooltip belongs to, so the tooltip goes.
     hideTooltip();
-    renderScreen(currentScreen);
+    const landing = renderScreen(currentScreen);
 
     scrolls.forEach(([scrollKey, top]) => {
       const box = body.querySelector(`[data-scroll-key="${CSS.escape(scrollKey)}"]`);
       if (box) box.scrollTop = top;
     });
+    // A screen can ask to land somewhere, like the line "Open K2 in the spec"
+    // waited for while the spec loaded. That wins over putting focus back.
+    if (landing && !focusKey) {
+      scrollBelowHeader(landing);
+      landing.focus({ preventScroll: true });
+      return;
+    }
     if (!focusWasInBody && !focusKey) return;
     const target = key ? body.querySelector(`[data-focus-key="${CSS.escape(key)}"]`) : null;
     if (target) target.focus();
@@ -1625,6 +2131,22 @@
     if (handler) handler(control, event);
   });
 
+  // Typing in the Spec editor form. One listener for the whole page, so
+  // redraws never stack listeners. It updates the draft and grows the field.
+  document.addEventListener("input", (event) => {
+    const field = event.target.closest("[data-draft-key]");
+    if (!field || !state.specDraft) return;
+    setDraftText(field.dataset.draftKey, field.value);
+    if (field.tagName === "TEXTAREA") fitTextareas([field]);
+  });
+
+  // Asks before a reload or a closed tab drops spec edits that aren't saved.
+  window.addEventListener("beforeunload", (event) => {
+    if (!draftChanged()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+
   const resetButton = document.getElementById("reset-demo");
   const resetDialog = document.getElementById("reset-dialog");
 
@@ -1634,7 +2156,9 @@
       stopPlayback();
       state = createInitialState();
       refresh();
-      showSnackbar("Demo reset. Everything is back to the starting data.");
+      // Saved spec versions never change, so the Spec editor loads the latest again.
+      loadSpec();
+      showSnackbar("Demo reset. Saved spec versions stay.");
     });
   });
 
@@ -1844,4 +2368,5 @@
   const firstScreen = screenFromHash();
   if (!firstScreen) location.replace(`#${DEFAULT_SCREEN}`);
   showScreen(firstScreen || DEFAULT_SCREEN);
+  loadSpec();
 })();

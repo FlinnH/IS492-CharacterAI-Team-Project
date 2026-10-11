@@ -1352,6 +1352,122 @@ button.chip:active::before {
   gap: 8px 16px;
 }
 
+/* Notices above the toolbar: a warning, an older version, or edit mode */
+.spec-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.spec-notice__text {
+  flex: 1 1 20rem;
+}
+
+/* A warning from the server, like an empty setting, asks for the creator's
+   judgment, so it uses tertiary, like "Needs your call" */
+.spec-notice--warning {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.spec-toolbar__version {
+  flex: 0 0 11rem;
+}
+
+.spec-version-info {
+  margin-top: 16px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.spec-version-info + .spec-status {
+  margin-top: 4px;
+}
+
+/* Nothing written yet: an empty setting, or a section with no lines */
+.spec-line__text--empty,
+.spec-card__empty {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.spec-card__empty {
+  margin-top: 12px;
+}
+
+/* Edit mode: every text is an outlined field, and each line has Delete
+   beside it */
+.spec-results--editing .spec-lines {
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.spec-edit-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+}
+
+/* Lines the 40px button up with the middle of a one-line field */
+.spec-edit-line > .btn {
+  margin-top: 8px;
+}
+
+/* Grows with its text where the browser can; app.js does it everywhere else */
+.spec-edit-line textarea.text-field__input {
+  field-sizing: content;
+}
+
+.spec-edit-line.is-removed {
+  align-items: center;
+  padding: 4px 4px 4px 16px;
+  border: 1px dashed var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-extra-small);
+}
+
+.spec-edit-line.is-removed > .btn {
+  margin-top: 0;
+}
+
+.spec-edit-line__removed {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.spec-add-line {
+  margin-top: 12px;
+}
+
+/* Cancel and Save stay in reach while the form scrolls: sticky from 600px
+   up, and at the end of the form on phones, away from the keyboard */
+.spec-save-bar {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+
+.spec-save-bar__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--md-sys-color-error);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.spec-save-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 /* The line shown at the top of the "Flags that cite" side sheet */
 .cited-line {
   display: flex;
@@ -2347,6 +2463,16 @@ button.chip:active::before {
     border-top: 1px solid var(--md-sys-color-outline);
   }
 
+  /* Spec editor form: Delete goes under its field */
+  .spec-edit-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .spec-edit-line > .btn {
+    justify-self: start;
+    margin-top: 0;
+  }
+
   .screen__title {
     font: var(--type-headline-small);
     letter-spacing: var(--md-sys-typescale-headline-small-tracking);
@@ -2356,6 +2482,17 @@ button.chip:active::before {
 @media (min-width: 600px) {
   :root {
     --app-margin: 24px;
+  }
+
+  .spec-save-bar {
+    position: sticky;
+    bottom: 16px;
+    z-index: 2;
+  }
+
+  /* Keyboard focus scrolls clear of the save bar too (app.js measures it) */
+  html:has(.spec-save-bar) {
+    scroll-padding-bottom: calc(var(--spec-save-bar-height, 72px) + 32px);
   }
 }
 
