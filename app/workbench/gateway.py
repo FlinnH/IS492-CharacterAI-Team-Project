@@ -2,22 +2,27 @@
 
 A call waits for its slot (the creator can stop it while it waits), streams the
 reply, and writes exactly one model_calls row when it ends, however it ends.
-Retry, backoff, and fallback come in M6. The model_calls columns for them
-(attempt, fallback, same_model) are already there and hold their defaults.
+A JSON call (the AI judge's) answers in one piece, checked against a Pydantic
+model, and a reply that doesn't match is tried once more, each attempt with
+its own row. Backoff and fallback come in M6; the fallback column holds its
+default until then.
 """
 
 import asyncio
+import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
 import anyio
+from pydantic import BaseModel, ValidationError
 
 from workbench import db, telemetry
 from workbench.config import Prompts, Settings
 from workbench.limiter import Limiter
-from workbench.providers import Provider, ProviderError, Usage
+from workbench.providers import Completion, Provider, ProviderError, Usage
+from workbench.schemas import ModelSpec
 
 
 class CapReached(Exception):
@@ -52,10 +57,64 @@ class CallResult:
     latency_ms: int | None = None
 
 
+@dataclass
+class JsonResult:
+    """How a JSON call ended, after at most one retry.
+
+    status is ok (value holds the answer), invalid (no attempt matched the
+    model), error (the service failed), or capped. failure is a short code
+    for the logs, like schema, cut_off, or the provider's kind of error.
+    """
+
+    status: str = "error"
+    value: BaseModel | None = None
+    text: str = ""
+    # For the creator when the service failed or the cap was reached.
+    message: str = ""
+    failure: str | None = None
+    model_reported: str | None = None
+    model_call_id: int | None = None
+    attempts: int = 0
+
+
 # What waiting for the next chunk can end in, besides a chunk.
 _ENDED = object()
 _STOPPED = object()
 _TIMED_OUT = object()
+
+# A reply wrapped in a markdown code fence, which some models add around JSON.
+_FENCED = re.compile(r"^```(?:json)?\s*\n(.*)\n```$", re.DOTALL)
+
+
+def estimated_cost(spec: ModelSpec, usage: Usage | None) -> float | None:
+    """What the call would cost on the paid tier, in US dollars. Thinking bills as output."""
+    if usage is None:
+        return None
+    return round(
+        (
+            (usage.input_tokens - usage.cached_tokens) * spec.input_price
+            + usage.cached_tokens * spec.cached_input_price
+            + (usage.output_tokens + usage.reasoning_tokens) * spec.output_price
+        )
+        / 1_000_000,
+        8,
+    )
+
+
+def _parse(output: type[BaseModel], completion: Completion, schema_version: str) -> tuple[BaseModel | None, str | None]:
+    """The reply as output, or None and a short reason that never quotes the reply."""
+    text = completion.text.strip()
+    fenced = _FENCED.match(text)
+    try:
+        return output.model_validate_json(fenced[1] if fenced else text), None
+    except ValidationError as error:
+        problems = error.errors()
+    if completion.finish_reason == "length":
+        return None, f"reply cut off at max_tokens, so it didn't match {schema_version}"
+    if any(problem["type"] == "json_invalid" for problem in problems):
+        return None, f"reply wasn't JSON, so it didn't match {schema_version}"
+    places = sorted({".".join(str(part) for part in problem["loc"]) or "the top" for problem in problems})
+    return None, f"reply didn't match {schema_version} at {', '.join(places[:4])}"
 
 
 async def _cancel_and_wait(tasks: Sequence[asyncio.Task]) -> None:
@@ -195,6 +254,105 @@ class Gateway:
         effort = reasoning_effort if reasoning_effort is not None else spec.reasoning_effort
         return Call(self, role, model_id, list(messages), prompt_version, session, stop, transcript_id, turn, effort)
 
+    async def complete_json(
+        self,
+        *,
+        role: str,
+        model_id: str,
+        messages: Sequence[dict],
+        prompt_version: str,
+        session: str | None,
+        output: type[BaseModel],
+        schema: dict,
+        schema_version: str,
+        reasoning_effort: str | None,
+        max_tokens: int,
+        timeout: float,
+        transcript_id: int | None = None,
+        same_model: bool = False,
+        attempts: int = 2,
+    ) -> JsonResult:
+        """One call that answers in JSON, checked against output.
+
+        A reply that doesn't match is tried once more (attempts counts both).
+        A failed service isn't retried, since the same request would fail the
+        same way until M6 adds backoff. Every attempt checks the cap, waits for
+        its slot, and writes its own model_calls row with no reply text.
+        """
+        spec = self.prompts.models.models[model_id]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": schema_version.replace(".", "_"), "schema": schema, "strict": True},
+        }
+        result = JsonResult()
+        for attempt in range(1, attempts + 1):
+            result.attempts = attempt
+            try:
+                self.check_cap(
+                    role=role, model_id=model_id, prompt_version=prompt_version, session=session, transcript_id=transcript_id
+                )
+            except CapReached as error:
+                result.status, result.failure, result.message = "capped", "capped", str(error)
+                return result
+            wait = self.limiter.reserve(self.clock())
+            if wait > 0:
+                await self.sleep(wait)
+
+            started_at, started = self.wall(), self.clock()
+            completion = value = None
+            status, detail = "stopped", "stopped before the reply came"
+            self.in_flight += 1
+            try:
+                completion = await self.provider.complete(
+                    model_id, list(messages), reasoning_effort, max_tokens, response_format, timeout
+                )
+                value, detail = _parse(output, completion, schema_version)
+                status = "ok" if value is not None else "error"
+            except ProviderError as error:
+                status, detail = "error", error.detail
+                result.status, result.failure, result.message = "error", error.kind, error.message
+            finally:
+                try:
+                    result.model_call_id = telemetry.record_call(
+                        self.database,
+                        telemetry.CallRecord(
+                            started_at=telemetry.timestamp(started_at),
+                            quota_day=self.limiter.quota_day(started_at),
+                            session=session,
+                            role=role,
+                            transcript_id=transcript_id,
+                            turn=None,
+                            provider=self.provider.name,
+                            model_asked=model_id,
+                            model_reported=completion.model if completion else None,
+                            prompt_version=prompt_version,
+                            settings_version=self.prompts.models_version,
+                            reasoning_effort=reasoning_effort,
+                            status=status,
+                            error=detail if status != "ok" else None,
+                            attempt=attempt,
+                            same_model=same_model,
+                            latency_ms=round((self.clock() - started) * 1000),
+                            input_tokens=completion.usage.input_tokens if completion and completion.usage else None,
+                            cached_tokens=completion.usage.cached_tokens if completion and completion.usage else None,
+                            output_tokens=completion.usage.output_tokens if completion and completion.usage else None,
+                            reasoning_tokens=completion.usage.reasoning_tokens if completion and completion.usage else None,
+                            est_cost_usd=estimated_cost(spec, completion.usage if completion else None),
+                        ),
+                    )
+                finally:
+                    self.in_flight -= 1
+
+            if completion is None:
+                return result
+            result.model_reported = completion.model or result.model_reported
+            if value is not None:
+                result.status, result.value, result.text, result.failure, result.message = "ok", value, completion.text, None, ""
+                return result
+            result.status = "invalid"
+            result.failure = "cut_off" if detail.startswith("reply cut off") else "schema"
+        return result
+
 
 @dataclass
 class Call:
@@ -294,17 +452,7 @@ class Call:
         usage = result.usage
         result.ttft_ms = round((first_text - started) * 1000) if first_text is not None else None
         result.latency_ms = round((ended - started) * 1000)
-        cost = None
-        if usage is not None:
-            cost = round(
-                (
-                    (usage.input_tokens - usage.cached_tokens) * spec.input_price
-                    + usage.cached_tokens * spec.cached_input_price
-                    + (usage.output_tokens + usage.reasoning_tokens) * spec.output_price
-                )
-                / 1_000_000,
-                8,
-            )
+        cost = estimated_cost(spec, usage)
         result.model_call_id = telemetry.record_call(
             gateway.database,
             telemetry.CallRecord(

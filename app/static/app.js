@@ -3,10 +3,11 @@
 
   A plain script (no modules, no build step). The Spec editor and Run a
   conversation talk to the workbench server, by way of api.js: specs, live
-  chats, and imported chats are saved there. Flag review and Compare runs
-  still read the CP2 chats from data.js (window.WORKBENCH_DATA), and the calls
-  the creator makes there live in memory until M4, so "Reset demo" or
-  reloading the page starts those over.
+  chats, imported chats, and their checks (the automatic checks and the AI
+  judge) are saved there. Flag review and Compare runs still read the CP2
+  chats from data.js (window.WORKBENCH_DATA), and the calls the creator makes
+  there live in memory until M4, so "Reset demo" or reloading the page starts
+  those over.
 
   Sections:
     1. Data and state
@@ -77,6 +78,8 @@
       runError: null,
       // The message being typed, per chat ID.
       drafts: {},
+      // Check results, per chat ID (see 3.2.2).
+      checks: {},
       // Flag review. Every map is keyed by flag ID unless noted.
       // decisions: { verdict: "agreed" } or { verdict: "overridden", reason }
       decisions: {},
@@ -1134,6 +1137,7 @@
       rememberChat(chat.id);
       updateChatSummary(chat);
       refreshRun({ focusKey });
+      loadCheck(chat.id);
       return true;
     } catch (error) {
       if (ticket !== chatRequest) return false;
@@ -1317,19 +1321,34 @@
       </section>`;
   }
 
+  // A reply the last check flagged says so, with the flags' quotes marked.
   function renderBubble(chat, message) {
     const name = message.speaker === "user" ? chat.user_name : chat.character_name;
     const stopped = message.stopped
       ? `<span class="bubble__status"><span class="icon" aria-hidden="true">stop_circle</span><span>Stopped</span></span>`
       : "";
+    const check = message.speaker === "character" && !message.stopped ? readyCheck(chat.id) : null;
+    const flags = check ? check.flags.filter((flag) => flag.turn === message.turn) : [];
+    // A rule flag sits at its first break and lists the other turns that broke the same line.
+    const alsoLines = check && flags.length === 0
+      ? [...new Set(check.flags.filter((flag) => flag.also_turns.includes(message.turn)).map((flag) => flag.line_id))]
+      : [];
+    let flagStatus = "";
+    if (flags.length > 0) {
+      flagStatus = `<span class="bubble__status bubble__status--flagged"><span class="icon icon--filled" aria-hidden="true">flag</span><span>Flagged</span></span>`;
+    } else if (alsoLines.length > 0) {
+      flagStatus = `<span class="bubble__status"><span class="icon" aria-hidden="true">flag</span><span>Also breaks ${escapeHtml(listText(alsoLines))}</span></span>`;
+    }
     return `
-      <li class="bubble bubble--${message.speaker === "user" ? "user" : "character"}" data-seq="${message.seq}">
+      <li class="bubble bubble--${message.speaker === "user" ? "user" : "character"}" data-seq="${message.seq}"
+        data-turn="${message.turn}" tabindex="-1">
         <p class="bubble__meta">
           <span class="bubble__speaker">${escapeHtml(name)}</span>
           <span class="bubble__turn">${numberWord(chat)} ${message.turn}<span class="visually-hidden">:</span></span>
           ${stopped}
+          ${flagStatus}
         </p>
-        <p class="bubble__text keep-lines">${escapeHtml(message.text)}</p>
+        <p class="bubble__text keep-lines">${highlight(message.text, flags.map((flag) => flag.quote.toLowerCase()))}</p>
       </li>`;
   }
 
@@ -1387,7 +1406,7 @@
           <span class="icon" aria-hidden="true">upload_file</span>
           <p class="run-result__text">Imported chat, pinned to spec ${escapeHtml(specLabel(chat.spec_version))}. Imported chats are read-only.</p>
           ${reviewable
-            ? `<button type="button" class="btn btn--filled" data-action="review-flags" data-run="${escapeHtml(chat.sample)}" data-focus-key="review-flags">Review flags</button>`
+            ? `<button type="button" class="btn btn--outlined" data-action="review-flags" data-run="${escapeHtml(chat.sample)}" data-focus-key="review-flags">Review the CP2 flags</button>`
             : ""}
         </div>`);
     } else if (chat.status === "script_done" || chat.status === "stopped") {
@@ -1413,6 +1432,7 @@
         </div>`);
     }
     if (canType(chat)) parts.push(renderMessageBox(chat));
+    parts.push(renderCheck(chat));
     return parts.join("");
   }
 
@@ -1634,6 +1654,8 @@
     }
     refreshRun({ focusKey });
     if (state.runError && state.runError.chatId === chatId) announce(state.runError.message);
+    // The chat grew, so an earlier check no longer covers it.
+    loadCheck(chatId);
   }
 
   // Ends a streaming reply for Reset demo: Stop for the server, then the request itself.
@@ -1954,6 +1976,7 @@
       rememberChat(chat.id);
       updateChatSummary(chat);
       refreshRun({ focusKey: "run-chat" });
+      loadCheck(chat.id);
       showSnackbar(known.has(chat.id)
         ? `Already imported. Showing ${chat.title}.`
         : `Imported ${chat.title}. It's pinned to spec ${specLabel(chat.spec_version)}.`);
@@ -1966,6 +1989,328 @@
     } finally {
       importBusy = false;
     }
+  };
+
+  // 3.2.2 Check a chat ------------------------------------------------------
+  // Check this chat runs the automatic checks on every finished reply, then
+  // has the AI judge review the whole chat in one model call. The flags show
+  // under the transcript, read-only for now: making the call on each one moves
+  // to Flag review in M4. The server keeps every check, so coming back to a
+  // chat shows its check with no new call, until the chat changes. Here
+  // "Needs your call" marks only the flags the spec can't settle, which code
+  // routes to the creator (persona exits, guesses near the knowledge
+  // boundary, and lines the spec marks).
+
+  // state.checks[chatId] is { status, view, message, retry }. status is
+  // "loading", "none" (not checked as it stands), "running" (this tab is
+  // checking it), "elsewhere" (another tab is), "ready" (view holds the
+  // results), or "failed" (the request failed; retry is "check" or "look").
+
+  const NEEDS_CALL_TEXT = {
+    persona_exit: () => "The character stepped out of the role. Only you can judge how much that matters.",
+    near_guess: (chat) => `A guess near what ${chat.character_name} can't know. Only you can tell a guess from a leak.`,
+    unsure_boundary: () => "The AI isn't sure this crosses the knowledge boundary, so it's yours to decide.",
+    line: () => "The spec marks this line for your call.",
+    judge: () => "The AI judge left this one to you.",
+  };
+
+  function readyCheck(chatId) {
+    const check = state.checks[chatId];
+    return check && check.status === "ready" ? check.view : null;
+  }
+
+  function hasFinishedReply(chat) {
+    return chat.messages.some((message) => message.speaker === "character" && !message.stopped && message.text.trim());
+  }
+
+  function checkRunning(chatId) {
+    return Boolean(state.checks[chatId] && state.checks[chatId].status === "running");
+  }
+
+  // "3, 4, and 6"
+  function listText(items) {
+    if (items.length <= 2) return items.join(" and ");
+    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+  }
+
+  // What a cited line or field is, for screen readers: "behavior rule", or "spec field" for a label like Voice.
+  function citeMeaning(lineId) {
+    return /^[A-Z][0-9]+$/.test(lineId) && LINE_MEANINGS[lineId[0]] ? LINE_MEANINGS[lineId[0]] : "spec field";
+  }
+
+  function capitalized(word) {
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }
+
+  // Loads the saved check, which never calls a model, and redraws if the chat is on screen.
+  async function loadCheck(chatId) {
+    if (checkRunning(chatId)) return;
+    if (!state.checks[chatId]) state.checks[chatId] = { status: "loading", view: null, message: "", retry: null };
+    let next;
+    try {
+      const found = await WorkbenchApi.getCheck(chatId);
+      next = found.result
+        ? { status: "ready", view: found.result, message: "", retry: null }
+        : { status: found.running ? "elsewhere" : "none", view: null, message: "", retry: null };
+    } catch (error) {
+      next = { status: "failed", view: null, message: `The saved check didn't load. ${error.message}`, retry: "look" };
+    }
+    if (checkRunning(chatId)) return;
+    state.checks[chatId] = next;
+    if (state.chatId === chatId) refreshRun();
+  }
+
+  // "8 flags: 1 from automatic checks and 7 from the AI judge. 2 need your call."
+  function checkSummary(view) {
+    const total = view.flags.length;
+    const fromRules = view.flags.filter((flag) => flag.source === "rule").length;
+    const calls = view.flags.filter((flag) => flag.needs_call).length;
+    const noun = total === 1 ? "flag" : "flags";
+    let text;
+    if (total === 0) {
+      text = view.judge.status === "ok"
+        ? "No flags. The automatic checks and the AI judge found no breaks."
+        : "No flags from the automatic checks.";
+    } else if (view.judge.status === "ok") {
+      text = `${total} ${noun}: ${fromRules} from automatic checks and ${total - fromRules} from the AI judge.`;
+    } else {
+      text = `${total} ${noun}, all from automatic checks.`;
+    }
+    if (calls > 0) text += ` ${calls} ${calls === 1 ? "needs" : "need"} your call.`;
+    return text;
+  }
+
+  // "1 flag hidden: its quote wasn't in the chat."
+  function hiddenText(chat, item) {
+    const one = item.count === 1;
+    const word = numberWord(chat).toLowerCase();
+    const spec = specLabel(chat.spec_version);
+    const reasons = {
+      quote_not_found: one ? "its quote wasn't in the chat" : "their quotes weren't in the chat",
+      quote_other_turn: one ? `its quote was from a different ${word}` : `their quotes were from different ${word}s`,
+      quote_from_user: `${one ? "its quote was" : "their quotes were"} ${chat.user_name}'s words, not ${chat.character_name}'s`,
+      unknown_line: one ? `it cited a line that isn't in spec ${spec}` : `they cited lines that aren't in spec ${spec}`,
+      not_a_reply: one
+        ? `its ${word} has no finished reply from ${chat.character_name}`
+        : `their ${word}s have no finished reply from ${chat.character_name}`,
+    };
+    return `${item.count} ${one ? "flag" : "flags"} hidden: ${reasons[item.reason]}.`;
+  }
+
+  function checkButton(label, focusKey) {
+    return `
+      <button type="button" class="btn btn--filled btn--icon-leading" data-action="check-chat" data-focus-key="${focusKey}">
+        <span class="icon" aria-hidden="true">fact_check</span>
+        <span>${label}</span>
+      </button>`;
+  }
+
+  // Below the transcript: the button, the check under way, or the results.
+  function renderCheck(chat) {
+    if (!hasFinishedReply(chat)) return "";
+    const check = state.checks[chat.id];
+    if (!check || check.status === "loading") return "";
+    if (check.status === "ready") return renderCheckResults(chat, check.view);
+
+    if (check.status === "running" || check.status === "elsewhere") {
+      const here = check.status === "running";
+      return `
+        <div class="card card--outlined check-start">
+          <span class="icon" aria-hidden="true">hourglass_top</span>
+          <div class="check-start__text">
+            <p class="check-start__title" tabindex="-1" data-focus-key="check-status">Checking this chat</p>
+            <p class="check-start__body">${here
+              ? "The automatic checks run first. Then the AI judge reads the whole chat in one call, which can take a minute."
+              : "A check of this chat started in another tab or before a reload. Look again in a moment."}</p>
+            ${here ? '<div class="check-progress" aria-hidden="true"></div>' : ""}
+          </div>
+          ${here
+            ? ""
+            : '<button type="button" class="btn btn--outlined" data-action="reload-check" data-focus-key="reload-check">Look again</button>'}
+        </div>`;
+    }
+
+    if (check.status === "failed") {
+      return `
+        <div class="card card--outlined run-error">
+          <span class="icon" aria-hidden="true">error</span>
+          <p class="run-error__text">${escapeHtml(check.message)}</p>
+          ${check.retry === "look"
+            ? '<button type="button" class="btn btn--filled" data-action="reload-check" data-focus-key="reload-check">Look again</button>'
+            : checkButton("Try again", "check-chat")}
+        </div>`;
+    }
+
+    return `
+      <div class="card card--outlined check-start">
+        <span class="icon" aria-hidden="true">fact_check</span>
+        <div class="check-start__text">
+          <p class="check-start__title">Check this chat for breaks</p>
+          <p class="check-start__body">Automatic checks count sentences and look for banned words in every reply from ${escapeHtml(chat.character_name)}. Then an AI judge reads the whole chat once and flags each break with a quote and the spec line it breaks. That's one model call, or two if the first answer can't be read.</p>
+        </div>
+        ${checkButton("Check this chat", "check-chat")}
+      </div>`;
+  }
+
+  function renderCheckResults(chat, view) {
+    const judge = view.judge;
+    const effort = judge.reasoning_effort ? ` at ${judge.reasoning_effort} reasoning effort` : "";
+    const notes = [];
+    if (judge.status !== "ok") {
+      notes.push(`
+        <li class="check__note check__note--error">
+          <span class="icon" aria-hidden="true">error</span>
+          <span class="check__note-text">${escapeHtml(judge.note)}</span>
+          ${checkButton("Try again", "check-chat")}
+        </li>`);
+    }
+    view.hidden.forEach((item) => {
+      notes.push(`
+        <li class="check__note">
+          <span class="icon" aria-hidden="true">visibility_off</span>
+          <span class="check__note-text">${escapeHtml(hiddenText(chat, item))}</span>
+        </li>`);
+    });
+    if (judge.same_model) {
+      notes.push(`
+        <li class="check__note">
+          <span class="icon" aria-hidden="true">sync_problem</span>
+          <span class="check__note-text">The AI judge is the same model that wrote some of these replies, so it may miss its own mistakes. Those flags say "Same model reviewed."</span>
+        </li>`);
+    }
+    const cards = view.flags.length > 0
+      ? `<ol class="flag-cards">${view.flags.map((flag) => `<li>${renderCheckFlag(chat, flag)}</li>`).join("")}</ol>`
+      : "";
+
+    return `
+      <section class="check" aria-labelledby="check-title">
+        <div class="check__head">
+          <h2 class="check__title" id="check-title" tabindex="-1" data-focus-key="check-results">Check results</h2>
+          ${chip("description", `Spec ${specLabel(view.spec_version)}`)}
+          ${chip("smart_toy", `AI judge: ${judge.model_label}`)}
+        </div>
+        <p class="check__source">Checked ${escapeHtml(chatTime(judge.checked_at))}${escapeHtml(effort)}.${view.cached
+          ? " Shown from the saved check, with no new model call."
+          : ""}</p>
+        <p class="check__summary">${escapeHtml(checkSummary(view))}</p>
+        ${notes.length ? `<ul class="check__notes">${notes.join("")}</ul>` : ""}
+        ${cards}
+        ${renderCheckGaps(chat, view)}
+      </section>`;
+  }
+
+  // A read-only flag card: the evidence first, then the spec line in the spec's own words.
+  function renderCheckFlag(chat, flag) {
+    const id = `check-flag-${flag.id}`;
+    const word = numberWord(chat);
+    const title = `${word} ${flag.turn}, ${flag.type}`;
+    const level = capitalized(flag.confidence);
+    const callText = flag.needs_call ? NEEDS_CALL_TEXT[flag.needs_call_reason](chat) : "";
+    return `
+      <article class="card card--outlined flag-card" id="${id}" aria-labelledby="${id}-title">
+        <div class="flag-card__head">
+          <h3 class="flag-card__title" id="${id}-title">${escapeHtml(title)}</h3>
+          ${flag.needs_call
+            ? '<span class="needs-call"><span class="icon" aria-hidden="true">pending</span><span>Needs your call</span></span>'
+            : ""}
+        </div>
+        <figure class="flag-card__evidence">
+          <blockquote><p class="keep-lines"><q>${escapeHtml(flag.quote)}</q></p></blockquote>
+          <figcaption>From ${escapeHtml(chat.character_name)}'s reply</figcaption>
+        </figure>
+        <div class="flag-card__chips">
+          ${flag.source === "rule" ? chip("rule", "Automatic check") : chip("smart_toy", "AI judge")}
+          <span class="chip">${escapeHtml(flag.line_id)}<span class="visually-hidden">: ${escapeHtml(citeMeaning(flag.line_id))}</span></span>
+          <span class="chip chip--icon-leading flag-card__confidence">
+            <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[level]}</span>
+            <span>${level}<span class="visually-hidden"> confidence</span></span>
+          </span>
+          ${flag.same_model ? chip("sync_problem", "Same model reviewed") : ""}
+        </div>
+        <p class="flag-card__cite-text"><span class="flag-card__label">${escapeHtml(flag.line_id)}.</span> ${escapeHtml(flag.line_text)}</p>
+        <p class="flag-card__why"><span class="flag-card__label">Why this flag?</span> ${escapeHtml(flag.why)}</p>
+        ${flag.also_turns.length > 0
+          ? `<p class="flag-card__also">Also in ${word.toLowerCase()}s ${escapeHtml(listText(flag.also_turns))}.</p>`
+          : ""}
+        ${flag.needs_call
+          ? `<p class="flag-card__unsure"><span class="icon" aria-hidden="true">pending</span><span>${escapeHtml(callText)}</span></p>`
+          : ""}
+        ${flag.confidence === "low" && !flag.needs_call
+          ? `<p class="flag-card__unsure">
+              <span class="icon" aria-hidden="true">help</span>
+              <span>The AI is unsure. Read the turn before deciding.</span>
+            </p>`
+          : ""}
+        <button type="button" class="btn btn--text btn--icon-leading" data-action="show-in-transcript" data-turn="${flag.turn}"
+          data-focus-key="show-${flag.id}">
+          <span class="icon" aria-hidden="true">arrow_upward</span>
+          <span>Show in transcript<span class="visually-hidden">: ${escapeHtml(title)}</span></span>
+        </button>
+      </article>`;
+  }
+
+  // What the judge said the spec and the chat can't settle.
+  function renderCheckGaps(chat, view) {
+    if (view.not_checked.length === 0) return "";
+    const word = numberWord(chat).toLowerCase();
+    const items = view.not_checked.map((gap) => `
+      <div class="not-checked__item">
+        <p><span class="flag-card__label">${escapeHtml(gap.topic)}.</span> ${escapeHtml(gap.why)}</p>
+        ${gap.turns.length > 0
+          ? `<p class="flag-card__also">${capitalized(word)}${gap.turns.length === 1 ? "" : "s"} ${escapeHtml(listText(gap.turns))}</p>`
+          : ""}
+      </div>`);
+    return `
+      <section class="card card--outlined not-checked" aria-labelledby="check-gaps-title">
+        <h3 class="not-checked__title" id="check-gaps-title">
+          <span class="icon" aria-hidden="true">visibility_off</span>
+          <span>Not checked by the AI</span>
+        </h3>
+        ${items.join("")}
+      </section>`;
+  }
+
+  actions["check-chat"] = async (button) => {
+    const chat = state.chat;
+    if (!chat || isLive(chat.id) || checkRunning(chat.id) || (button && button.getAttribute("aria-disabled") === "true")) return;
+    const chatId = chat.id;
+    state.checks[chatId] = { status: "running", view: null, message: "", retry: null };
+    refreshRun({ focusKey: "check-status" });
+    announce("Checking this chat. The AI judge can take a minute.");
+    try {
+      const view = await WorkbenchApi.checkChat(chatId);
+      state.checks[chatId] = { status: "ready", view, message: "", retry: null };
+      if (state.chatId === chatId) {
+        refreshRun({ focusKey: "check-results" });
+        announce(`Check done. ${checkSummary(view)}`);
+      }
+    } catch (error) {
+      state.checks[chatId] = { status: "failed", view: null, message: error.message, retry: "check" };
+      if (state.chatId === chatId) {
+        refreshRun({ focusKey: "check-chat" });
+        announce(error.message);
+      }
+    }
+    // The judge's calls count toward today's total, shown by Start run.
+    loadRunOptions();
+  };
+
+  actions["reload-check"] = () => {
+    if (!state.chat) return;
+    delete state.checks[state.chat.id];
+    loadCheck(state.chat.id);
+  };
+
+  // Scrolls the transcript (its own box) to the flagged reply and focuses it.
+  actions["show-in-transcript"] = (button) => {
+    const body = runBody();
+    if (!body) return;
+    const box = body.querySelector(".chat");
+    const bubble = body.querySelector(`.bubble--character[data-turn="${CSS.escape(button.dataset.turn)}"]`);
+    if (!box || !bubble) return;
+    box.scrollTop += bubble.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+    scrollBelowHeader(box.closest(".transcript"));
+    bubble.focus({ preventScroll: true });
   };
 
   // 3.3 Flag review (Diagnose) ----------------------------------------------
@@ -2970,12 +3315,12 @@
       stopLiveRun();
       state = createInitialState();
       refresh();
-      // Saved spec versions and chats never change, so the screens load them again.
+      // Saved spec versions, chats, and checks never change, so the screens load them again.
       loadSpec();
       loadRunOptions();
       loadSamples();
       loadChats();
-      showSnackbar("Demo reset. Saved spec versions and chats stay.");
+      showSnackbar("Demo reset. Saved spec versions, chats, and checks stay.");
     });
   });
 

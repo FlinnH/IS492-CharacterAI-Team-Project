@@ -1,7 +1,7 @@
 """HTTP entry point: the API routes, then the screens in app/static/.
 
-Routes only call services, like specs, transcripts, and runtime, which open
-their own database connections. A live turn streams as server-sent events.
+Routes only call services, like specs, transcripts, runtime, and judge, which
+open their own database connections. A live turn streams as server-sent events.
 Its checks run in a dependency, before the stream starts, so a refused turn
 gets a plain JSON error with the right status.
 """
@@ -22,12 +22,15 @@ from fastapi.staticfiles import StaticFiles
 from workbench import db, providers, specs, transcripts
 from workbench.config import Settings, load_prompts, load_settings
 from workbench.gateway import CapReached, Gateway
+from workbench.judge import CheckBusy, Judge, NothingToCheck
 from workbench.limiter import Limiter
 from workbench.runtime import ChatBusy, ChatClosed, NoKey, RunInvalid, Runtime, Turn
 from workbench.schemas import (
     Character,
     ChatSummary,
     ChatView,
+    CheckState,
+    CheckView,
     ImportPreview,
     ImportRequest,
     RunOptions,
@@ -103,6 +106,7 @@ def create_app(
     timing = {name: value for name, value in (("clock", clock), ("sleep", sleep)) if value is not None}
     gateway = Gateway(database, settings, prompts, provider, limiter, **timing)
     runtime = Runtime(database, settings, prompts, gateway, transcripts.load_scenarios())
+    judge = Judge(database, settings, prompts, gateway, runtime.scenarios, busy=lambda: runtime.running)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -113,15 +117,18 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.runtime = runtime
+    app.state.judge = judge
 
     app.add_exception_handler(specs.SpecNotFound, error_response(404))
     app.add_exception_handler(transcripts.ChatNotFound, error_response(404))
     app.add_exception_handler(specs.SpecConflict, error_response(409))
     app.add_exception_handler(ChatBusy, error_response(409))
     app.add_exception_handler(ChatClosed, error_response(409))
+    app.add_exception_handler(CheckBusy, error_response(409))
     app.add_exception_handler(specs.SpecInvalid, error_response(422))
     app.add_exception_handler(RunInvalid, error_response(422))
     app.add_exception_handler(transcripts.ImportInvalid, error_response(422))
+    app.add_exception_handler(NothingToCheck, error_response(422))
     app.add_exception_handler(CapReached, error_response(429))
     app.add_exception_handler(NoKey, error_response(503))
     app.add_exception_handler(RequestValidationError, invalid_request)
@@ -203,6 +210,18 @@ def create_app(
     @app.post("/api/chats/{chat_id}/stop", response_model=ChatSummary)
     async def stop_chat(chat_id: int, request: Request) -> ChatSummary:
         return runtime.stop(chat_id, session_of(request))
+
+    # Checks: the rule checks and the AI judge. GET reads the saved check of the
+    # chat as it stands and never calls a model; POST checks it, reusing a saved
+    # judge run when one covers this exact chat.
+
+    @app.get("/api/chats/{chat_id}/check", response_model=CheckState)
+    async def chat_check(chat_id: int) -> CheckState:
+        return judge.state(chat_id)
+
+    @app.post("/api/chats/{chat_id}/check", response_model=CheckView)
+    async def check_chat(chat_id: int, request: Request) -> CheckView:
+        return await judge.check(chat_id, session_of(request))
 
     # Import.
 

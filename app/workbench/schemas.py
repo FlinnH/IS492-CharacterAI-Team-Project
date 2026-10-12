@@ -1,7 +1,7 @@
 """Shared Pydantic types: spec bodies as stored, edits from the Spec editor,
-model settings, chats, and API responses."""
+model settings, chats, the AI judge's answer, flags, and API responses."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -135,6 +135,20 @@ class CharacterModels(Model):
     fake: list[str] = Field(min_length=1)
 
 
+class JudgeSettings(Model):
+    """The AI judge, which reviews a whole chat in one call."""
+
+    # The judge's own, never copied from the character's. Its accuracy matters
+    # more than its speed, so it is low or higher.
+    reasoning_effort: Literal["low", "medium", "high"]
+    # The judge answers in one piece after it thinks, so this leaves room for both.
+    max_tokens: int = Field(ge=1)
+    # The judge model for each provider.
+    gemini: str
+    ollama: str
+    fake: str
+
+
 class PreflightSettings(Model):
     # Reasoning efforts that preflight compares on time to first token.
     reasoning_efforts: list[str] = Field(min_length=1)
@@ -148,6 +162,7 @@ class ModelSettings(Model):
     # The quota day ends at midnight in this time zone.
     quota_timezone: str
     character: CharacterModels
+    judge: JudgeSettings
     preflight: PreflightSettings
     models: dict[str, ModelSpec]
 
@@ -158,10 +173,17 @@ class ModelSettings(Model):
                 spec = self.models.get(model_id)
                 if spec is None or spec.provider != provider:
                     raise ValueError(f"the {provider} menu names {model_id}, which has no {provider} entry under models")
+            judge_id = getattr(self.judge, provider)
+            spec = self.models.get(judge_id)
+            if spec is None or spec.provider != provider:
+                raise ValueError(f"the {provider} judge is {judge_id}, which has no {provider} entry under models")
         return self
 
     def character_models(self, provider: str) -> list[str]:
         return list(getattr(self.character, provider))
+
+    def judge_model(self, provider: str) -> str:
+        return getattr(self.judge, provider)
 
 
 # Scenarios: the fixed test scripts (app/samples/scenarios.v1.json).
@@ -417,3 +439,170 @@ class ErrorEvent(Model):
     message: str
     retry: bool
     status: ChatStatus
+
+
+# The AI judge's answer. app/prompts/judge.schema.v1.json is this model's JSON
+# schema with every $ref written out (inline_refs), since Gemini's structured
+# output doesn't list $defs. config refuses to start if the two differ.
+
+FailureType = Literal[
+    "persona drift",
+    "memory loss",
+    "factual contradiction",
+    "knowledge-boundary violation",
+    "style drift",
+    "situational mismatch",
+    "persona exit",
+    "invented claim about the user",
+]
+Confidence = Literal["high", "medium", "low"]
+
+
+class JudgeFlag(Model):
+    turn: int = Field(description="The turn number of the character's reply, exactly as the chat numbers it.")
+    type: FailureType = Field(description="The kind of break.")
+    line_id: str = Field(
+        description="The ID of the one spec line the reply breaks, or the label of the spec field it breaks."
+    )
+    quote: str = Field(description="The shortest exact span of the reply that shows the break, copied word for word.")
+    confidence: Confidence = Field(
+        description="high when the spec settles it, medium when it probably breaks, low when unsure."
+    )
+    near_boundary_guess: bool = Field(
+        description="True when the reply guesses or hints toward something the character can't know, without naming it."
+    )
+    needs_your_call: bool = Field(description="True when only the person who wrote the spec can settle it.")
+    why: str = Field(description="One plain sentence that says what breaks and why.")
+
+
+class UserClaim(Model):
+    turn: int = Field(description="The turn of the character's reply that makes the claim.")
+    quote: str = Field(description="The shortest exact span of the reply that makes the claim, copied word for word.")
+    supported_by_turn: int = Field(
+        description="The turn of the user line that says it, or 0 if the user never said it before that reply."
+    )
+
+
+class JudgeGap(Model):
+    topic: str = Field(description="A short name for what couldn't be checked.")
+    turns: list[int] = Field(description="The turns it concerns.")
+    why: str = Field(description="Why the spec and the chat can't settle it.")
+
+
+class JudgeOutput(Model):
+    flags: list[JudgeFlag] = Field(description="Every break in the character's replies.")
+    user_claims: list[UserClaim] = Field(description="Every claim the character makes about the user.")
+    not_checked: list[JudgeGap] = Field(description="What the spec and the chat alone can't settle.")
+
+
+def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
+    """The schema with each "$ref" replaced by the definition it points to, and no "$defs"."""
+    definitions = schema.get("$defs", {})
+
+    def expand(node):
+        if isinstance(node, list):
+            return [expand(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        if "$ref" in node:
+            target = expand(definitions[node["$ref"].rsplit("/", 1)[-1]])
+            return {**target, **{key: expand(value) for key, value in node.items() if key != "$ref"}}
+        return {key: expand(value) for key, value in node.items() if key != "$defs"}
+
+    return expand(schema)
+
+
+# Flags. A finding is a flag that passed its checks, before it is saved: from a
+# rule check (code alone) or from the judge. Code, not the judge, sets
+# needs_call, and needs_call_reason says which rule did.
+
+FlagSource = Literal["judge", "rule", "recheck"]
+NeedsCallReason = Literal["persona_exit", "near_guess", "unsure_boundary", "line", "judge"]
+# Why the evidence checks hid a judge flag. The screen counts these.
+HiddenReason = Literal["not_a_reply", "unknown_line", "quote_other_turn", "quote_from_user", "quote_not_found"]
+# Flags that repeat another flag are dropped too, but nothing is lost, so the screen doesn't count them.
+RejectReason = HiddenReason | Literal["duplicate", "repeats_rule"]
+
+
+class Finding(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Literal["judge", "rule"]
+    turn: int
+    # A rule flag's other broken turns, after the first.
+    also_turns: tuple[int, ...] = ()
+    type: FailureType
+    # A line ID or a field label, exactly as the spec writes it.
+    line_id: str
+    # An exact span of the reply, so the screen can mark it.
+    quote: str
+    confidence: Confidence
+    near_boundary_guess: bool = False
+    needs_call: bool = False
+    needs_call_reason: NeedsCallReason | None = None
+    why: str
+
+
+# Check results, for Run a conversation.
+
+
+class CheckFlag(Model):
+    id: int
+    source: FlagSource
+    turn: int
+    also_turns: list[int]
+    type: FailureType
+    line_id: str
+    # The cited line's own words, from the chat's spec version, so a flag never
+    # restates its rule in the AI's words.
+    line_text: str
+    quote: str
+    confidence: Confidence
+    near_boundary_guess: bool
+    needs_call: bool
+    needs_call_reason: NeedsCallReason | None
+    # The judge reviewed a turn its own model wrote.
+    same_model: bool
+    why: str
+
+
+class HiddenCount(Model):
+    reason: HiddenReason
+    count: int
+
+
+class NotCheckedTopic(Model):
+    topic: str
+    turns: list[int]
+    why: str
+
+
+class JudgeRunView(Model):
+    status: Literal["ok", "failed"]
+    model: str
+    model_label: str
+    reasoning_effort: str | None
+    prompt_version: str
+    schema_version: str
+    same_model: bool
+    # For the creator when the judge's flags are missing. Empty when it worked.
+    note: str
+    checked_at: str
+
+
+class CheckView(Model):
+    chat_id: int
+    spec_version: int
+    # True when this came from a saved check, with no new model call.
+    cached: bool
+    judge: JudgeRunView
+    flags: list[CheckFlag]
+    hidden: list[HiddenCount]
+    not_checked: list[NotCheckedTopic]
+
+
+class CheckState(Model):
+    # A check of this chat is running now.
+    running: bool
+    # The saved check of the chat as it is now, or None.
+    result: CheckView | None

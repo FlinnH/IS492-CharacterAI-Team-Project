@@ -9,16 +9,17 @@ app/prompts/manifest.toml names.
 """
 
 import hashlib
+import json
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import dotenv_values
 from pydantic import Field, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from workbench.schemas import ModelSettings
+from workbench.schemas import JudgeOutput, ModelSettings, inline_refs
 
 APP_DIR = Path(__file__).resolve().parent.parent
 EXAMPLE_FILE = APP_DIR / ".env.example"
@@ -49,6 +50,7 @@ class Settings(BaseSettings):
     workbench_calls_per_minute: PositiveInt
     workbench_session_run_limit: PositiveInt
     workbench_first_token_timeout_seconds: PositiveFloat
+    workbench_judge_timeout_seconds: PositiveFloat
     workbench_max_typed_chars: PositiveInt
     workbench_max_import_chars: PositiveInt
     workbench_seeded_transcript_path: Path
@@ -83,6 +85,11 @@ class Prompts:
     models_version: str
     character_template: str
     character_version: str
+    judge_template: str
+    judge_version: str
+    # The JSON schema every judge answer must match, sent with each judge call.
+    judge_schema: dict[str, Any]
+    judge_schema_version: str
 
 
 def load_prompts(folder: Path = PROMPTS_DIR) -> Prompts:
@@ -110,9 +117,22 @@ def load_prompts(folder: Path = PROMPTS_DIR) -> Prompts:
     template = (folder / current["character"]).read_text(encoding="utf-8")
     if template.count(SPEC_PLACEHOLDER) != 1:
         raise RuntimeError(f"app/prompts/{current['character']} must hold {SPEC_PLACEHOLDER} exactly once.")
+
+    # The judge's answer is checked against schemas.JudgeOutput, so the schema
+    # the judge is sent must be that model's, or valid answers would fail.
+    judge_schema = json.loads((folder / current["judge_schema"]).read_text(encoding="utf-8"))
+    if judge_schema != inline_refs(JudgeOutput.model_json_schema()):
+        raise RuntimeError(
+            f"app/prompts/{current['judge_schema']} doesn't match schemas.JudgeOutput. Save the model's schema "
+            "as the next version and point the manifest at it."
+        )
     return Prompts(
         models=models,
         models_version=Path(current["models"]).stem,
         character_template=template,
         character_version=Path(current["character"]).stem,
+        judge_template=(folder / current["judge"]).read_text(encoding="utf-8"),
+        judge_version=Path(current["judge"]).stem,
+        judge_schema=judge_schema,
+        judge_schema_version=Path(current["judge_schema"]).stem,
     )

@@ -2,11 +2,13 @@
 
 OpenAIProvider talks to an OpenAI-compatible endpoint: Gemini's, or a local
 Ollama. FakeProvider streams a canned reply with no network, for the tests and
-for running the app without a key. Both stream Chunk objects the same way, and
-both raise ProviderError with a message the creator can read as it is.
+for running the app without a key. Both stream Chunk objects the same way,
+both answer a JSON call with one Completion, and both raise ProviderError with
+a message the creator can read as it is.
 """
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +40,17 @@ class Chunk:
     model: str | None
     # The latest token counts. Gemini repeats them on every chunk, so the last one wins.
     usage: Usage | None
+
+
+@dataclass(frozen=True)
+class Completion:
+    """A whole reply, from a call that asked for JSON."""
+
+    text: str
+    model: str | None
+    usage: Usage | None
+    # "stop", or "length" when the reply ran into max_tokens.
+    finish_reason: str | None
 
 
 class ProviderError(Exception):
@@ -180,6 +193,40 @@ class OpenAIProvider:
             with anyio.CancelScope(shield=True):
                 await stream.close()
 
+    async def complete(
+        self,
+        model: str,
+        messages: Sequence[dict],
+        reasoning_effort: str | None,
+        max_tokens: int,
+        response_format: dict,
+        timeout: float,
+    ) -> Completion:
+        """One whole reply in the given response format, not streamed.
+
+        Google's OpenAI compatibility page shows structured output only without
+        streaming. timeout covers the whole call, thinking included.
+        """
+        options = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
+        try:
+            response = await self._openai().chat.completions.create(
+                model=model,
+                messages=[dict(message) for message in messages],
+                max_tokens=max_tokens,
+                response_format=response_format,
+                timeout=timeout,
+                **options,
+            )
+        except openai.APIError as error:
+            raise provider_error(error) from None
+        choice = response.choices[0] if response.choices else None
+        return Completion(
+            text=(choice.message.content or "") if choice and choice.message else "",
+            model=response.model or None,
+            usage=usage_from(response.usage) if response.usage else None,
+            finish_reason=choice.finish_reason if choice else None,
+        )
+
     async def list_models(self) -> list[str]:
         """Model IDs the service offers, without Gemini's "models/" prefix."""
         try:
@@ -256,11 +303,54 @@ class FakeProvider:
             output = -(-sent // per_token) if sent else 0
             yield Chunk(text=piece, model=self.settings.model_reported, usage=Usage(input_tokens, 0, output, 0))
 
+    async def complete(
+        self,
+        model: str,
+        messages: Sequence[dict],
+        reasoning_effort: str | None,
+        max_tokens: int,
+        response_format: dict,
+        timeout: float,
+    ) -> Completion:
+        """The next scripted reply, or else the smallest answer the requested schema allows."""
+        self.requests.append(
+            {
+                "model": model,
+                "messages": [dict(message) for message in messages],
+                "reasoning_effort": reasoning_effort,
+                "max_tokens": max_tokens,
+                "response_format": response_format,
+                "timeout": timeout,
+            }
+        )
+        script = self.replies.pop(0) if self.replies else FakeReply()
+        if script.error is not None:
+            raise script.error
+        await self.sleep(self.settings.first_token_seconds if script.first_token_seconds is None else script.first_token_seconds)
+        if script.text is not None:
+            text = script.text
+        else:
+            text = json.dumps(smallest_instance(response_format["json_schema"]["schema"]))
+        per_token = self.settings.chars_per_token
+        input_tokens = max(1, sum(len(message["content"]) for message in messages) // per_token)
+        # A JSON call reports the model it was asked for.
+        return Completion(text=text, model=model, usage=Usage(input_tokens, 0, -(-len(text) // per_token), 0), finish_reason="stop")
+
     async def list_models(self) -> list[str]:
         return []
 
     async def aclose(self) -> None:
         return None
+
+
+def smallest_instance(schema: dict):
+    """The smallest value a JSON schema allows: empty lists and strings, zero, false, or the first choice."""
+    if "enum" in schema:
+        return schema["enum"][0]
+    kind = schema.get("type")
+    if kind == "object":
+        return {name: smallest_instance(schema["properties"][name]) for name in schema.get("required", [])}
+    return {"array": [], "string": "", "integer": 0, "number": 0, "boolean": False}.get(kind)
 
 
 Provider = OpenAIProvider | FakeProvider

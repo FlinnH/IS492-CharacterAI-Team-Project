@@ -140,8 +140,12 @@ LAYERS = {
     "providers": 3,
     "gateway": 4,
     "specs": 5,
+    # Pure checks: they import only schemas.
+    "rules": 5,
+    "evidence": 5,
     "transcripts": 6,
     "runtime": 7,
+    "judge": 7,
     "main": 8,
 }
 
@@ -163,7 +167,9 @@ def test_no_model_id_in_code():
     # Model IDs live in app/prompts/, so a model change is a new models version, not a code edit.
     import tomllib
 
-    models = tomllib.loads((APP_DIR / "prompts" / "models.v1.toml").read_text(encoding="utf-8"))["models"]
+    models = set()
+    for path in (APP_DIR / "prompts").glob("models.v*.toml"):
+        models |= set(tomllib.loads(path.read_text(encoding="utf-8"))["models"])
     files = [*python_files(), STATIC_DIR / "api.js", STATIC_DIR / "app.js"]
     found = [
         f"{path.relative_to(APP_DIR)}: {model_id}"
@@ -181,7 +187,7 @@ def test_the_fake_provider_matches_the_real_one():
     sys.path.insert(0, str(APP_DIR))
     from workbench.providers import FakeProvider, OpenAIProvider
 
-    for method in ("stream", "list_models", "aclose"):
+    for method in ("stream", "complete", "list_models", "aclose"):
         fake = list(inspect.signature(getattr(FakeProvider, method)).parameters)
         real = list(inspect.signature(getattr(OpenAIProvider, method)).parameters)
         assert fake == real, method

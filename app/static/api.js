@@ -160,6 +160,10 @@ window.WorkbenchApi = (() => {
     nextTurn: (id, onEvent, signal) => stream(`/api/chats/${part(id)}/next`, undefined, onEvent, signal),
     sendMessage: (id, text, onEvent, signal) => stream(`/api/chats/${part(id)}/messages`, { text }, onEvent, signal),
     stopChat: (id) => request("POST", `/api/chats/${part(id)}/stop`),
+    // The saved check of a chat as it stands, as { running, result }. Never calls a model.
+    getCheck: (id) => request("GET", `/api/chats/${part(id)}/check`),
+    // Runs the automatic checks and the AI judge, or returns the saved check when one covers the chat.
+    checkChat: (id) => request("POST", `/api/chats/${part(id)}/check`),
 
     // Import.
     listSamples: () => request("GET", "/api/samples"),
