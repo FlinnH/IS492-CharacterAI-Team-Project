@@ -1834,6 +1834,162 @@ button.chip:active::before {
   margin-top: 8px;
 }
 
+/* Check a chat --------------------------------------------------------------- */
+/* The flag cards reuse Flag review's styles; these lay out what's around them. */
+
+/* A reply the last check flagged: a flag icon and the word, so the state never
+   rests on color alone */
+.bubble__status--flagged {
+  color: var(--md-sys-color-error);
+}
+
+/* "Show in transcript" focuses the reply, so the ring shows for mouse users too */
+.bubble:focus {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+/* Check this chat, and the check under way */
+.check-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 16px;
+}
+
+.check-start > .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.check-start__text {
+  display: grid;
+  flex: 1 1 18rem;
+  gap: 4px;
+}
+
+.check-start__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.check-start__body {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* The judge's one call has no steps to count, so the bar only says it's working.
+   It moves with transform, not width, and stays still when motion is reduced. */
+.check-progress {
+  position: relative;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-highest);
+  overflow: hidden;
+}
+
+.check-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--md-sys-color-primary);
+  animation: check-progress 1.6s var(--md-sys-motion-easing-standard) infinite;
+}
+
+@keyframes check-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .check-progress::after {
+    animation: none;
+  }
+}
+
+/* Check results */
+.check {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.check__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.check__title {
+  margin-right: auto;
+  font: var(--type-title-large);
+  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+}
+
+.check__source {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.check__summary {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.check__notes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check__note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.check__note .icon {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.check__note--error {
+  border: 1px solid var(--md-sys-color-error);
+}
+
+.check__note--error .icon {
+  color: var(--md-sys-color-error);
+}
+
+.check__note-text {
+  flex: 1 1 16rem;
+}
+
+.check .flag-cards,
+.check .not-checked {
+  margin-top: 0;
+}
+
+/* "Also in turns 3, 4, and 6", under a rule flag */
+.flag-card__also {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
 /* Import a chat (dialog) ----------------------------------------------------- */
 
 .dialog--import {

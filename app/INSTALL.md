@@ -1,6 +1,6 @@
 # Install and run the workbench
 
-Draft for CP3, updated in milestone M2. The app serves the workbench screens from a local server. The Spec editor saves spec versions, and Run a conversation streams live chats from a model or imports saved chats. Later milestones add the AI judge and the demo steps.
+Draft for CP3, updated in milestone M3. The app serves the workbench screens from a local server. The Spec editor saves spec versions, Run a conversation streams live chats from a model or imports saved chats, and Check this chat flags breaks with automatic checks and an AI judge. Later milestones add flag review on saved checks and the demo steps.
 
 ## What you need
 
@@ -31,8 +31,9 @@ The limits live in `app/.env` too:
 
 - `WORKBENCH_CALLS_PER_MINUTE` (15) spaces model calls at least 60/15 = 4 seconds apart, under the free per-minute limit.
 - `WORKBENCH_DAILY_CALL_CAP` (200) stops model calls for the day once that many are made. The count starts over at midnight Pacific time, when Google's free quota resets.
+- `WORKBENCH_JUDGE_TIMEOUT_SECONDS` (120) is how long Check this chat waits for the AI judge's answer.
 
-Model IDs, reasoning effort, token limits, and prices live in `app/prompts/models.v1.toml`, next to the character prompt. A prompt file in use never changes: `app/prompts/manifest.toml` holds each file's hash, and the server refuses to start if one differs. To change a setting there, save the next version (like `models.v2.toml`) and point the manifest at it.
+Model IDs, reasoning effort, token limits, and prices live in the models file that `app/prompts/manifest.toml` names (now `models.v3.toml`), next to the character prompt, the judge prompt, and the judge's output schema. A prompt file in use never changes: the manifest holds each file's hash, and the server refuses to start if one differs. To change a setting there, save the next version (like `models.v4.toml`) and point the manifest at it.
 
 ## Model key
 
@@ -48,9 +49,9 @@ On the free tier, Google may read prompts and use them to improve its products, 
 
 `WORKBENCH_PROVIDER` in `app/.env` picks the service:
 
-- `gemini` (the default): needs the key above. The Model menu offers Gemini 3.1 Flash-Lite (the default) and Gemini 3.5 Flash-Lite.
-- `ollama`: a local model, `gpt-oss:20b`, with no key and no network. Install Ollama, run `ollama pull gpt-oss:20b`, and start it with a longer context than its default, for example `OLLAMA_CONTEXT_LENGTH=32768 ollama serve`. The workbench sends the whole spec on every turn, so a short context cuts the chat off.
-- `fake`: no model and no network. Every reply is "This is a fake reply. No model was called." Use it to try the screens without a key.
+- `gemini` (the default): needs the key above. The Model menu offers Gemini 3.1 Flash-Lite (the default) and Gemini 3.5 Flash-Lite. The AI judge is Gemini 3.5 Flash-Lite at medium reasoning effort.
+- `ollama`: a local model, `gpt-oss:20b`, with no key and no network. Install Ollama, run `ollama pull gpt-oss:20b`, and start it with a longer context than its default, for example `OLLAMA_CONTEXT_LENGTH=32768 ollama serve`. The workbench sends the whole spec on every turn, so a short context cuts the chat off. The same model is the judge, so its flags say "Same model reviewed."
+- `fake`: no model and no network. Every reply is "This is a fake reply. No model was called." The fake judge finds no breaks, so only the automatic checks flag anything. Use it to try the screens without a key.
 
 ## Run a conversation
 
@@ -68,6 +69,16 @@ Import a chat on Run a conversation adds a saved chat to the Chat menu:
 - **Paste or choose a file.** One message per line ("Alex: Hi."), a receipt log from `validation/transcripts/`, a markdown table with a speaker column, or a workbench chat in JSON. Preview shows how it was read before you import it. A row that can't be read is named by its number.
 - **The samples.** CLA-F2 and GPT-F2, the CP2 chats from Claude and ChatGPT.
 - **The seeded transcript.** It loads from the path in `WORKBENCH_SEEDED_TRANSCRIPT_PATH`, and only when you pick it.
+
+## Check a chat
+
+Under any chat with a finished reply, Check this chat looks for breaks:
+
+1. Automatic checks run first, with no AI: the sentence limit and the banned words in the chat's spec version, on every reply. Each rule gives one flag per chat, at the first break, and lists the other turns that broke it. A reply to a request for a story may run long.
+2. Then the AI judge reads the whole chat in one model call. Each flag has a turn, a type, the spec line it breaks, an exact quote, a confidence, and why. The judge also lists claims about the user, and any the user never made become flags, along with what the judge couldn't check.
+3. Code checks every judge flag before you see it: the line must be in the chat's spec version, and the quote must appear word for word in that reply. A flag that fails is hidden, and the results say how many and why.
+
+Persona exits, guesses near what the character can't know, and lines the spec marks always say "Needs your call." The judge's answer must match `app/prompts/judge.schema.v1.json`. If it doesn't, the judge gets one more try. If that fails too, or the service fails, only the automatic checks show, with a note. Every check is saved, so coming back to the chat shows it with no new call, until the chat changes.
 
 ## Preflight
 
@@ -97,5 +108,5 @@ app/.venv/bin/pytest tests/test_live.py --live -s
 
 ## Coming in later milestones
 
-- **The AI judge (M3).** Flags on live and imported chats, with the evidence for each.
+- **Flag review on saved checks (M4).** Agree with or override each flag from Check this chat, with your calls saved.
 - **Demo reset (M8).** A script that resets the database to a known state before a demo.

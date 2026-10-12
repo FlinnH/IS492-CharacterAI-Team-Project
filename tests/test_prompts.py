@@ -1,7 +1,10 @@
-"""M2 prompt tests: the prompt files load, match their recorded hashes, and the
-character prompt is the spec alone."""
+"""M2 and M3 prompt tests: the prompt files load and match their recorded
+hashes, the character prompt is the spec alone, and the judge's prompt,
+schema, and reasoning effort are its own."""
 
 import hashlib
+import json
+import re
 import shutil
 import tomllib
 
@@ -10,14 +13,17 @@ import pytest
 from conftest import APP_DIR
 from workbench import config
 from workbench.config import SPEC_PLACEHOLDER, load_prompts
+from workbench.schemas import JudgeOutput, inline_refs
 
 PROMPTS_DIR = APP_DIR / "prompts"
 
 
 def test_prompts_load_and_match_the_manifest():
     prompts = load_prompts()
-    # models.v2 switched the character to minimal reasoning effort; v1 stays for history.
-    assert (prompts.models_version, prompts.character_version) == ("models.v2", "character.v1")
+    # models.v2 switched the character to minimal reasoning effort, and models.v3
+    # added the judge; v1 and v2 stay for history.
+    assert (prompts.models_version, prompts.character_version) == ("models.v3", "character.v1")
+    assert (prompts.judge_version, prompts.judge_schema_version) == ("judge.v1", "judge.schema.v1")
 
     manifest = tomllib.loads((PROMPTS_DIR / "manifest.toml").read_text(encoding="utf-8"))
     for name, expected in manifest["sha256"].items():
@@ -76,3 +82,44 @@ def test_the_preflight_scenario_exists():
 
 def test_config_is_the_only_reader_of_the_prompts_folder():
     assert config.PROMPTS_DIR == PROMPTS_DIR
+
+
+def test_the_judge_schema_file_is_the_models_schema_written_out():
+    text = (PROMPTS_DIR / "judge.schema.v1.json").read_text(encoding="utf-8")
+    assert json.loads(text) == inline_refs(JudgeOutput.model_json_schema()) == load_prompts().judge_schema
+    # Gemini's structured output doesn't list $defs, so nothing points elsewhere.
+    assert "$ref" not in text and "$defs" not in text
+    assert text.isascii()
+
+
+def test_a_judge_schema_that_drifts_from_the_model_is_refused(tmp_path):
+    folder = copy_prompts(tmp_path)
+    schema = json.loads((folder / "judge.schema.v1.json").read_text(encoding="utf-8"))
+    del schema["properties"]["not_checked"]
+    changed = json.dumps(schema, indent=2) + "\n"
+    (folder / "judge.schema.v1.json").write_text(changed, encoding="utf-8")
+    manifest = (folder / "manifest.toml").read_text(encoding="utf-8")
+    old = tomllib.loads(manifest)["sha256"]["judge.schema.v1.json"]
+    new = hashlib.sha256(changed.encode("utf-8")).hexdigest()
+    (folder / "manifest.toml").write_text(manifest.replace(old, new), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="doesn't match schemas.JudgeOutput"):
+        load_prompts(folder)
+
+
+def test_the_judge_prompt_names_no_line_and_no_character():
+    # The judge reviews any character's chat against that chat's own spec.
+    text = load_prompts().judge_template
+    spec = json.loads((APP_DIR / "samples" / "spec_v1.json").read_text(encoding="utf-8"))
+    line_ids = [line["id"] for section in spec["body"]["sections"] for line in section["lines"]]
+    assert [line_id for line_id in line_ids if re.search(rf"\b{line_id}\b", text)] == []
+    assert not re.search(r"Harry|Alex|Hogwarts|Umbridge", text)
+    assert SPEC_PLACEHOLDER not in text
+
+
+def test_the_judge_has_its_own_effort_low_or_higher():
+    raw = tomllib.loads((PROMPTS_DIR / f"{load_prompts().models_version}.toml").read_text(encoding="utf-8"))
+    # Set in the judge's own section, never borrowed from a character model.
+    assert raw["judge"]["reasoning_effort"] in ("low", "medium", "high")
+    models = load_prompts().models
+    for provider in ("gemini", "ollama", "fake"):
+        assert models.models[models.judge_model(provider)].provider == provider

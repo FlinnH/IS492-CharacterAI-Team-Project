@@ -29,7 +29,7 @@ from workbench.limiter import Limiter  # noqa: E402
 from workbench.main import create_app  # noqa: E402
 from workbench.providers import FAKE_FILE, FakeProvider  # noqa: E402
 from workbench.runtime import Runtime  # noqa: E402
-from workbench.schemas import FakeSettings  # noqa: E402
+from workbench.schemas import FakeSettings, MessageView, SampleChat, SpecBody  # noqa: E402
 
 # The frozen CP2 prototype. app/static/data.js is a copy that M4 removes.
 PROTOTYPE_DATA = REPO_DIR / "prototype" / "data.js"
@@ -251,3 +251,22 @@ def scenario_lines(scenario_id):
 
 def default_model(provider="fake"):
     return load_prompts().models.character_models(provider)[0]
+
+
+def v1_body():
+    """Spec v1's body, as app/samples/spec_v1.json holds it."""
+    return SpecBody.model_validate(json.loads(specs.SAMPLE_FILE.read_text(encoding="utf-8"))["body"])
+
+
+def messages(*rows):
+    """A chat's messages from (turn, speaker, text) rows, or (turn, speaker, text, stopped)."""
+    return [
+        MessageView(seq=seq, turn=row[0], speaker=row[1], text=row[2], source="import", stopped=len(row) > 3 and row[3])
+        for seq, row in enumerate(rows, start=1)
+    ]
+
+
+def sample_messages(name):
+    """A sample chat's messages (cla-f2, gpt-f2), as an import saves them."""
+    chat = SampleChat.model_validate_json((APP_DIR / "samples" / f"{name}.json").read_text(encoding="utf-8"))
+    return messages(*((message.turn, message.speaker, message.text) for message in chat.messages))

@@ -1,0 +1,156 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "flags": {
+      "description": "Every break in the character's replies.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "turn": {
+            "description": "The turn number of the character's reply, exactly as the chat numbers it.",
+            "title": "Turn",
+            "type": "integer"
+          },
+          "type": {
+            "description": "The kind of break.",
+            "enum": [
+              "persona drift",
+              "memory loss",
+              "factual contradiction",
+              "knowledge-boundary violation",
+              "style drift",
+              "situational mismatch",
+              "persona exit",
+              "invented claim about the user"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "line_id": {
+            "description": "The ID of the one spec line the reply breaks, or the label of the spec field it breaks.",
+            "title": "Line Id",
+            "type": "string"
+          },
+          "quote": {
+            "description": "The shortest exact span of the reply that shows the break, copied word for word.",
+            "title": "Quote",
+            "type": "string"
+          },
+          "confidence": {
+            "description": "high when the spec settles it, medium when it probably breaks, low when unsure.",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "near_boundary_guess": {
+            "description": "True when the reply guesses or hints toward something the character can't know, without naming it.",
+            "title": "Near Boundary Guess",
+            "type": "boolean"
+          },
+          "needs_your_call": {
+            "description": "True when only the person who wrote the spec can settle it.",
+            "title": "Needs Your Call",
+            "type": "boolean"
+          },
+          "why": {
+            "description": "One plain sentence that says what breaks and why.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn",
+          "type",
+          "line_id",
+          "quote",
+          "confidence",
+          "near_boundary_guess",
+          "needs_your_call",
+          "why"
+        ],
+        "title": "JudgeFlag",
+        "type": "object"
+      },
+      "title": "Flags",
+      "type": "array"
+    },
+    "user_claims": {
+      "description": "Every claim the character makes about the user.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "turn": {
+            "description": "The turn of the character's reply that makes the claim.",
+            "title": "Turn",
+            "type": "integer"
+          },
+          "quote": {
+            "description": "The shortest exact span of the reply that makes the claim, copied word for word.",
+            "title": "Quote",
+            "type": "string"
+          },
+          "supported_by_turn": {
+            "description": "The turn of the user line that says it, or 0 if the user never said it before that reply.",
+            "title": "Supported By Turn",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "turn",
+          "quote",
+          "supported_by_turn"
+        ],
+        "title": "UserClaim",
+        "type": "object"
+      },
+      "title": "User Claims",
+      "type": "array"
+    },
+    "not_checked": {
+      "description": "What the spec and the chat alone can't settle.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "topic": {
+            "description": "A short name for what couldn't be checked.",
+            "title": "Topic",
+            "type": "string"
+          },
+          "turns": {
+            "description": "The turns it concerns.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Turns",
+            "type": "array"
+          },
+          "why": {
+            "description": "Why the spec and the chat can't settle it.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "turns",
+          "why"
+        ],
+        "title": "JudgeGap",
+        "type": "object"
+      },
+      "title": "Not Checked",
+      "type": "array"
+    }
+  },
+  "required": [
+    "flags",
+    "user_claims",
+    "not_checked"
+  ],
+  "title": "JudgeOutput",
+  "type": "object"
+}

@@ -183,8 +183,98 @@ def test_only_a_chats_status_changes_and_chats_are_kept(chat_conn):
 
 def test_migration_002_makes_the_chat_tables(tmp_path):
     with db.Database(tmp_path / "workbench.db").connect() as conn:
-        assert db.migrate(conn) == 2
+        assert db.migrate(conn) >= 2
         assert {"transcripts", "messages", "model_calls", "events"} <= set(table_names(conn))
-        # Later milestones add a column the same way, as M4 will for events.flag_id.
-        conn.execute("CREATE TABLE flags (id INTEGER PRIMARY KEY)")
+        # Later milestones add a column the same way, as M4 will for events.flag_id
+        # (flags itself comes in migration 003).
         conn.execute("ALTER TABLE events ADD COLUMN flag_id INTEGER REFERENCES flags (id)")
+
+
+@pytest.fixture
+def check_conn(chat_conn):
+    """The chat above, plus a judge run with a rule flag, a judge flag, a hidden flag, and a not-checked topic."""
+    chat_conn.execute(
+        "INSERT INTO judge_runs (id, transcript_id, content_key, cache_key, prompt_version, schema_version, model,"
+        " attempts, status, created_at) VALUES (1, 1, 'content', 'cache', 'judge.v1', 'judge.schema.v1', 'test-model',"
+        " 1, 'ok', '2026-10-12T00:00:00Z')"
+    )
+    flag = (
+        "INSERT INTO flags (id, transcript_id, content_key, run_id, source, turn, type, line_id, quote, confidence,"
+        " first_confidence, why, created_at) VALUES ({id}, 1, 'content', {run}, '{source}', 2, 'style drift', 'X1',"
+        " 'Hello.', 'high', 'high', 'Why.', '2026-10-12T00:00:00Z')"
+    )
+    chat_conn.execute(flag.format(id=1, run="NULL", source="rule"))
+    chat_conn.execute(flag.format(id=2, run=1, source="judge"))
+    chat_conn.execute(
+        "INSERT INTO rejected_flags (id, run_id, transcript_id, reason, raw_json, created_at)"
+        " VALUES (1, 1, 1, 'quote_not_found', '{}', '2026-10-12T00:00:00Z')"
+    )
+    chat_conn.execute(
+        "INSERT INTO not_checked (id, run_id, transcript_id, topic, why, created_at)"
+        " VALUES (1, 1, 1, 'Tone', 'Why.', '2026-10-12T00:00:00Z')"
+    )
+    return chat_conn
+
+
+def test_migration_003_makes_the_check_tables(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) == 3
+        assert {"judge_runs", "flags", "rejected_flags", "not_checked"} <= set(table_names(conn))
+
+
+@pytest.mark.parametrize("table", ["judge_runs", "rejected_flags", "not_checked"])
+@pytest.mark.parametrize("statement", ["UPDATE {table} SET id = id", "DELETE FROM {table}"], ids=["update", "delete"])
+def test_judge_runs_and_what_they_hid_are_append_only(check_conn, table, statement):
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        check_conn.execute(statement.format(table=table))
+    assert check_conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE flags SET quote = 'Changed.' WHERE id = 2",
+        "UPDATE flags SET turn = 3 WHERE id = 2",
+        "UPDATE flags SET line_id = 'X2' WHERE id = 2",
+        "UPDATE flags SET first_confidence = 'low' WHERE id = 2",
+    ],
+    ids=["quote", "turn", "line", "first-confidence"],
+)
+def test_a_flag_keeps_its_evidence(check_conn, statement):
+    with pytest.raises(sqlite3.IntegrityError, match="keeps its evidence"):
+        check_conn.execute(statement)
+
+
+def test_only_a_flags_status_and_confidence_change_and_flags_are_kept(check_conn):
+    check_conn.execute("UPDATE flags SET status = 'withdrawn', confidence = 'low' WHERE id = 2")
+    row = check_conn.execute("SELECT status, confidence, first_confidence FROM flags WHERE id = 2").fetchone()
+    assert tuple(row) == ("withdrawn", "low", "high")
+    with pytest.raises(sqlite3.IntegrityError, match="flags are kept"):
+        check_conn.execute("DELETE FROM flags")
+    with pytest.raises(sqlite3.IntegrityError, match="flags are kept"):
+        check_conn.execute(
+            "INSERT OR REPLACE INTO flags (id, transcript_id, content_key, source, turn, type, line_id, quote, confidence,"
+            " first_confidence, why, created_at) VALUES (1, 1, 'content', 'rule', 9, 'style drift', 'X1', 'Other.',"
+            " 'low', 'low', 'Why.', 'x')"
+        )
+
+
+def test_one_ok_judge_run_per_cache_key(check_conn):
+    insert = (
+        "INSERT INTO judge_runs (transcript_id, content_key, cache_key, prompt_version, schema_version, model, attempts,"
+        " status, failure, created_at) VALUES (1, 'content', 'cache', 'judge.v1', 'judge.schema.v1', 'test-model', 2,"
+        " '{status}', {failure}, '2026-10-12T00:01:00Z')"
+    )
+    # A failed run can sit beside the ok one, but a second ok run can't.
+    check_conn.execute(insert.format(status="failed", failure="'schema'"))
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
+        check_conn.execute(insert.format(status="ok", failure="NULL"))
+
+
+def test_rule_flags_have_no_run_and_judge_flags_need_one(check_conn):
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        check_conn.execute(
+            "INSERT INTO flags (transcript_id, content_key, run_id, source, turn, type, line_id, quote, confidence,"
+            " first_confidence, why, created_at) VALUES (1, 'content', NULL, 'judge', 2, 'style drift', 'X1', 'Hello.',"
+            " 'high', 'high', 'Why.', 'x')"
+        )
