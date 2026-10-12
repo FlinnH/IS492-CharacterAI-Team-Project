@@ -1,0 +1,15 @@
+# The prompt files in use and the sha256 of every prompt file.
+#
+# app/workbench/config.py refuses to start when a file's hash differs, because a
+# prompt that was used never changes. To change one, save a new version (like
+# models.v2.toml), add its hash below, and point [current] at it. Older
+# versions stay listed, so the versions in old log rows still mean one text.
+
+[current]
+models = "models.v2.toml"
+character = "character.v1.md"
+
+[sha256]
+"models.v1.toml" = "3fa18267019838d5871469e91b3567811f30ea4bedc4ecb4e150d7098428a9de"
+"models.v2.toml" = "f011f0e7e540757e42e98256c1988559ff731397b0895c0726dcc7894b6d8434"
+"character.v1.md" = "bd030364bddd23a53388ca1596e29c0f2f5f8fc4aade57f234dcaa568c7af436"

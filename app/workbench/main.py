@@ -1,21 +1,46 @@
 """HTTP entry point: the API routes, then the screens in app/static/.
 
-Routes only call services, like specs, which open their own database connections.
+Routes only call services, like specs, transcripts, and runtime, which open
+their own database connections. A live turn streams as server-sent events.
+Its checks run in a dependency, before the stream starts, so a refused turn
+gets a plain JSON error with the right status.
 """
 
+import re
+from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 
-from workbench import db, specs
-from workbench.config import Settings, load_settings
-from workbench.schemas import Character, SpecEdit, SpecView
+from workbench import db, providers, specs, transcripts
+from workbench.config import Settings, load_prompts, load_settings
+from workbench.gateway import CapReached, Gateway
+from workbench.limiter import Limiter
+from workbench.runtime import ChatBusy, ChatClosed, NoKey, RunInvalid, Runtime, Turn
+from workbench.schemas import (
+    Character,
+    ChatSummary,
+    ChatView,
+    ImportPreview,
+    ImportRequest,
+    RunOptions,
+    SampleInfo,
+    SpecEdit,
+    SpecView,
+    StartChat,
+    TypedLine,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+SESSION_HEADER = "x-workbench-session"
+SESSION_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -35,6 +60,9 @@ def error_response(status: int):
         if isinstance(error, specs.SpecInvalid):
             # The draft field to fix, so the Spec editor can move focus to it.
             content["field"] = error.field
+        if isinstance(error, transcripts.ImportInvalid):
+            # The rows to fix, so the Import dialog can list them.
+            content["problems"] = [problem.model_dump() for problem in error.problems]
         return JSONResponse(status_code=status, content=content)
 
     return handle
@@ -49,21 +77,53 @@ async def invalid_request(request: Request, error: RequestValidationError) -> JS
     )
 
 
-def create_app(settings: Settings) -> FastAPI:
-    app = FastAPI(title="Character Consistency Workbench")
-    app.state.settings = settings
+def session_of(request: Request) -> str | None:
+    """The browser tab's session ID from api.js, if it looks like one."""
+    value = request.headers.get(SESSION_HEADER, "")
+    return value if SESSION_ID.fullmatch(value) else None
 
+
+def create_app(
+    settings: Settings,
+    *,
+    provider: providers.Provider | None = None,
+    clock: Callable[[], float] | None = None,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+) -> FastAPI:
     # Startup work runs here, not in a lifespan handler, because TestClient
     # only runs lifespan inside a with block.
+    prompts = load_prompts()
     database = db.Database(settings.workbench_db_path)
     with database.connect() as conn:
         db.migrate(conn)
     specs.seed(database)
+
+    provider = provider if provider is not None else providers.build(settings)
+    limiter = Limiter(settings.workbench_calls_per_minute, settings.workbench_daily_call_cap, prompts.models.quota_timezone)
+    timing = {name: value for name, value in (("clock", clock), ("sleep", sleep)) if value is not None}
+    gateway = Gateway(database, settings, prompts, provider, limiter, **timing)
+    runtime = Runtime(database, settings, prompts, gateway, transcripts.load_scenarios())
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        yield
+        await provider.aclose()
+
+    app = FastAPI(title="Character Consistency Workbench", lifespan=lifespan)
+    app.state.settings = settings
     app.state.database = database
+    app.state.runtime = runtime
 
     app.add_exception_handler(specs.SpecNotFound, error_response(404))
+    app.add_exception_handler(transcripts.ChatNotFound, error_response(404))
     app.add_exception_handler(specs.SpecConflict, error_response(409))
+    app.add_exception_handler(ChatBusy, error_response(409))
+    app.add_exception_handler(ChatClosed, error_response(409))
     app.add_exception_handler(specs.SpecInvalid, error_response(422))
+    app.add_exception_handler(RunInvalid, error_response(422))
+    app.add_exception_handler(transcripts.ImportInvalid, error_response(422))
+    app.add_exception_handler(CapReached, error_response(429))
+    app.add_exception_handler(NoKey, error_response(503))
     app.add_exception_handler(RequestValidationError, invalid_request)
 
     @app.get("/api/health")
@@ -91,6 +151,75 @@ def create_app(settings: Settings) -> FastAPI:
     @app.post("/api/characters/{slug}/specs", response_model=SpecView, status_code=201)
     def save_spec(slug: str, edit: SpecEdit) -> SpecView:
         return specs.save_edit(database, slug, edit)
+
+    # Run a conversation. The chat routes are async, so the runtime's turn state
+    # is only ever touched on the event loop.
+
+    @app.get("/api/run-options", response_model=RunOptions)
+    async def run_options() -> RunOptions:
+        return runtime.run_options()
+
+    @app.get("/api/chats", response_model=list[ChatSummary])
+    async def chats() -> list[ChatSummary]:
+        return runtime.list_chats()
+
+    @app.post("/api/chats", response_model=ChatView, status_code=201)
+    async def start_chat(start: StartChat, request: Request) -> ChatView:
+        return runtime.start(character=start.character, scenario_id=start.scenario, model_id=start.model, session=session_of(request))
+
+    @app.get("/api/chats/{chat_id}", response_model=ChatView)
+    async def chat(chat_id: int) -> ChatView:
+        return runtime.get_chat(chat_id)
+
+    async def next_turn(chat_id: int, request: Request) -> AsyncIterator[Turn]:
+        turn = runtime.begin(chat_id, typed=None, session=session_of(request))
+        try:
+            yield turn
+        finally:
+            # Saves and logs a reply that a closed tab cut off. Does nothing after a normal end.
+            await turn.finish()
+
+    async def typed_turn(chat_id: int, line: TypedLine, request: Request) -> AsyncIterator[Turn]:
+        turn = runtime.begin(chat_id, typed=line.text, session=session_of(request))
+        try:
+            yield turn
+        finally:
+            await turn.finish()
+
+    async def stream(turn: Turn) -> AsyncIterator[ServerSentEvent]:
+        async for name, payload in turn.events():
+            yield ServerSentEvent(event=name, data=payload)
+
+    @app.post("/api/chats/{chat_id}/next", response_class=EventSourceResponse)
+    async def chat_next(turn: Annotated[Turn, Depends(next_turn)]) -> AsyncIterable[ServerSentEvent]:
+        async for event in stream(turn):
+            yield event
+
+    @app.post("/api/chats/{chat_id}/messages", response_class=EventSourceResponse)
+    async def chat_message(turn: Annotated[Turn, Depends(typed_turn)]) -> AsyncIterable[ServerSentEvent]:
+        async for event in stream(turn):
+            yield event
+
+    @app.post("/api/chats/{chat_id}/stop", response_model=ChatSummary)
+    async def stop_chat(chat_id: int, request: Request) -> ChatSummary:
+        return runtime.stop(chat_id, session_of(request))
+
+    # Import.
+
+    @app.get("/api/samples", response_model=list[SampleInfo])
+    def samples() -> list[SampleInfo]:
+        return transcripts.list_samples(settings)
+
+    @app.post("/api/imports/preview", response_model=ImportPreview)
+    def import_preview(body: ImportRequest) -> ImportPreview:
+        return transcripts.preview(database, settings, body)
+
+    @app.post("/api/imports", response_model=ChatView, status_code=201)
+    async def import_chat(body: ImportRequest, request: Request, response: Response) -> ChatView:
+        chat_id, created = transcripts.import_chat(database, settings, body, session_of(request))
+        if not created:
+            response.status_code = 200
+        return runtime.get_chat(chat_id)
 
     # Mounted last, so the API routes above win over file paths.
     app.mount("/", NoCacheStaticFiles(directory=STATIC_DIR, html=True), name="static")

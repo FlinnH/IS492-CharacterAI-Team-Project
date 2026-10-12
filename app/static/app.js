@@ -1,11 +1,12 @@
 /*
   Character Consistency Workbench: CP3 app, first copied from the CP2 prototype
 
-  A plain script (no modules, no build step). The Spec editor loads and saves
-  spec versions through the workbench server, by way of api.js. The other
-  screens still read the CP2 chats from data.js (window.WORKBENCH_DATA), and
-  the calls the creator makes there live in memory until M4, so "Reset demo"
-  or reloading the page starts those over.
+  A plain script (no modules, no build step). The Spec editor and Run a
+  conversation talk to the workbench server, by way of api.js: specs, live
+  chats, and imported chats are saved there. Flag review and Compare runs
+  still read the CP2 chats from data.js (window.WORKBENCH_DATA), and the calls
+  the creator makes there live in memory until M4, so "Reset demo" or
+  reloading the page starts those over.
 
   Sections:
     1. Data and state
@@ -31,12 +32,6 @@
   // Frozen, so no screen can change the original by accident. Screens read
   // and change `state`, which is a copy; "Reset demo" makes a fresh one.
   const DATA = deepFreeze(window.WORKBENCH_DATA);
-
-  // Run a conversation: the scenarios that run a chat, and the tools in the
-  // prompting study. Each tool ran each scenario once; the prototype holds the
-  // F2 chats only. T2 isn't listed: it tests the reviewer, not the character.
-  const SCENARIO_IDS = ["T1", "E1", "E2", "F1", "F2"];
-  const TOOLS = ["ChatGPT", "Claude", "Gemini"];
 
   let state = createInitialState();
 
@@ -65,11 +60,23 @@
       specQuery: "",
       // Set by "Go to flag" on the Spec editor; Flag review opens at this flag.
       openFlagId: null,
-      // The chat that Run a conversation plays and Flag review shows, and how
-      // far its playback has got. The Tool dropdown picks it, and its
-      // scenario sets the Scenario dropdown.
+      // The data.js chat that Flag review and Compare runs show.
       runId: DATA.runs[0].id,
-      playback: { status: "idle", shown: 0 },
+      // Run a conversation: the saved chats (live runs and imports) from the
+      // server, the one on screen, and the next run's scenario and model.
+      chats: [],
+      chatsLoad: { status: "loading", message: "" },
+      chatId: null,
+      chat: null,
+      runSetup: { scenarioId: null, modelId: null },
+      runStarting: false,
+      // The run streaming now: { chatId, phase ("waiting", "writing", or
+      // "stopping"), turn, text so far, waitSeconds, scripted, stopRequested }.
+      live: null,
+      // The last turn that failed: { chatId, message, retry }.
+      runError: null,
+      // The message being typed, per chat ID.
+      drafts: {},
       // Flag review. Every map is keyed by flag ID unless noted.
       // decisions: { verdict: "agreed" } or { verdict: "overridden", reason }
       decisions: {},
@@ -194,6 +201,20 @@
         <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[level]}</span>
         <span>${escapeHtml(level)} confidence</span>
       </span>`;
+  }
+
+  // A native <select> dressed as an M3 outlined field. support is the quiet
+  // line under it; tooltip shows on hover or focus and is read out as a
+  // description too.
+  function selectField(id, label, options, { support = "", tooltip = "" } = {}) {
+    const describedBy = [support && `${id}-help`, tooltip && `${id}-meaning`].filter(Boolean).join(" ");
+    return `
+      <div class="text-field text-field--select">
+        <select class="text-field__input" id="${id}" data-focus-key="${id}"${describedBy ? ` aria-describedby="${describedBy}"` : ""}${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}" data-tooltip-place="above"` : ""}>${options}</select>
+        <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
+        ${support ? `<p class="text-field__support" id="${id}-help">${escapeHtml(support)}</p>` : ""}
+        ${tooltip ? `<span class="visually-hidden" id="${id}-meaning">${escapeHtml(tooltip)}</span>` : ""}
+      </div>`;
   }
 
   // 3. Screens =============================================================
@@ -568,7 +589,7 @@
 
   actions["go-to-flag"] = (button) => {
     const target = findFlag(button.dataset.flag);
-    if (target && target.run.id !== state.runId) changeRunSetup({ runId: target.run.id });
+    if (target) selectDataRun(target.run.id);
     state.openFlagId = button.dataset.flag;
     citingSheet.close();
     goToScreen("diagnose");
@@ -928,243 +949,1023 @@
   };
 
   // 3.2 Run a conversation (Stress-test) ------------------------------------
-  // The Tool dropdown picks one real chat of the scenario, and Start run plays
-  // it one message at a time, the way a live conversation arrives, with the
-  // turn count and a way to skip ahead (DESIGN_SPEC section 4). Playback keeps
-  // going if you switch screens. Picking another chat stops it.
+  // Start run makes a live chat on the server, pinned to the latest spec
+  // version, then plays the scenario's script one turn at a time. Each reply
+  // streams in as the model writes it. Stop ends the reply and the script, and
+  // then, like after the last scripted line, the message box takes the
+  // creator's own lines. Import adds a saved chat (pasted, a sample, or the
+  // seeded transcript) to the same Chat list. While a reply streams, the
+  // screen changes in place, so focus and scrolling stay where the creator
+  // left them, and no other screen is redrawn by it.
 
-  const PLAYBACK_STEP_MS = 500;
-  let playbackTimer = 0;
+  // Loaded from the server and kept outside `state`, so Reset demo reloads them.
+  let runOptions = null;
+  let runOptionsLoad = { status: "loading", message: "" };
+  let samples = [];
+  // Counts runs and chat loads, so a reply that belongs to an older one changes nothing.
+  let runTicket = 0;
+  let chatRequest = 0;
+  // The reply streaming now, as { chatId, controller }, so Stop and Reset can end it.
+  let runStream = null;
+  // The chat on screen, kept per tab, so a reload comes back to it.
+  const CHAT_KEY = "workbench-chat";
 
-  function selectedRun() {
-    return state.runs.find((run) => run.id === state.runId) || state.runs[0];
+  function rememberChat(id) {
+    try {
+      sessionStorage.setItem(CHAT_KEY, String(id));
+    } catch {
+      // Storage can be off; the newest chat shows instead.
+    }
   }
 
-  // Picking another chat starts over, so the chat area clears.
-  function changeRunSetup(change) {
-    stopPlayback();
-    Object.assign(state, change);
-    state.playback = { status: "idle", shown: 0 };
+  function rememberedChat() {
+    try {
+      return Number(sessionStorage.getItem(CHAT_KEY)) || null;
+    } catch {
+      return null;
+    }
   }
 
-  function stopPlayback() {
-    clearTimeout(playbackTimer);
+  // "4 seconds", "1 second". Rounded to whole seconds, at least 1.
+  function secondsText(value) {
+    const whole = Math.max(1, Math.round(value));
+    return `${whole} ${whole === 1 ? "second" : "seconds"}`;
   }
 
-  // Everything the chat shows for one run, in order: the spec loading at
-  // turn 1, then for each turn the script's line and the character's reply.
-  function chatItems(scenario, run) {
-    const items = [{ kind: "system", turn: 1, text: `Turn 1: character spec ${run.specVersion} loaded` }];
-    scenario.userLines.forEach((line) => {
-      items.push({ kind: "user", turn: line.turn, text: line.text });
-      const reply = run.replies.find((candidate) => candidate.turn === line.turn);
-      if (reply) items.push({ kind: "character", turn: reply.turn, text: reply.text });
-    });
-    return items;
+  function chatTime(iso) {
+    return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
   }
 
-  function breaksText(count) {
-    if (count === 0) return "no possible breaks";
-    return count === 1 ? "1 possible break" : `${count} possible breaks`;
+  // How the Chat menu names a chat: a live run by its scenario and model, an
+  // imported chat by its tool and receipt, like "Claude (CLA-F2)".
+  function chatLabel(chat) {
+    if (chat.kind === "live") return `${chat.scenario} live run, ${chat.model}, ${chatTime(chat.created_at)}`;
+    return `${chat.title}, imported`;
   }
 
-  // Where the chat came from, as its block records it, for example
-  // "Saved 2026-10-01 (Incognito). Model shown: Sonnet 5.5."
-  function sourceText(run) {
-    const { date, mode, model, note } = run.source;
-    return [`Saved ${date} (${mode}).`, model ? `Model shown: ${model}.` : "", note].filter(Boolean).join(" ");
+  // Chats number their messages by turn, or by line when the source did.
+  function numberWord(chat) {
+    return chat.numbering === "line" ? "Line" : "Turn";
+  }
+
+  function modelLabel(id) {
+    const model = runOptions && runOptions.models.find((item) => item.id === id);
+    return model ? model.label : id;
+  }
+
+  function isLive(chatId) {
+    return Boolean(state.live && state.live.chatId === chatId);
+  }
+
+  // The last line is still waiting for a reply, after a turn that failed.
+  function pendingLine(chat) {
+    const last = chat.messages[chat.messages.length - 1];
+    return Boolean(last && last.speaker === "user");
+  }
+
+  function canContinue(chat) {
+    return chat.kind === "live" && chat.status === "active" && !isLive(chat.id) && (chat.script_left > 0 || pendingLine(chat));
+  }
+
+  function canType(chat) {
+    return chat.kind === "live" && (chat.status === "script_done" || chat.status === "stopped") && !isLive(chat.id);
+  }
+
+  // Why Start run can't start now, or "" when it can.
+  function startBlockedReason() {
+    if (!runOptions.key_set) return "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh.";
+    if (runOptions.used_today >= runOptions.daily_cap) {
+      return `Today's ${runOptions.daily_cap} model calls are used up. The count starts over at midnight Pacific time.`;
+    }
+    return "";
+  }
+
+  function waitText(seconds) {
+    return `Waiting ${secondsText(seconds)} so calls stay under ${runOptions.calls_per_minute} a minute.`;
+  }
+
+  function progressText(chat, live) {
+    if (!live.turn) return "Starting the next turn";
+    return live.scripted && chat.script_last_turn ? `Turn ${live.turn} of ${chat.script_last_turn}` : `Turn ${live.turn}`;
+  }
+
+  function liveLabel(live) {
+    if (live.phase === "stopping") return "Stopping";
+    return live.phase === "writing" ? "Writing" : "Waiting";
+  }
+
+  // Where the chat came from. Live runs say when and with which model;
+  // imported chats repeat what their receipt recorded.
+  function sourceText(chat) {
+    if (chat.kind === "live") {
+      return `Started ${chatTime(chat.created_at)} with ${modelLabel(chat.model)}. It keeps spec ${specLabel(chat.spec_version)}, even after you save a newer version.`;
+    }
+    const { date, mode, model, note } = chat.source;
+    const saved = date ? `Saved ${date}${mode ? ` (${mode})` : ""}.` : `Imported ${chatTime(chat.created_at)}.`;
+    return [saved, model ? `Model shown: ${model}.` : "", note].filter(Boolean).join(" ");
+  }
+
+  // Keeps the Chat menu's entry for a chat in step with its latest view.
+  function updateChatSummary(view) {
+    const { source, messages, ...summary } = view;
+    const index = state.chats.findIndex((chat) => chat.id === view.id);
+    if (index === -1) state.chats.unshift(summary);
+    else state.chats[index] = summary;
+  }
+
+  async function loadRunOptions() {
+    try {
+      runOptions = await WorkbenchApi.runOptions();
+      runOptionsLoad = { status: "ready", message: "" };
+      const setup = state.runSetup;
+      // F2, the demo's scenario, is last in the list.
+      if (!runOptions.scenarios.some((scenario) => scenario.id === setup.scenarioId)) {
+        setup.scenarioId = runOptions.scenarios[runOptions.scenarios.length - 1].id;
+      }
+      if (!runOptions.models.some((model) => model.id === setup.modelId)) setup.modelId = runOptions.default_model;
+    } catch (error) {
+      runOptionsLoad = { status: "failed", message: error.message };
+    }
+    refreshRun();
+  }
+
+  async function loadSamples() {
+    try {
+      samples = await WorkbenchApi.listSamples();
+    } catch {
+      samples = [];
+    }
+  }
+
+  // Loads the Chat menu, then one chat: select if given, else the one on
+  // screen, else the one this tab showed last, else an unfinished live run,
+  // else the newest.
+  async function loadChats({ select = null, focusKey = null } = {}) {
+    const ticket = ++chatRequest;
+    try {
+      const chats = await WorkbenchApi.listChats();
+      if (ticket !== chatRequest) return;
+      state.chats = chats;
+      state.chatsLoad = { status: "ready", message: "" };
+      const known = (id) => id && chats.some((chat) => chat.id === id);
+      const unfinished = chats.find((chat) => chat.kind === "live" && chat.status === "active");
+      const id = [select, state.chatId, rememberedChat()].find(known) || (unfinished || chats[0] || {}).id;
+      if (id) {
+        await loadChat(id, { focusKey });
+      } else {
+        state.chatId = null;
+        state.chat = null;
+        refreshRun({ focusKey });
+      }
+    } catch (error) {
+      if (ticket !== chatRequest) return;
+      state.chatsLoad = { status: "failed", message: error.message };
+      refreshRun({ focusKey });
+    }
+  }
+
+  async function loadChat(id, { focusKey = null } = {}) {
+    const ticket = ++chatRequest;
+    try {
+      const chat = await WorkbenchApi.getChat(id);
+      if (ticket !== chatRequest) return false;
+      state.chatId = chat.id;
+      state.chat = chat;
+      rememberChat(chat.id);
+      updateChatSummary(chat);
+      refreshRun({ focusKey });
+      return true;
+    } catch (error) {
+      if (ticket !== chatRequest) return false;
+      showSnackbar(`That chat didn't load. ${error.message}`);
+      return false;
+    }
+  }
+
+  // Redraws Run a conversation only while it's on screen. Otherwise the
+  // change waits in `state`, and coming back to the screen draws it.
+  function refreshRun(options) {
+    if (currentScreen === "run") refresh(options);
+  }
+
+  // The Run screen's body, or null while another screen shows.
+  function runBody() {
+    return currentScreen === "run" ? panelFor("run").querySelector("[data-screen-body]") : null;
+  }
+
+  function chip(icon, text) {
+    return `
+      <span class="chip chip--icon-leading">
+        <span class="icon" aria-hidden="true">${icon}</span>
+        <span>${escapeHtml(text)}</span>
+      </span>`;
   }
 
   function renderRun(body) {
-    const run = selectedRun();
-    const items = chatItems(state.scenario, run);
+    if (runOptionsLoad.status === "loading") {
+      body.innerHTML = '<p class="spec-status">Loading the run setup.</p>';
+      return null;
+    }
+    if (runOptionsLoad.status === "failed") {
+      body.innerHTML = `
+        <div class="card card--outlined spec-empty">
+          <p>The run setup didn't load. ${escapeHtml(runOptionsLoad.message)}</p>
+          <button type="button" class="btn btn--filled" data-action="retry-run-options" data-focus-key="retry-run-options">Try again</button>
+        </div>`;
+      return null;
+    }
 
-    // The Scenario dropdown shows this chat's scenario. Scenarios with no chat
-    // in the prototype can't be picked.
-    const scenarioOptions = SCENARIO_IDS.map((id) => {
-      const hasChats = state.runs.some((chat) => chat.scenarioId === id);
-      const label = id === state.scenario.id ? state.scenario.name : `${id} (not in this prototype)`;
-      return `<option value="${id}"${hasChats ? "" : " disabled"}${id === run.scenarioId ? " selected" : ""}>${escapeHtml(label)}</option>`;
-    }).join("");
-    // The Tool dropdown picks the chat. A tool without a chat of this
-    // scenario says so and can't be picked.
-    const toolOptions = TOOLS.map((tool) => {
-      const chat = state.runs.find((candidate) => candidate.tool === tool && candidate.scenarioId === run.scenarioId);
-      if (!chat) return `<option value="" disabled>${escapeHtml(tool)} (no chat yet)</option>`;
-      return `<option value="${escapeHtml(chat.id)}"${chat.id === run.id ? " selected" : ""}>${escapeHtml(tool)}</option>`;
-    }).join("");
-
+    const chat = state.chat;
     body.innerHTML = `
       <div class="run-screen">
-        <div class="run-setup">
-          ${selectField("run-scenario", "Scenario", scenarioOptions, {
-            support: "T2 tests the reviewer, not the character, so it isn't a run.",
-            tooltip: scenarioTip(run.scenarioId),
-          })}
-          ${selectField("run-tool", "Tool", toolOptions, {
-            support: "Each tool ran this scenario once. Pick one to play its chat.",
-          })}
-          <button type="button" class="btn btn--filled btn--icon-leading" data-action="start-run" data-focus-key="start-run">
+        ${renderRunSetup()}
+        ${state.chats.length ? renderChatPicker() : ""}
+        ${chat ? renderTranscript(chat) : renderNoChat()}
+        ${chat ? renderRunAfter(chat) : ""}
+      </div>`;
+
+    body.querySelector("#run-scenario").addEventListener("change", (event) => {
+      state.runSetup.scenarioId = event.target.value;
+      // Only the tooltip changes, so nothing else redraws mid-run.
+      const tip = scenarioTip(event.target.value);
+      event.target.dataset.tooltip = tip;
+      body.querySelector("#run-scenario-meaning").textContent = tip;
+    });
+    body.querySelector("#run-model").addEventListener("change", (event) => {
+      state.runSetup.modelId = event.target.value;
+    });
+    const picker = body.querySelector("#run-chat");
+    if (picker) {
+      picker.addEventListener("change", (event) => {
+        if (state.live) {
+          event.target.value = String(state.chatId);
+          announce("Stop the run to switch chats.");
+          return;
+        }
+        state.runError = null;
+        loadChat(Number(event.target.value), { focusKey: "run-chat" });
+      });
+    }
+    const message = chat ? body.querySelector("#run-message") : null;
+    if (message) {
+      message.addEventListener("input", () => {
+        state.drafts[chat.id] = message.value;
+        body.querySelector('[data-action="send-message"]').setAttribute("aria-disabled", String(!message.value.trim()));
+      });
+      message.addEventListener("keydown", (event) => {
+        // Enter sends; Shift+Enter starts a new line. Enter that confirms
+        // an input method's text (as in Japanese or Chinese) never sends.
+        if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+        event.preventDefault();
+        actions["send-message"]();
+      });
+    }
+
+    const messages = body.querySelector(".chat");
+    if (messages) messages.scrollTop = messages.scrollHeight;
+    return null;
+  }
+
+  function renderRunSetup() {
+    const setup = state.runSetup;
+    const scenarioOptions = runOptions.scenarios
+      .map((scenario) => `<option value="${escapeHtml(scenario.id)}"${scenario.id === setup.scenarioId ? " selected" : ""}>${escapeHtml(scenario.name)}</option>`)
+      .join("");
+    const modelOptions = runOptions.models
+      .map((model) => {
+        const label = model.id === runOptions.default_model ? `${model.label} (default)` : model.label;
+        return `<option value="${escapeHtml(model.id)}"${model.id === setup.modelId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
+    const blocked = startBlockedReason();
+    const support = blocked ||
+      `Calls start at least ${secondsText(60 / runOptions.calls_per_minute)} apart. ${runOptions.used_today} of ${runOptions.daily_cap} calls used today.`;
+    const busy = Boolean(state.live || state.runStarting);
+    return `
+      <div class="run-setup">
+        ${selectField("run-scenario", "Scenario", scenarioOptions, {
+          support: "T2 tests the reviewer, not the character, so it isn't a run.",
+          tooltip: scenarioTip(setup.scenarioId),
+        })}
+        ${selectField("run-model", "Model", modelOptions, { support })}
+        <div class="run-setup__actions">
+          <button type="button" class="btn btn--filled btn--icon-leading" data-action="start-run" data-focus-key="start-run"
+            aria-disabled="${Boolean(blocked) || busy}"${blocked ? ' aria-describedby="run-model-help"' : ""}>
             <span class="icon" aria-hidden="true">play_arrow</span>
             <span>Start run</span>
           </button>
+          <button type="button" class="btn btn--outlined btn--icon-leading" data-action="open-import" data-focus-key="open-import"
+            aria-haspopup="dialog" aria-disabled="${busy}">
+            <span class="icon" aria-hidden="true">upload_file</span>
+            <span>Import a chat</span>
+          </button>
         </div>
-
-        <section class="card card--outlined transcript" aria-labelledby="transcript-title">
-          <div class="transcript__header">
-            <h2 class="transcript__title" id="transcript-title">Transcript</h2>
-            <span class="chip chip--icon-leading">
-              <span class="icon" aria-hidden="true">receipt_long</span>
-              <span>Receipt ${escapeHtml(run.receipt)}</span>
-            </span>
-            <span class="chip chip--icon-leading">
-              <span class="icon" aria-hidden="true">description</span>
-              <span>Spec ${escapeHtml(run.specVersion)}</span>
-            </span>
-          </div>
-          <p class="transcript__source">${escapeHtml(sourceText(run))}</p>
-          <div class="run-progress" hidden>
-            <p class="run-progress__label" id="run-progress-label"></p>
-            <progress class="linear-progress" aria-labelledby="run-progress-label"></progress>
-            <button type="button" class="btn btn--text" data-action="skip-run" data-focus-key="skip-run">Skip to end</button>
-          </div>
-          <div class="chat" tabindex="0" role="region" aria-label="Messages">
-            ${state.playback.shown === 0
-              ? `<p class="chat__empty">Press Start run to play ${escapeHtml(run.receipt)} turn by turn.</p>`
-              : ""}
-            <ol class="chat__list">${items.slice(0, state.playback.shown).map(renderChatItem).join("")}</ol>
-          </div>
-        </section>
-
-        <div class="run-result" role="status"></div>
       </div>`;
-
-    body.querySelector("#run-tool").addEventListener("change", (event) => {
-      changeRunSetup({ runId: event.target.value });
-      refresh();
-    });
-
-    const chat = body.querySelector(".chat");
-    chat.scrollTop = chat.scrollHeight;
-    renderRunStatus(body);
   }
 
-  // A native <select> dressed as an M3 outlined field. support is the quiet
-  // line under it; tooltip shows on hover or focus and is read out as a
-  // description too.
-  function selectField(id, label, options, { support = "", tooltip = "" } = {}) {
-    const describedBy = [support && `${id}-help`, tooltip && `${id}-meaning`].filter(Boolean).join(" ");
+  function renderChatPicker() {
+    const options = state.chats
+      .map((chat) => `<option value="${chat.id}"${chat.id === state.chatId ? " selected" : ""}>${escapeHtml(chatLabel(chat))}</option>`)
+      .join("");
     return `
-      <div class="text-field text-field--select">
-        <select class="text-field__input" id="${id}" data-focus-key="${id}"${describedBy ? ` aria-describedby="${describedBy}"` : ""}${tooltip ? ` data-tooltip="${escapeHtml(tooltip)}" data-tooltip-place="above"` : ""}>${options}</select>
-        <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
-        ${support ? `<p class="text-field__support" id="${id}-help">${escapeHtml(support)}</p>` : ""}
-        ${tooltip ? `<span class="visually-hidden" id="${id}-meaning">${escapeHtml(tooltip)}</span>` : ""}
+      <div class="run-chats">
+        ${selectField("run-chat", "Chat", options, {
+          support: "Live runs and imported chats, newest first. Each keeps the spec version it used.",
+        })}
       </div>`;
   }
 
-  function renderChatItem(item) {
-    if (item.kind === "system") {
-      return `
+  function renderNoChat() {
+    const text = state.chatsLoad.status === "failed"
+      ? `The saved chats didn't load. ${state.chatsLoad.message}`
+      : "No chats yet. Pick a scenario and a model, then press Start run. Or import a saved chat.";
+    return `
+      <section class="card card--outlined transcript" aria-label="Transcript">
+        <div class="chat"><p class="chat__empty">${escapeHtml(text)}</p></div>
+      </section>`;
+  }
+
+  function renderTranscript(chat) {
+    const live = isLive(chat.id) ? state.live : null;
+    const items = [];
+    // Turn 1 of every scripted chat is the spec itself.
+    if (chat.numbering === "turn" && (chat.kind === "live" || chat.scenario)) {
+      items.push(`
         <li class="chat__system">
           <span class="icon" aria-hidden="true">description</span>
-          <span>${escapeHtml(item.text)}</span>
-        </li>`;
+          <span>Turn 1: character spec ${escapeHtml(specLabel(chat.spec_version))} loaded</span>
+        </li>`);
     }
-    const speaker = item.kind === "user" ? state.scenario.userName : state.scenario.characterName;
+    chat.messages.forEach((message) => items.push(renderBubble(chat, message)));
+    if (live && live.turn) items.push(renderLiveBubble(chat, live));
+
     return `
-      <li class="bubble bubble--${item.kind}">
+      <section class="card card--outlined transcript" aria-labelledby="transcript-title">
+        <div class="transcript__header">
+          <h2 class="transcript__title" id="transcript-title">Transcript</h2>
+          ${chat.kind === "live" ? chip("bolt", "Live run") : chip("upload_file", "Imported")}
+          ${chat.receipt ? chip("receipt_long", `Receipt ${chat.receipt}`) : ""}
+          ${chip("description", `Spec ${specLabel(chat.spec_version)}`)}
+          ${chat.model ? chip("smart_toy", chat.model) : ""}
+        </div>
+        <p class="transcript__source">${escapeHtml(sourceText(chat))}</p>
+        ${live ? renderRunProgress(chat, live) : ""}
+        <div class="chat" tabindex="0" role="region" aria-label="Messages" data-focus-key="run-messages">
+          ${items.length ? "" : '<p class="chat__empty">No messages yet.</p>'}
+          <ol class="chat__list">${items.join("")}</ol>
+        </div>
+      </section>`;
+  }
+
+  function renderBubble(chat, message) {
+    const name = message.speaker === "user" ? chat.user_name : chat.character_name;
+    const stopped = message.stopped
+      ? `<span class="bubble__status"><span class="icon" aria-hidden="true">stop_circle</span><span>Stopped</span></span>`
+      : "";
+    return `
+      <li class="bubble bubble--${message.speaker === "user" ? "user" : "character"}" data-seq="${message.seq}">
         <p class="bubble__meta">
-          <span class="bubble__speaker">${escapeHtml(speaker)}</span>
-          <span class="bubble__turn">Turn ${item.turn}<span class="visually-hidden">:</span></span>
+          <span class="bubble__speaker">${escapeHtml(name)}</span>
+          <span class="bubble__turn">${numberWord(chat)} ${message.turn}<span class="visually-hidden">:</span></span>
+          ${stopped}
         </p>
-        <p class="bubble__text keep-lines">${escapeHtml(item.text)}</p>
+        <p class="bubble__text keep-lines">${escapeHtml(message.text)}</p>
       </li>`;
   }
 
-  // Updates what changes while a run plays: the turn count, the Start and
-  // Skip buttons, and the result card at the end.
-  function renderRunStatus(body) {
-    const { status, shown } = state.playback;
-    const run = selectedRun();
-    const items = chatItems(state.scenario, run);
-    const totalTurns = items[items.length - 1].turn;
-    const turn = shown > 0 ? items[shown - 1].turn : 0;
+  // The reply being written. Its text changes in place on every delta; screen
+  // readers hear the whole reply once it's done, not each piece.
+  function renderLiveBubble(chat, live) {
+    return `
+      <li class="bubble bubble--character bubble--live" data-live-bubble aria-busy="true">
+        <p class="bubble__meta">
+          <span class="bubble__speaker">${escapeHtml(chat.character_name)}</span>
+          <span class="bubble__turn">Turn ${live.turn}<span class="visually-hidden">:</span></span>
+          <span class="bubble__status" data-live-status><span class="icon" aria-hidden="true">edit</span><span>${liveLabel(live)}</span></span>
+        </p>
+        <p class="bubble__text keep-lines" data-live-text>${escapeHtml(live.text)}</p>
+      </li>`;
+  }
 
-    const progress = body.querySelector(".run-progress");
-    const skipHadFocus = document.activeElement === progress.querySelector('[data-action="skip-run"]');
-    progress.hidden = status !== "playing";
-    progress.querySelector(".run-progress__label").textContent = `Turn ${turn} of ${totalTurns}`;
-    const bar = progress.querySelector("progress");
-    bar.max = totalTurns;
-    bar.value = turn;
+  // "Turn 5 of 11", the bar, Stop, and the wait notice, for the whole run.
+  function renderRunProgress(chat, live) {
+    const scripted = live.scripted && chat.script_last_turn;
+    const stopping = live.phase === "stopping";
+    const waiting = live.phase === "waiting" && live.waitSeconds > 0;
+    return `
+      <div class="run-progress">
+        <p class="run-progress__label" id="run-progress-label" data-run-progress>${escapeHtml(progressText(chat, live))}</p>
+        ${scripted
+          ? `<progress class="linear-progress" max="${chat.script_last_turn}" value="${live.turn || 1}" aria-labelledby="run-progress-label" data-run-bar></progress>`
+          : ""}
+        <button type="button" class="btn btn--text btn--icon-leading" data-action="stop-run" data-focus-key="stop-run" aria-disabled="${stopping}">
+          <span class="icon" aria-hidden="true">stop_circle</span>
+          <span>${stopping ? "Stopping" : "Stop"}</span>
+        </button>
+      </div>
+      <p class="run-wait" data-run-wait${waiting ? "" : " hidden"}>${waiting ? escapeHtml(waitText(live.waitSeconds)) : ""}</p>`;
+  }
 
-    body.querySelector('[data-action="start-run"]').disabled = status === "playing";
-
-    // The result goes into a live region, so screen readers hear it once.
-    const result = body.querySelector(".run-result");
-    if (status !== "done") {
-      result.innerHTML = "";
-    } else if (!result.firstElementChild) {
-      result.innerHTML = `
+  // Below the transcript: what went wrong, what happens next, and the message box.
+  function renderRunAfter(chat) {
+    if (isLive(chat.id)) return "";
+    const parts = [];
+    const error = state.runError && state.runError.chatId === chat.id ? state.runError : null;
+    if (error) {
+      parts.push(`
+        <div class="card card--outlined run-error">
+          <span class="icon" aria-hidden="true">error</span>
+          <p class="run-error__text">${escapeHtml(error.message)}</p>
+          ${error.retry && canContinue(chat)
+            ? '<button type="button" class="btn btn--filled" data-action="retry-turn" data-focus-key="retry-turn">Try again</button>'
+            : ""}
+        </div>`);
+    } else if (chat.kind !== "live") {
+      const reviewable = chat.kind === "sample" && state.runs.some((run) => run.id === chat.sample);
+      parts.push(`
+        <div class="card card--filled run-result__card">
+          <span class="icon" aria-hidden="true">upload_file</span>
+          <p class="run-result__text">Imported chat, pinned to spec ${escapeHtml(specLabel(chat.spec_version))}. Imported chats are read-only.</p>
+          ${reviewable
+            ? `<button type="button" class="btn btn--filled" data-action="review-flags" data-run="${escapeHtml(chat.sample)}" data-focus-key="review-flags">Review flags</button>`
+            : ""}
+        </div>`);
+    } else if (chat.status === "script_done" || chat.status === "stopped") {
+      const ended = chat.status === "stopped" ? "Run stopped. The script won't go on in this chat." : "Script finished.";
+      parts.push(`
         <div class="card card--filled run-result__card">
           <span class="icon" aria-hidden="true">task_alt</span>
-          <p class="run-result__text">Run complete. The workbench found ${breaksText(run.flags.length)}.</p>
-          <button type="button" class="btn btn--filled" data-action="review-flags" data-focus-key="review-flags">Review flags</button>
-        </div>`;
-      // Skip to end just disappeared, so its focus moves to the next step.
-      if (skipHadFocus) result.querySelector('[data-action="review-flags"]').focus();
+          <p class="run-result__text">${ended} Type your own next message below, or start a new run.</p>
+        </div>`);
+    }
+    if (canContinue(chat) && !error) {
+      const left = chat.script_left;
+      const text = pendingLine(chat)
+        ? "The last line is still waiting for a reply."
+        : `${left} scripted ${left === 1 ? "line is" : "lines are"} left.`;
+      parts.push(`
+        <div class="run-continue">
+          <button type="button" class="btn btn--filled btn--icon-leading" data-action="continue-run" data-focus-key="continue-run">
+            <span class="icon" aria-hidden="true">play_arrow</span>
+            <span>Continue run</span>
+          </button>
+          <p class="run-continue__text">${escapeHtml(text)}</p>
+        </div>`);
+    }
+    if (canType(chat)) parts.push(renderMessageBox(chat));
+    return parts.join("");
+  }
+
+  function renderMessageBox(chat) {
+    const draft = state.drafts[chat.id] || "";
+    return `
+      <div class="message-box">
+        <div class="text-field message-box__field">
+          <textarea class="text-field__input" id="run-message" rows="2" placeholder=" " maxlength="${runOptions.max_typed_chars}"
+            aria-describedby="run-message-help" data-focus-key="run-message">${escapeHtml(draft)}</textarea>
+          <label class="text-field__label" for="run-message">Your next line, as ${escapeHtml(chat.user_name)}</label>
+          <p class="text-field__support" id="run-message-help">Enter sends. Shift+Enter starts a new line.</p>
+        </div>
+        <button type="button" class="btn btn--filled btn--icon-leading" data-action="send-message" data-focus-key="send-message"
+          aria-disabled="${!draft.trim()}">
+          <span class="icon" aria-hidden="true">send</span>
+          <span>Send</span>
+        </button>
+      </div>`;
+  }
+
+  // In-place changes while a reply streams.
+
+  // Follows new text only when the creator hasn't scrolled up to reread.
+  function followChat(box, change) {
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 48;
+    change();
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  function updateRunProgress(body) {
+    const live = state.live;
+    if (!live || !state.chat) return;
+    const label = body.querySelector("[data-run-progress]");
+    if (label) label.textContent = progressText(state.chat, live);
+    const bar = body.querySelector("[data-run-bar]");
+    if (bar && live.turn) bar.value = live.turn;
+    const wait = body.querySelector("[data-run-wait]");
+    if (wait) {
+      const waiting = live.phase === "waiting" && live.waitSeconds > 0;
+      wait.hidden = !waiting;
+      wait.textContent = waiting ? waitText(live.waitSeconds) : "";
+    }
+    const stop = body.querySelector('[data-action="stop-run"]');
+    if (stop) {
+      stop.setAttribute("aria-disabled", String(live.phase === "stopping"));
+      stop.lastElementChild.textContent = live.phase === "stopping" ? "Stopping" : "Stop";
+    }
+    const status = body.querySelector("[data-live-status]");
+    if (status) status.lastElementChild.textContent = liveLabel(live);
+  }
+
+  // The user's line and an empty reply bubble, once the server saved the line.
+  function showLiveTurn(chatId) {
+    const body = runBody();
+    if (!body || state.chatId !== chatId) return;
+    const box = body.querySelector(".chat");
+    if (!box) return;
+    const list = box.querySelector(".chat__list");
+    const chat = state.chat;
+    followChat(box, () => {
+      const empty = box.querySelector(".chat__empty");
+      if (empty) empty.remove();
+      const message = chat.messages[chat.messages.length - 1];
+      if (message && !list.querySelector(`[data-seq="${message.seq}"]`)) {
+        list.insertAdjacentHTML("beforeend", renderBubble(chat, message));
+      }
+      const old = list.querySelector("[data-live-bubble]");
+      if (old) old.remove();
+      list.insertAdjacentHTML("beforeend", renderLiveBubble(chat, state.live));
+    });
+    updateRunProgress(body);
+  }
+
+  // Finds the bubble on every delta, so a redraw in between can't leave it stale.
+  function showLiveText(chatId) {
+    const body = runBody();
+    if (!body || state.chatId !== chatId || !state.live) return;
+    const box = body.querySelector(".chat");
+    const text = box && box.querySelector("[data-live-text]");
+    if (!text) return;
+    followChat(box, () => {
+      text.textContent = state.live.text;
+    });
+    updateRunProgress(body);
+  }
+
+  // Swaps the reply bubble for the saved reply, or removes it when nothing was saved.
+  function showSavedReply(chatId, message) {
+    const body = runBody();
+    if (!body || state.chatId !== chatId) return;
+    const list = body.querySelector(".chat__list");
+    if (!list) return;
+    const bubble = list.querySelector("[data-live-bubble]");
+    const html = message ? renderBubble(state.chat, message) : "";
+    if (bubble) bubble.outerHTML = html;
+    else if (html) list.insertAdjacentHTML("beforeend", html);
+    updateRunProgress(body);
+  }
+
+  function addMessage(chatId, message) {
+    const chat = state.chat;
+    if (!chat || chat.id !== chatId || chat.messages.some((saved) => saved.seq === message.seq)) return;
+    chat.messages.push(message);
+    chat.message_count = chat.messages.length;
+  }
+
+  // Applies one server event of the turn streaming in chatId.
+  function handleRunEvent(chatId, name, data) {
+    const live = state.live;
+    if (!live || live.chatId !== chatId) return;
+    if (name === "user") {
+      live.turn = data.turn;
+      live.phase = live.phase === "stopping" ? "stopping" : "waiting";
+      live.text = "";
+      live.waitSeconds = 0;
+      addMessage(chatId, { seq: data.seq, turn: data.turn, speaker: "user", text: data.text, source: live.scripted ? "script" : "typed", stopped: false });
+      showLiveTurn(chatId);
+    } else if (name === "wait") {
+      live.waitSeconds = data.seconds;
+      showLiveText(chatId);
+    } else if (name === "delta") {
+      if (!live.turn && state.chat) live.turn = state.chat.messages[state.chat.messages.length - 1].turn;
+      if (live.phase !== "stopping") live.phase = "writing";
+      live.waitSeconds = 0;
+      live.text += data.text;
+      if (runBody() && state.chatId === chatId && !runBody().querySelector("[data-live-bubble]")) showLiveTurn(chatId);
+      else showLiveText(chatId);
+    } else if (name === "done") {
+      if (data.message) addMessage(chatId, data.message);
+      if (state.chat && state.chat.id === chatId) {
+        state.chat.status = data.status;
+        state.chat.script_left = data.script_left;
+      }
+      runOptions.used_today = data.used_today;
+      live.text = "";
+      if (live.phase !== "stopping") live.phase = "waiting";
+      showSavedReply(chatId, data.message);
+      if (data.message && !data.stopped && state.chat) announce(`${state.chat.character_name} replied.`);
+    } else if (name === "error") {
+      state.runError = { chatId, message: data.message, retry: data.retry };
+      if (state.chat && state.chat.id === chatId) state.chat.status = data.status;
     }
   }
 
-  // Shows the next message. Only touches the page while the Run screen is
-  // open; coming back to it redraws everything from `state`.
-  function playNext() {
-    const items = chatItems(state.scenario, selectedRun());
-    state.playback.shown += 1;
-    if (state.playback.shown >= items.length) {
-      state.playback.status = "done";
-    } else {
-      playbackTimer = setTimeout(playNext, PLAYBACK_STEP_MS);
+  // Streams one turn: kind "next" (the next scripted line, or the line still
+  // waiting for a reply) or "typed". Resolves with { name, data } for done or
+  // error, { name: "failed", data: ApiError } when the request failed, or null
+  // when the run was reset or stopped before the server answered.
+  async function streamTurn(chatId, kind, text, ticket) {
+    const controller = new AbortController();
+    runStream = { chatId, controller };
+    let outcome = null;
+    const onEvent = (name, data) => {
+      if (ticket !== runTicket) return;
+      handleRunEvent(chatId, name, data);
+      if (name === "done" || name === "error") outcome = { name, data };
+    };
+    try {
+      if (kind === "typed") await WorkbenchApi.sendMessage(chatId, text, onEvent, controller.signal);
+      else await WorkbenchApi.nextTurn(chatId, onEvent, controller.signal);
+    } catch (error) {
+      if (ticket !== runTicket || (error && error.name === "AbortError")) return null;
+      // Stop that reached the server between two turns ends the script, so the next turn is refused.
+      if (error.status === 409 && state.live && state.live.stopRequested) return null;
+      outcome = { name: "failed", data: error };
+    } finally {
+      if (runStream && runStream.controller === controller) runStream = null;
     }
-    if (currentScreen !== "run") return;
-
-    const body = panelFor("run").querySelector("[data-screen-body]");
-    const chat = body.querySelector(".chat");
-    // Follow new messages, unless the creator scrolled up to reread.
-    const atBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 48;
-    chat.querySelector(".chat__list").insertAdjacentHTML("beforeend", renderChatItem(items[state.playback.shown - 1]));
-    if (atBottom) chat.scrollTop = chat.scrollHeight;
-    renderRunStatus(body);
+    return outcome;
   }
 
-  actions["start-run"] = () => {
-    stopPlayback();
-    state.playback = { status: "playing", shown: 1 };
-    const body = panelFor("run").querySelector("[data-screen-body]");
-    renderRun(body);
-    // Start run is disabled while it plays, so focus moves to Skip to end.
-    body.querySelector('[data-action="skip-run"]').focus();
-    playbackTimer = setTimeout(playNext, PLAYBACK_STEP_MS);
+  // Plays the script from where the chat is, one streamed turn after another,
+  // until it ends, a turn fails, or the creator presses Stop.
+  async function playRun(chatId) {
+    const ticket = ++runTicket;
+    state.runError = null;
+    state.live = { chatId, phase: "waiting", turn: null, text: "", waitSeconds: 0, scripted: true, stopRequested: false };
+    refreshRun({ focusKey: "stop-run" });
+    let outcome = null;
+    for (;;) {
+      outcome = await streamTurn(chatId, "next", null, ticket);
+      if (ticket !== runTicket) return;
+      const live = state.live;
+      if (!outcome || outcome.name !== "done" || outcome.data.stopped || outcome.data.status !== "active" || live.stopRequested) break;
+      if (outcome.data.script_left === 0) break;
+      live.turn = null;
+      live.phase = "waiting";
+      const body = runBody();
+      if (body) updateRunProgress(body);
+    }
+    await finishRun(chatId, ticket, outcome);
+  }
+
+  // After a run or a typed line: reloads the saved chat, so the screen shows
+  // exactly what the server kept, and moves focus on only if Stop had it.
+  async function finishRun(chatId, ticket, outcome) {
+    const active = document.activeElement;
+    const stopHadFocus = Boolean(active && active.closest && active.closest('[data-action="stop-run"]'));
+    if (outcome && outcome.name === "failed") {
+      state.runError = { chatId, message: outcome.data.message, retry: outcome.data.status === 0 };
+    }
+    try {
+      const chat = await WorkbenchApi.getChat(chatId);
+      if (ticket !== runTicket) return;
+      if (state.chatId === chatId) state.chat = chat;
+      updateChatSummary(chat);
+    } catch {
+      // The screen keeps what it streamed.
+    }
+    if (ticket !== runTicket) return;
+    state.live = null;
+    let focusKey = null;
+    if (stopHadFocus && state.chat) {
+      if (state.runError && state.runError.chatId === chatId && state.runError.retry && canContinue(state.chat)) focusKey = "retry-turn";
+      else if (canType(state.chat)) focusKey = "run-message";
+      else if (canContinue(state.chat)) focusKey = "continue-run";
+      else focusKey = "start-run";
+    }
+    refreshRun({ focusKey });
+    if (state.runError && state.runError.chatId === chatId) announce(state.runError.message);
+  }
+
+  // Ends a streaming reply for Reset demo: Stop for the server, then the request itself.
+  function stopLiveRun() {
+    runTicket += 1;
+    const live = state.live;
+    if (live) WorkbenchApi.stopChat(live.chatId).catch(() => {});
+    if (runStream) {
+      runStream.controller.abort();
+      runStream = null;
+    }
+  }
+
+  actions["start-run"] = async (button) => {
+    if (state.live || state.runStarting || (button && button.getAttribute("aria-disabled") === "true")) return;
+    const ticket = runTicket;
+    state.runStarting = true;
+    try {
+      const chat = await WorkbenchApi.startChat({
+        character: runOptions.character.slug,
+        scenario: state.runSetup.scenarioId,
+        model: state.runSetup.modelId,
+      });
+      state.runStarting = false;
+      if (ticket !== runTicket) return;
+      state.chatId = chat.id;
+      state.chat = chat;
+      rememberChat(chat.id);
+      updateChatSummary(chat);
+      playRun(chat.id);
+    } catch (error) {
+      state.runStarting = false;
+      if (ticket !== runTicket) return;
+      showSnackbar(error.message);
+      loadRunOptions();
+    }
   };
 
-  actions["skip-run"] = () => {
-    stopPlayback();
-    const items = chatItems(state.scenario, selectedRun());
-    const body = panelFor("run").querySelector("[data-screen-body]");
-    const chat = body.querySelector(".chat");
-    chat.querySelector(".chat__list").insertAdjacentHTML(
-      "beforeend",
-      items.slice(state.playback.shown).map(renderChatItem).join(""),
-    );
-    state.playback = { status: "done", shown: items.length };
-    chat.scrollTop = chat.scrollHeight;
-    renderRunStatus(body);
+  actions["continue-run"] = () => {
+    if (state.live || !state.chat || !canContinue(state.chat)) return;
+    playRun(state.chat.id);
   };
 
-  actions["review-flags"] = () => {
+  // Try again after a failed turn answers the line that is still waiting.
+  actions["retry-turn"] = () => {
+    actions["continue-run"]();
+  };
+
+  actions["stop-run"] = async (button) => {
+    const live = state.live;
+    if (!live || live.phase === "stopping" || (button && button.getAttribute("aria-disabled") === "true")) return;
+    live.stopRequested = true;
+    live.phase = "stopping";
+    const body = runBody();
+    if (body) updateRunProgress(body);
+    try {
+      await WorkbenchApi.stopChat(live.chatId);
+    } catch (error) {
+      // The server didn't hear Stop, so end the request; it saves what came in so far.
+      if (runStream && runStream.chatId === live.chatId) runStream.controller.abort();
+      showSnackbar(`Stop didn't reach the server. ${error.message}`);
+    }
+  };
+
+  actions["send-message"] = async () => {
+    const chat = state.chat;
+    if (!chat || state.live || !canType(chat)) return;
+    const text = (state.drafts[chat.id] || "").trim();
+    if (!text) {
+      announce("Type a message first.");
+      return;
+    }
+    const ticket = ++runTicket;
+    state.runError = null;
+    state.live = { chatId: chat.id, phase: "waiting", turn: null, text: "", waitSeconds: 0, scripted: false, stopRequested: false };
+    refreshRun({ focusKey: "stop-run" });
+    const outcome = await streamTurn(chat.id, "typed", text, ticket);
+    if (ticket !== runTicket) return;
+    // A line the server refused keeps its draft, so it can be fixed and sent again.
+    if (outcome && outcome.name !== "failed") delete state.drafts[chat.id];
+    await finishRun(chat.id, ticket, outcome);
+  };
+
+  actions["review-flags"] = (button) => {
+    if (button && button.dataset.run) selectDataRun(button.dataset.run);
     state.openFlagId = null;
     goToScreen("diagnose");
+  };
+
+  actions["retry-run-options"] = () => {
+    runOptionsLoad = { status: "loading", message: "" };
+    refreshRun({ focusKey: "retry-run-options" });
+    loadRunOptions();
+  };
+
+  // 3.2.1 Import a chat -----------------------------------------------------
+  // The dialog body is drawn once each time it opens. After that only the
+  // preview area changes, so arrowing through the choices and typing in the
+  // fields never loses focus.
+
+  const importDialog = document.getElementById("import-dialog");
+  const importBody = importDialog.querySelector("[data-import-body]");
+  let importBusy = false;
+
+  function importSource() {
+    const picked = importBody.querySelector('input[name="import-source"]:checked');
+    return picked ? picked.value : "paste";
+  }
+
+  function specVersionsNewestFirst() {
+    if (state.specView) return state.specView.versions.map((summary) => summary.version);
+    const latest = runOptions ? runOptions.latest_spec_version : 1;
+    return Array.from({ length: latest }, (_, index) => latest - index);
+  }
+
+  // Samples and the seeded transcript default to the version they were made
+  // with; a pasted chat defaults to the latest.
+  function defaultSpecVersion(source) {
+    const versions = specVersionsNewestFirst();
+    if (source === "paste") return versions[0];
+    const sample = samples.find((item) => `sample:${item.id}` === source);
+    return sample ? sample.spec_version : versions[0];
+  }
+
+  function renderImportBody() {
+    const choices = samples.map((sample) => {
+      const seeded = sample.path !== null;
+      const note = seeded
+        ? `<span class="import__path">${escapeHtml(sample.path)}${sample.available ? "" : ". File not found"}</span>`
+        : "";
+      return `
+        <label class="import__choice">
+          <input type="radio" name="import-source" value="sample:${escapeHtml(sample.id)}"${sample.available ? "" : " disabled"}>
+          <span><span>${escapeHtml(seeded ? sample.label : `Sample: ${sample.label}`)}</span>${note}</span>
+        </label>`;
+    });
+    const versions = specVersionsNewestFirst()
+      .map((version) => `<option value="${version}">${escapeHtml(specLabel(version))}</option>`)
+      .join("");
+    importBody.innerHTML = `
+      <fieldset class="import__choices">
+        <legend class="import__legend">Where is the chat?</legend>
+        <label class="import__choice">
+          <input type="radio" name="import-source" value="paste" checked>
+          <span><span>Paste it, or choose a file</span></span>
+        </label>
+        ${choices.join("")}
+      </fieldset>
+      <div class="import__paste" data-import-paste>
+        <div class="text-field">
+          <textarea class="text-field__input import__text" id="import-text" rows="7" placeholder=" " aria-describedby="import-text-help"></textarea>
+          <label class="text-field__label" for="import-text">Chat</label>
+          <p class="text-field__support" id="import-text-help">One message per line, like "Alex: Hi." A receipt log, or a table with a speaker column, works too.</p>
+        </div>
+        <label class="import__file">
+          <span>Or choose a file (.md, .txt, or .json)</span>
+          <input type="file" id="import-file" accept=".md,.txt,.json,text/plain,text/markdown,application/json">
+        </label>
+        <div class="import__meta">
+          <div class="text-field">
+            <input class="text-field__input" id="import-tool" placeholder=" " autocomplete="off">
+            <label class="text-field__label" for="import-tool">Tool (optional)</label>
+          </div>
+          <div class="text-field">
+            <input class="text-field__input" id="import-receipt" placeholder=" " autocomplete="off">
+            <label class="text-field__label" for="import-receipt">Receipt ID (optional)</label>
+          </div>
+        </div>
+      </div>
+      ${selectField("import-spec", "Spec version this chat used", versions, {
+        support: "The chat stays pinned to this version.",
+      })}
+      <div class="import__preview" data-import-preview></div>`;
+
+    importBody.querySelector("#import-spec").value = String(defaultSpecVersion("paste"));
+    importBody.querySelectorAll('input[name="import-source"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        const source = importSource();
+        importBody.querySelector("[data-import-paste]").hidden = source !== "paste";
+        importBody.querySelector("#import-spec").value = String(defaultSpecVersion(source));
+        importBody.querySelector("[data-import-preview]").innerHTML = "";
+      });
+    });
+    importBody.querySelector("#import-file").addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        importBody.querySelector("#import-text").value = String(reader.result);
+        importBody.querySelector("[data-import-preview]").innerHTML = "";
+        announce(`Read ${file.name}. Press Preview to check it.`);
+      };
+      reader.onerror = () => announce(`${file.name} couldn't be read.`);
+      reader.readAsText(file);
+    });
+  }
+
+  function importRequest() {
+    const source = importSource();
+    const picked = importBody.querySelector('input[name="import-role"]:checked');
+    const body = {
+      source: source === "paste" ? "paste" : "sample",
+      character: runOptions.character.slug,
+      spec_version: Number(importBody.querySelector("#import-spec").value),
+      character_label: picked ? picked.value : null,
+    };
+    if (source === "paste") {
+      body.text = importBody.querySelector("#import-text").value;
+      body.tool = importBody.querySelector("#import-tool").value;
+      body.receipt = importBody.querySelector("#import-receipt").value;
+    } else {
+      body.sample = source.slice("sample:".length);
+    }
+    return body;
+  }
+
+  function rowsText(rows) {
+    if (rows.length === 0) return "";
+    const shown = rows.slice(0, 12).join(", ");
+    return rows.length > 12 ? `${shown}, and ${rows.length - 12} more` : shown;
+  }
+
+  function renderProblems(problems) {
+    return `
+      <div class="import__problems" tabindex="-1" data-import-problems>
+        <p class="import__problems-title">
+          <span class="icon" aria-hidden="true">error</span>
+          <span>Fix ${problems.length === 1 ? "this row" : "these rows"}, then preview again.</span>
+        </p>
+        <ul>${problems.map((problem) => `<li>${escapeHtml(problem.message)}</li>`).join("")}</ul>
+      </div>`;
+  }
+
+  function renderPreview(preview) {
+    const word = preview.numbering === "line" ? "line" : "turn";
+    const range = preview.first_number === null ? "" : ` (${word}s ${preview.first_number} to ${preview.last_number})`;
+    const speakers = preview.speakers
+      .map((speaker) => {
+        const role = speaker.role === "character" ? ", the character" : speaker.role === "user" ? ", the other speaker" : "";
+        return `<li>${escapeHtml(speaker.label)}: ${speaker.count} ${speaker.count === 1 ? "message" : "messages"}${role}</li>`;
+      })
+      .join("");
+    const roles = preview.needs_roles
+      ? `
+        <fieldset class="import__roles">
+          <legend class="import__legend">Which speaker is the character?</legend>
+          ${preview.speakers
+            .map((speaker) => `
+              <label class="import__choice">
+                <input type="radio" name="import-role" value="${escapeHtml(speaker.label)}">
+                <span><span>${escapeHtml(speaker.label)}</span></span>
+              </label>`)
+            .join("")}
+        </fieldset>`
+      : "";
+    const row = (item) => `
+      <li>
+        <span class="import__row-meta">${escapeHtml(item.label)}, ${word} ${item.number}</span>
+        <span class="import__row-text">${escapeHtml(item.text)}</span>
+      </li>`;
+    const gap = preview.last_rows.length && preview.message_count > preview.first_rows.length + preview.last_rows.length
+      ? '<li class="import__row-gap" aria-hidden="true">...</li>'
+      : "";
+    return `
+      <div class="import-preview">
+        <p class="import-preview__summary">${escapeHtml(preview.title)}: ${preview.message_count} ${preview.message_count === 1 ? "message" : "messages"}${escapeHtml(range)}, pinned to ${escapeHtml(specLabel(preview.spec_version))}.</p>
+        <ul class="import-preview__speakers">${speakers}</ul>
+        ${roles}
+        <ol class="import-preview__rows">${preview.first_rows.map(row).join("")}${gap}${preview.last_rows.map(row).join("")}</ol>
+        ${preview.skipped_rows.length ? `<p class="import-preview__note">Skipped ${preview.skipped_rows.length} ${preview.skipped_rows.length === 1 ? "line that isn't a message" : "lines that aren't messages"} (rows ${escapeHtml(rowsText(preview.skipped_rows))}).</p>` : ""}
+        ${preview.duplicate_of ? '<p class="import-preview__note">This chat is already imported. Import shows the saved chat.</p>' : ""}
+        ${preview.problems.length ? renderProblems(preview.problems) : ""}
+      </div>`;
+  }
+
+  actions["open-import"] = (button) => {
+    if (state.live || !runOptions) return;
+    renderImportBody();
+    openDialog(importDialog, button);
+  };
+
+  actions["preview-import"] = async () => {
+    if (importBusy) return;
+    importBusy = true;
+    const area = importBody.querySelector("[data-import-preview]");
+    try {
+      const preview = await WorkbenchApi.previewImport(importRequest());
+      area.innerHTML = renderPreview(preview);
+      const speakers = `${preview.speakers.length} ${preview.speakers.length === 1 ? "speaker" : "speakers"}`;
+      const problems = preview.problems.length
+        ? `${preview.problems.length} ${preview.problems.length === 1 ? "problem" : "problems"}`
+        : "no problems";
+      announce(`${preview.message_count} messages, ${speakers}, ${problems}.${preview.needs_roles ? " Say which speaker is the character." : ""}`);
+      const problemBox = area.querySelector("[data-import-problems]");
+      if (problemBox) problemBox.focus();
+    } catch (error) {
+      area.innerHTML = error.problems && error.problems.length
+        ? renderProblems(error.problems)
+        : `<p class="import__problems" tabindex="-1" data-import-problems>${escapeHtml(error.message)}</p>`;
+      announce(error.message);
+      area.querySelector("[data-import-problems]").focus();
+    } finally {
+      importBusy = false;
+    }
+  };
+
+  actions["confirm-import"] = async () => {
+    if (importBusy) return;
+    importBusy = true;
+    const area = importBody.querySelector("[data-import-preview]");
+    try {
+      const known = new Set(state.chats.map((chat) => chat.id));
+      const chat = await WorkbenchApi.importChat(importRequest());
+      importDialog.close();
+      state.runError = null;
+      state.chatId = chat.id;
+      state.chat = chat;
+      rememberChat(chat.id);
+      updateChatSummary(chat);
+      refreshRun({ focusKey: "run-chat" });
+      showSnackbar(known.has(chat.id)
+        ? `Already imported. Showing ${chat.title}.`
+        : `Imported ${chat.title}. It's pinned to spec ${specLabel(chat.spec_version)}.`);
+    } catch (error) {
+      area.innerHTML = error.problems && error.problems.length
+        ? renderProblems(error.problems)
+        : `<p class="import__problems" tabindex="-1" data-import-problems>${escapeHtml(error.message)}</p>`;
+      announce(error.message);
+      area.querySelector("[data-import-problems]").focus();
+    } finally {
+      importBusy = false;
+    }
   };
 
   // 3.3 Flag review (Diagnose) ----------------------------------------------
@@ -1176,6 +1977,18 @@
   // - Agreeing with every flag triggers a rubber-stamp check.
   // - What the AI could not check is listed for the creator to read.
   // Every decision redraws the screen; announceReview() tells screen readers.
+  // Until M4 it reviews the CP2 chats in data.js, apart from the live chats
+  // on Run a conversation.
+
+  // The data.js chat that Flag review and Compare runs show.
+  function selectedRun() {
+    return state.runs.find((run) => run.id === state.runId) || state.runs[0];
+  }
+
+  // Picks that chat. It never touches a run streaming on Run a conversation.
+  function selectDataRun(runId) {
+    if (state.runs.some((run) => run.id === runId)) state.runId = runId;
+  }
 
   const CONFIDENCE_FILTERS = ["All", "High", "Medium", "Low"];
   const MIN_REASON_WORDS = 3;
@@ -1365,7 +2178,7 @@
 
   actions["pick-chat"] = (button) => {
     if (button.dataset.run === state.runId) return;
-    changeRunSetup({ runId: button.dataset.run });
+    selectDataRun(button.dataset.run);
     state.reviewTurn = null;
     refresh({ focusKey: `chat-${button.dataset.run}` });
     const run = selectedRun();
@@ -1914,7 +2727,7 @@
   actions["review-open-flags"] = () => {
     const [first] = openFlags();
     if (!first) return;
-    if (first.run.id !== state.runId) changeRunSetup({ runId: first.run.id });
+    selectDataRun(first.run.id);
     state.openFlagId = first.flag.id;
     goToScreen("diagnose");
   };
@@ -2140,9 +2953,10 @@
     if (field.tagName === "TEXTAREA") fitTextareas([field]);
   });
 
-  // Asks before a reload or a closed tab drops spec edits that aren't saved.
+  // Asks before a reload or a closed tab drops spec edits that aren't saved,
+  // or cuts off a reply that is streaming (the server keeps it, marked stopped).
   window.addEventListener("beforeunload", (event) => {
-    if (!draftChanged()) return;
+    if (!draftChanged() && !state.live) return;
     event.preventDefault();
     event.returnValue = "";
   });
@@ -2153,12 +2967,15 @@
   resetButton.addEventListener("click", () => {
     openDialog(resetDialog, resetButton, (choice) => {
       if (choice !== "reset") return;
-      stopPlayback();
+      stopLiveRun();
       state = createInitialState();
       refresh();
-      // Saved spec versions never change, so the Spec editor loads the latest again.
+      // Saved spec versions and chats never change, so the screens load them again.
       loadSpec();
-      showSnackbar("Demo reset. Saved spec versions stay.");
+      loadRunOptions();
+      loadSamples();
+      loadChats();
+      showSnackbar("Demo reset. Saved spec versions and chats stay.");
     });
   });
 
@@ -2369,4 +3186,7 @@
   if (!firstScreen) location.replace(`#${DEFAULT_SCREEN}`);
   showScreen(firstScreen || DEFAULT_SCREEN);
   loadSpec();
+  loadRunOptions();
+  loadSamples();
+  loadChats();
 })();

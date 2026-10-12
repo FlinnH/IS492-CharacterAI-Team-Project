@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Character Consistency Workbench</title>
-  <meta name="description" content="CP2 prototype: define, stress-test, diagnose, and repair an AI character. Real chats, flags written by hand.">
+  <meta name="description" content="Workbench for IS 492 CP3: define, stress-test, diagnose, and repair an AI character.">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +21,7 @@
         <div class="top-app-bar__actions">
           <span class="chip chip--icon-leading">
             <span class="icon" aria-hidden="true">draw</span>
-            <span>Real chats, flags written by hand</span>
+            <span>Live chats, flags written by hand</span>
           </span>
           <button type="button" class="btn btn--text btn--icon-leading" data-action="show-codes" aria-haspopup="dialog">
             <span class="icon" aria-hidden="true">help</span>
@@ -72,7 +72,7 @@
 
   <main class="app-main" id="main">
     <noscript>
-      <p class="load-error">This prototype needs JavaScript. Turn it on and reload the page.</p>
+      <p class="load-error">The workbench needs JavaScript. Turn it on and reload the page.</p>
     </noscript>
 
     <section class="screen" id="panel-define" role="tabpanel" aria-labelledby="tab-define" tabindex="0" hidden>
@@ -88,7 +88,7 @@
     <section class="screen" id="panel-run" role="tabpanel" aria-labelledby="tab-run" tabindex="0" hidden>
       <p class="screen__step">Step 2 of 4: Stress-test</p>
       <h1 class="screen__title" tabindex="-1">Run a conversation</h1>
-      <p class="screen__lede">Run a fixed test script against the spec and read the character's replies turn by turn.</p>
+      <p class="screen__lede">Run a test script against the spec and watch each reply arrive as the model writes it, or import a saved chat.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
 
@@ -108,7 +108,7 @@
   </main>
 
   <footer class="app-footer">
-    <p>Prototype for IS 492 CP2. Real chats, flags written by hand. No live AI calls.</p>
+    <p>Workbench for IS 492 CP3. Run a conversation makes live model calls. Flags are still written by hand.</p>
   </footer>
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -120,7 +120,7 @@
   <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
     <form method="dialog">
       <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
-      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons, stops any run that is playing, and brings back the starting chats and flags. Saved spec versions stay, and unsaved spec edits are lost. You can't undo this.</p>
+      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons on Flag review, stops any reply that is streaming, and brings back the starting flags. Saved chats and spec versions stay, and unsaved spec edits are lost. You can't undo this.</p>
       <div class="dialog__actions">
         <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
         <button type="submit" class="btn btn--text" value="reset">Reset</button>
@@ -158,6 +158,20 @@
     <form method="dialog" class="dialog__actions">
       <button type="submit" class="btn btn--text" autofocus>Close</button>
     </form>
+  </dialog>
+
+  <!-- Import a chat. app.js draws the body each time the dialog opens. Only
+       Cancel closes it by itself; Preview and Import wait for the server. -->
+  <dialog class="dialog dialog--import" id="import-dialog" aria-labelledby="import-dialog-title">
+    <h2 class="dialog__headline" id="import-dialog-title">Import a chat</h2>
+    <div class="dialog__content import" data-import-body></div>
+    <div class="dialog__actions">
+      <form method="dialog">
+        <button type="submit" class="btn btn--text" value="cancel">Cancel</button>
+      </form>
+      <button type="button" class="btn btn--text" data-action="preview-import">Preview</button>
+      <button type="button" class="btn btn--filled" data-action="confirm-import">Import</button>
+    </div>
   </dialog>
 
   <dialog class="side-sheet" id="citing-flags-sheet" aria-labelledby="citing-flags-title">

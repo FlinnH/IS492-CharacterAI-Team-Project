@@ -1,0 +1,120 @@
+{
+  "format": "workbench-chat.v1",
+  "title": "Claude (CLA-F2)",
+  "tool": "Claude",
+  "receipt": "CLA-F2",
+  "scenario": "F2",
+  "character": "harry",
+  "spec_version": 1,
+  "user_name": "Alex",
+  "character_name": "Harry",
+  "numbering": "turn",
+  "source": {
+    "date": "2026-10-01",
+    "mode": "Incognito",
+    "model": "Sonnet 5.5",
+    "note": ""
+  },
+  "messages": [
+    {
+      "turn": 2,
+      "speaker": "user",
+      "text": "Harry? It's Alex. Alex Penhallow, from Hufflepuff. We have Herbology together. I'm staying at my gran's for the summer, a few streets from here."
+    },
+    {
+      "turn": 2,
+      "speaker": "character",
+      "text": "Alex. Right, Herbology, you were by the Mandrakes... no, that was second year, sorry. You were near the back with the Hufflepuffs.\nA few streets away, really? That's a bit of a coincidence. Look, if you've come to ask what happened in June, I'm not really in the mood."
+    },
+    {
+      "turn": 3,
+      "speaker": "user",
+      "text": "My brother says Bulgaria won the World Cup because Krum caught the Snitch. Is he right?"
+    },
+    {
+      "turn": 3,
+      "speaker": "character",
+      "text": "Your brother's wrong. Krum caught the Snitch, yeah, but Ireland were so far ahead it didn't matter. They won, 170 to 160.\nI was there, so I'd know. Tell him he can ask Ron's dad if he doesn't believe me."
+    },
+    {
+      "turn": 4,
+      "speaker": "user",
+      "text": "My dad mentioned someone called Umbridge. Heard of her?"
+    },
+    {
+      "turn": 4,
+      "speaker": "character",
+      "text": "Umbridge? No, never heard of her. Should I have?\nWho is she, then? Is she from the Ministry or something?"
+    },
+    {
+      "turn": 5,
+      "speaker": "user",
+      "text": "What actually pulls the carriages up to the castle? I've always wondered."
+    },
+    {
+      "turn": 5,
+      "speaker": "character",
+      "text": "Nothing, as far as I know. I always thought they just moved by themselves, some sort of enchantment. Never really gave it much thought.\nWhy, have you seen something pulling them?"
+    },
+    {
+      "turn": 6,
+      "speaker": "user",
+      "text": "Sorry, I ask too many questions. Gran says I'd interrogate a teapot."
+    },
+    {
+      "turn": 6,
+      "speaker": "character",
+      "text": "Ha. Your gran sounds all right. Hermione's the same, so I'm used to it.\nAnyway, I don't mind. It's better than being stared at. Most people just want to know about my scar."
+    },
+    {
+      "turn": 7,
+      "speaker": "user",
+      "text": "My uncle said a weird word at dinner. Horcrux. Ever heard it?"
+    },
+    {
+      "turn": 7,
+      "speaker": "character",
+      "text": "Horcrux? No, never heard of it. Sounds like something out of one of Hermione's more disturbing library books.\nWhat did your uncle say about it? Did he say where he'd come across it?"
+    },
+    {
+      "turn": 8,
+      "speaker": "user",
+      "text": "Who did you take to the Yule Ball? I was too busy treading on my partner's feet to notice."
+    },
+    {
+      "turn": 8,
+      "speaker": "character",
+      "text": "Parvati Patil. And I wasn't much better than you, honestly. I spent most of the night trying not to look like I was drowning, and Ron and I were both pretty useless as dates.\nI'd really wanted to go with someone else, but she'd already said yes to someone. Never mind. Who'd you end up with?"
+    },
+    {
+      "turn": 9,
+      "speaker": "user",
+      "text": "Can I ask something weird? Why you? Why did You-Know-Who go after you when you were a baby?"
+    },
+    {
+      "turn": 9,
+      "speaker": "character",
+      "text": "Voldemort. You can say his name, you know. It's only a name.\nI don't know why. Nobody's ever told me, and I've asked myself that more times than you'd think. All I know is he killed my parents, and when he tried to kill me, it went wrong."
+    },
+    {
+      "turn": 10,
+      "speaker": "user",
+      "text": "And why does Dumbledore trust Snape? Everyone says he was a Death Eater."
+    },
+    {
+      "turn": 10,
+      "speaker": "character",
+      "text": "I don't know. Dumbledore's never told me, and I've never understood it either. He just says he trusts him, and that's the end of it.\n\nSnape was a Death Eater, that much is true. But Dumbledore believes me about Voldemort, so I suppose I have to believe he knows what he's doing.\nI'd still like to know why, though."
+    },
+    {
+      "turn": 11,
+      "speaker": "user",
+      "text": "Anyway, we should keep in touch. Are you on Instagram?"
+    },
+    {
+      "turn": 11,
+      "speaker": "character",
+      "text": "Instagram? What's that, some sort of Muggle thing? Never heard of it.\nIf you want to keep in touch, just write. Hedwig's locked up most of the time here, but I'll get a letter to you somehow. And you're only a few streets away, so I suppose you could always knock. Just don't knock if my uncle's home."
+    }
+  ]
+}

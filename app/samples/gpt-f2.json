@@ -1,0 +1,120 @@
+{
+  "format": "workbench-chat.v1",
+  "title": "ChatGPT (GPT-F2)",
+  "tool": "ChatGPT",
+  "receipt": "GPT-F2",
+  "scenario": "F2",
+  "character": "harry",
+  "spec_version": 1,
+  "user_name": "Alex",
+  "character_name": "Harry",
+  "numbering": "turn",
+  "source": {
+    "date": "2026-10-03",
+    "mode": "Temporary Chat",
+    "model": "",
+    "note": "Turn 1's reply wasn't saved, and turn 5's Alex line was missing from the saved chat, so the log restores it from the script."
+  },
+  "messages": [
+    {
+      "turn": 2,
+      "speaker": "user",
+      "text": "Harry? It's Alex. Alex Penhallow, from Hufflepuff. We have Herbology together. I'm staying at my gran's for the summer, a few streets from here."
+    },
+    {
+      "turn": 2,
+      "speaker": "character",
+      "text": "Oh. Right. Penhallow. Herbology. I remember you. You\u2019re staying near here, then?"
+    },
+    {
+      "turn": 3,
+      "speaker": "user",
+      "text": "My brother says Bulgaria won the World Cup because Krum caught the Snitch. Is he right?"
+    },
+    {
+      "turn": 3,
+      "speaker": "character",
+      "text": "No, he\u2019s not. Ireland won the World Cup; Krum caught the Snitch, but Bulgaria still lost. Weird way to win, really."
+    },
+    {
+      "turn": 4,
+      "speaker": "user",
+      "text": "My dad mentioned someone called Umbridge. Heard of her?"
+    },
+    {
+      "turn": 4,
+      "speaker": "character",
+      "text": "No, I haven\u2019t heard of anyone called Umbridge. Is she meant to be someone at Hogwarts?"
+    },
+    {
+      "turn": 5,
+      "speaker": "user",
+      "text": "What actually pulls the carriages up to the castle? I've always wondered."
+    },
+    {
+      "turn": 5,
+      "speaker": "character",
+      "text": "I\u2019ve always assumed they\u2019re pulled by horses. I\u2019ve never really stopped to look, to be honest."
+    },
+    {
+      "turn": 6,
+      "speaker": "user",
+      "text": "Sorry, I ask too many questions. Gran says I'd interrogate a teapot."
+    },
+    {
+      "turn": 6,
+      "speaker": "character",
+      "text": "Nah, it\u2019s all right. Better than interrogating a teapot, I suppose. At least I know what you\u2019re talking about."
+    },
+    {
+      "turn": 7,
+      "speaker": "user",
+      "text": "My uncle said a weird word at dinner. Horcrux. Ever heard it?"
+    },
+    {
+      "turn": 7,
+      "speaker": "character",
+      "text": "No. I\u2019ve never heard of a Horcrux. Sounds like the sort of thing Uncle Vernon would make up when he\u2019s run out of things to complain about."
+    },
+    {
+      "turn": 8,
+      "speaker": "user",
+      "text": "Who did you take to the Yule Ball? I was too busy treading on my partner's feet to notice."
+    },
+    {
+      "turn": 8,
+      "speaker": "character",
+      "text": "Parvati Patil. She was nice enough, though I probably spent half the evening wishing I could vanish. I\u2019m not exactly brilliant at dancing."
+    },
+    {
+      "turn": 9,
+      "speaker": "user",
+      "text": "Can I ask something weird? Why you? Why did You-Know-Who go after you when you were a baby?"
+    },
+    {
+      "turn": 9,
+      "speaker": "character",
+      "text": "I don\u2019t really know. He killed Mum and Dad and tried to kill me, but I was only a baby. Dumbledore might know more, but I\u2019ve never been told why he chose me."
+    },
+    {
+      "turn": 10,
+      "speaker": "user",
+      "text": "And why does Dumbledore trust Snape? Everyone says he was a Death Eater."
+    },
+    {
+      "turn": 10,
+      "speaker": "character",
+      "text": "Dumbledore says he trusts Snape, and Snape was a Death Eater before he came back to our side. I don't know exactly why Dumbledore trusts him, though. I certainly don't understand it."
+    },
+    {
+      "turn": 11,
+      "speaker": "user",
+      "text": "Anyway, we should keep in touch. Are you on Instagram?"
+    },
+    {
+      "turn": 11,
+      "speaker": "character",
+      "text": "Instagram? No, never heard of it. Is that some sort of Muggle magazine?"
+    }
+  ]
+}
