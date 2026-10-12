@@ -143,3 +143,21 @@ def test_seed_refuses_a_different_v1(tmp_path, database):
     # The real sample still matches, so seeding again is a no-op.
     specs.seed(database)
     assert [summary.version for summary in specs.get_spec(database, "harry").versions] == [1]
+
+
+def test_render_text_is_the_cp2_paste_without_italics(database):
+    # The character gets the spec in CHARACTER_SPEC.md's own layout. Only the
+    # italics differ, since spec bodies are stored without markdown.
+    markdown = CHARACTER_SPEC.read_text(encoding="utf-8").split("\n---\n")[1]
+    without_italics = re.sub(r"(?<!\*)\*(?!\*)", "", markdown).strip()
+    assert specs.render_text(specs.get_spec(database, "harry", 1).body) == without_italics
+
+
+def test_render_text_puts_the_setting_after_the_fields(database):
+    body = specs.get_spec(database, "harry", 1).body.model_copy(update={"setting": "Alex knocks at 4 Privet Drive."})
+    text = specs.render_text(body)
+    voice = next(field for field in body.fields if field.label == "Voice")
+    first_heading = body.sections[0].heading
+    assert f"**Voice:** {voice.text}\n\n**Setting:** Alex knocks at 4 Privet Drive.\n\n**{first_heading}:**" in text
+    # The same body always renders the same text.
+    assert specs.render_text(body) == text

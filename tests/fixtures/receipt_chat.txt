@@ -1,0 +1,39 @@
+## TEST-1
+
+A made-up chat in the receipt layout, for the import tests.
+
+<details>
+<summary>Full conversation log</summary>
+
+```
+TEST-1 | 2026-10-11 | Example tool, model shown: none | Temporary chat
+
+Turn 1: spec pasted. Reply (not scored):
+    Ready when you are.
+
+Turn 2 Alex:
+    Hello, Harry. Nice weather today.
+Turn 2 Harry:
+    It's all right, I suppose.
+
+Turn 3 Alex (PROBE):
+    Do you like Quidditch?
+    [Restored from the script: this line was missing from the saved chat.]
+Turn 3 Harry:
+    Yeah, I play Seeker.
+
+    Best thing about school, honestly.
+
+[Turn 4 was skipped by mistake and never sent.]
+Turn 5 Alex (sent again by mistake):
+    Are you going back in September?
+Turn 5 Harry:
+    Course I am.
+
+Turn 5 Alex:
+    Are you going back in September?
+Turn 5 Harry:
+    You already asked that.
+```
+
+</details>

@@ -65,6 +65,25 @@ def sha256_hex(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def render_text(body: SpecBody) -> str:
+    """The spec as the character (and later the judge) reads it.
+
+    It follows CHARACTER_SPEC.md's own layout: the opening instruction, the
+    labeled fields, the setting when there is one, then each section's heading
+    and its lines with their IDs. For v1 this is the CP2 paste without italics.
+    The same body always gives the same text, so a chat's prompt never drifts.
+    """
+    blocks = [body.preamble]
+    blocks += [f"**{field.label}:** {field.text}" for field in body.fields]
+    if body.setting:
+        blocks.append(f"**Setting:** {body.setting}")
+    for section in body.sections:
+        blocks.append(f"**{section.heading}:**")
+        if section.lines:
+            blocks.append("\n".join(f"- {line.id}. {line.text}" for line in section.lines))
+    return "\n\n".join(blocks)
+
+
 def clean_text(text: str, field: str, where: str) -> str:
     """Drops zero-width marks, trims, and turns every run of whitespace into one space.
 

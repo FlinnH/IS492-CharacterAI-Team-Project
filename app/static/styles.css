@@ -1737,6 +1737,257 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-title-medium-tracking);
 }
 
+/* Start run and Import a chat, side by side next to the fields */
+.run-setup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The Chat menu: live runs and imported chats */
+.run-chats {
+  margin-top: 16px;
+  max-width: 36rem;
+}
+
+/* "Stopped" on a cut-off reply, and "Writing" on the one streaming in.
+   Words and an icon, so the state never rests on color alone. */
+.bubble__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 400;
+}
+
+.bubble__status .icon {
+  font-size: 16px;
+}
+
+/* The reply being written. Its text changes on every delta, so it never
+   replays the entry animation. */
+.bubble--live {
+  animation: none;
+  outline: 1px dashed var(--md-sys-color-outline);
+  outline-offset: 2px;
+}
+
+/* "Waiting 3 seconds so calls stay under 15 a minute." */
+.run-wait {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* A turn that failed: what happened, and Try again when it can */
+.run-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 16px;
+  border-color: var(--md-sys-color-error);
+}
+
+.run-error .icon {
+  color: var(--md-sys-color-error);
+}
+
+.run-error__text {
+  flex: 1 1 16rem;
+}
+
+/* Continue run, after a reload or a dropped connection left the script unfinished */
+.run-continue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 16px;
+}
+
+.run-continue__text {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* The creator's own next line, once the script is over or stopped */
+.message-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  margin-top: 16px;
+}
+
+.message-box__field {
+  flex: 1 1 20rem;
+}
+
+.message-box__field .text-field__input {
+  min-height: 72px;
+}
+
+/* Lines Send up with the middle of the first line of the field */
+.message-box .btn {
+  margin-top: 8px;
+}
+
+/* Import a chat (dialog) ----------------------------------------------------- */
+
+.dialog--import {
+  width: min(44rem, calc(100vw - 32px));
+}
+
+/* Cancel sits in its own form, so the form shouldn't add a box of its own */
+.dialog--import .dialog__actions form {
+  display: contents;
+}
+
+.import__choices,
+.import__roles {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.import__roles {
+  margin-top: 16px;
+}
+
+.import__legend {
+  margin-bottom: 8px;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.import__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+}
+
+.import__choice input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--md-sys-color-primary);
+}
+
+.import__choice > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.import__choice input:disabled + span {
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: default;
+}
+
+/* The seeded transcript's path, so the creator sees which file loads */
+.import__path {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  overflow-wrap: anywhere;
+}
+
+.import__paste {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.import__text {
+  min-height: 9rem;
+  font-family: var(--md-ref-typeface-plain);
+}
+
+.import__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--md-sys-color-on-surface);
+}
+
+.import__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 16px;
+}
+
+.import__preview:not(:empty) {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.import-preview__summary {
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.import-preview__speakers {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.import-preview__rows {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-preview__rows li {
+  display: grid;
+  gap: 2px;
+}
+
+.import__row-meta {
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.import__row-gap {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.import-preview__note {
+  margin-top: 12px;
+}
+
+/* Rows to fix. Error colors, with an icon and words. */
+.import__problems {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.import__problems ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.import__problems-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
 /* Flag review -------------------------------------------------------------- */
 /* Phones get one column: the flags, then the conversation. From 840px (see
    section 5) the conversation sits on the left and the flags on the right,

@@ -1,0 +1,9 @@
+{
+  "format": "workbench-fake.v1",
+  "model_reported": "fake-reply-v1-build-1",
+  "reply": "This is a fake reply. No model was called.",
+  "chunk_chars": 6,
+  "first_token_seconds": 0.6,
+  "chunk_seconds": 0.08,
+  "chars_per_token": 4
+}

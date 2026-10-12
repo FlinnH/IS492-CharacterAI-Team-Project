@@ -110,3 +110,81 @@ def test_newer_database_is_refused(tmp_path):
 
         with pytest.raises(RuntimeError, match="workbench.db"):
             db.migrate(conn)
+
+
+@pytest.fixture
+def chat_conn(conn):
+    """The migrated database above, plus one chat with a message, a model call, and an event."""
+    conn.execute(
+        "INSERT INTO transcripts (id, character_id, spec_version, kind, title, numbering, user_name, character_name,"
+        " status, created_at) VALUES (1, 1, 1, 'live', 'Test run', 'turn', 'Alex', 'Harry', 'active', '2026-10-11T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO model_calls (id, started_at, quota_day, role, provider, model_asked, prompt_version,"
+        " settings_version, status) VALUES (1, '2026-10-11T00:00:00Z', '2026-10-10', 'character', 'fake', 'test-model',"
+        " 'character.v1', 'models.v1', 'ok')"
+    )
+    conn.execute(
+        "INSERT INTO messages (id, transcript_id, seq, turn, speaker, text, source, model_call_id, created_at)"
+        " VALUES (1, 1, 1, 2, 'character', 'Hello.', 'model', 1, '2026-10-11T00:00:00Z')"
+    )
+    conn.execute("INSERT INTO events (id, created_at, kind, transcript_id) VALUES (1, '2026-10-11T00:00:00Z', 'run_started', 1)")
+    return conn
+
+
+@pytest.mark.parametrize("table", ["messages", "model_calls", "events"])
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE {table} SET id = id",
+        "DELETE FROM {table}",
+    ],
+    ids=["update", "delete"],
+)
+def test_logs_and_messages_are_append_only(chat_conn, table, statement):
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        chat_conn.execute(statement.format(table=table))
+    assert chat_conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "INSERT OR REPLACE INTO messages (id, transcript_id, seq, turn, speaker, text, source, created_at)"
+        " VALUES (1, 1, 1, 2, 'character', 'Rewritten.', 'model', '2026-10-12T00:00:00Z')",
+        "INSERT OR REPLACE INTO model_calls (id, started_at, quota_day, role, provider, model_asked, prompt_version,"
+        " settings_version, status) VALUES (1, 'x', 'x', 'character', 'fake', 'other', 'v', 'v', 'error')",
+        "INSERT OR REPLACE INTO events (id, created_at, kind) VALUES (1, 'x', 'import')",
+    ],
+    ids=["replace-message", "replace-model-call", "replace-event"],
+)
+def test_replace_cannot_rewrite_a_logged_row(chat_conn, statement):
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        chat_conn.execute(statement)
+    assert chat_conn.execute("SELECT text FROM messages").fetchone()[0] == "Hello."
+
+
+@pytest.mark.parametrize(
+    "statement",
+    ["UPDATE transcripts SET spec_version = 2", "UPDATE transcripts SET model = 'other'", "UPDATE transcripts SET kind = 'import'"],
+    ids=["spec-version", "model", "kind"],
+)
+def test_a_chat_keeps_its_spec_version_and_settings(chat_conn, statement):
+    with pytest.raises(sqlite3.IntegrityError, match="keeps the spec version"):
+        chat_conn.execute(statement)
+
+
+def test_only_a_chats_status_changes_and_chats_are_kept(chat_conn):
+    chat_conn.execute("UPDATE transcripts SET status = 'stopped'")
+    assert chat_conn.execute("SELECT status FROM transcripts").fetchone()[0] == "stopped"
+    with pytest.raises(sqlite3.IntegrityError, match="chats are kept"):
+        chat_conn.execute("DELETE FROM transcripts")
+
+
+def test_migration_002_makes_the_chat_tables(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) == 2
+        assert {"transcripts", "messages", "model_calls", "events"} <= set(table_names(conn))
+        # Later milestones add a column the same way, as M4 will for events.flag_id.
+        conn.execute("CREATE TABLE flags (id INTEGER PRIMARY KEY)")
+        conn.execute("ALTER TABLE events ADD COLUMN flag_id INTEGER REFERENCES flags (id)")

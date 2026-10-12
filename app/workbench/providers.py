@@ -1,0 +1,282 @@
+"""Model services. This module is the only one that imports openai or httpx2.
+
+OpenAIProvider talks to an OpenAI-compatible endpoint: Gemini's, or a local
+Ollama. FakeProvider streams a canned reply with no network, for the tests and
+for running the app without a key. Both stream Chunk objects the same way, and
+both raise ProviderError with a message the creator can read as it is.
+"""
+
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+import anyio
+import httpx2
+import openai
+
+from workbench.config import APP_DIR, Settings
+from workbench.schemas import FakeSettings
+
+FAKE_FILE = APP_DIR / "samples" / "fake.v1.json"
+
+
+@dataclass(frozen=True)
+class Usage:
+    """Token counts for one call. output_tokens is the visible reply; reasoning_tokens is thinking."""
+
+    input_tokens: int
+    cached_tokens: int
+    output_tokens: int
+    reasoning_tokens: int
+
+
+@dataclass(frozen=True)
+class Chunk:
+    text: str
+    # The model the service says it used, when the chunk names one.
+    model: str | None
+    # The latest token counts. Gemini repeats them on every chunk, so the last one wins.
+    usage: Usage | None
+
+
+class ProviderError(Exception):
+    """A failed call. message is for the creator; detail is a short log line with no prompt text."""
+
+    def __init__(self, kind: str, message: str, detail: str = "") -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.detail = detail or kind
+
+
+def usage_from(usage) -> Usage:
+    """Token counts from an OpenAI-style usage object.
+
+    OpenAI counts thinking inside completion_tokens and says how much in
+    completion_tokens_details. Gemini's endpoint leaves the details out and
+    counts thinking only in total_tokens, so there it's what total has left over.
+    """
+    prompt = usage.prompt_tokens or 0
+    completion = usage.completion_tokens or 0
+    total = usage.total_tokens or 0
+    prompt_details = getattr(usage, "prompt_tokens_details", None)
+    cached = (getattr(prompt_details, "cached_tokens", None) or 0) if prompt_details else 0
+    completion_details = getattr(usage, "completion_tokens_details", None)
+    reasoning = getattr(completion_details, "reasoning_tokens", None) if completion_details else None
+    if reasoning:
+        return Usage(prompt, cached, max(0, completion - reasoning), reasoning)
+    return Usage(prompt, cached, completion, max(0, total - prompt - completion))
+
+
+def _error_detail(error: openai.APIStatusError) -> str:
+    """HTTP status plus the service's own short message. Gemini wraps its error in a list."""
+    body = error.body
+    if isinstance(body, list) and body:
+        body = body[0]
+    if isinstance(body, dict):
+        body = body.get("error", body)
+    message = body.get("message") if isinstance(body, dict) else None
+    text = message if isinstance(message, str) else error.message
+    return " ".join(f"HTTP {error.status_code}: {text}".split())[:200]
+
+
+def provider_error(error: openai.APIError) -> ProviderError:
+    if isinstance(error, openai.APITimeoutError):
+        return ProviderError("timeout", "The model service took too long to answer. Try again.", "timeout")
+    if isinstance(error, openai.APIConnectionError):
+        return ProviderError(
+            "connection",
+            "Couldn't reach the model service. Check the internet connection (or that Ollama is running) and try again.",
+            "connection error",
+        )
+    if isinstance(error, openai.APIStatusError):
+        detail = _error_detail(error)
+        status = error.status_code
+        if status in (401, 403) or "API key not valid" in detail or "API_KEY_INVALID" in detail:
+            return ProviderError(
+                "auth",
+                "The model service didn't accept the key. Check GEMINI_API_KEY in app/.env, then restart app/run.sh.",
+                detail,
+            )
+        if status == 429:
+            return ProviderError(
+                "rate_limited", "The model service says its free limit was reached. Wait a minute and try again.", detail
+            )
+        if status == 404:
+            return ProviderError(
+                "not_found", "The model service doesn't know this model. Check the model IDs in app/prompts/.", detail
+            )
+        if status >= 500:
+            return ProviderError("server", "The model service had a problem. Try again in a minute.", detail)
+        return ProviderError("bad_request", f"The model service refused the request (HTTP {status}).", detail)
+    return ProviderError("error", "The model service sent an error partway through the reply. Try again.", "stream error")
+
+
+class OpenAIProvider:
+    """Any OpenAI-compatible endpoint, through the openai library with no automatic retries."""
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        base_url: str,
+        api_key: str,
+        timeout: float,
+        http_client: httpx2.AsyncClient | None = None,
+    ) -> None:
+        self.name = name
+        self.ready = bool(api_key)
+        self._base_url = base_url
+        self._api_key = api_key
+        self._timeout = timeout
+        self._http_client = http_client
+        self._client: openai.AsyncOpenAI | None = None
+
+    def _openai(self) -> openai.AsyncOpenAI:
+        # Built on first use, so the app starts without a key and says what's missing instead.
+        if not self.ready:
+            raise ProviderError("auth", "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh.", "no key")
+        if self._client is None:
+            self._client = openai.AsyncOpenAI(
+                api_key=self._api_key,
+                base_url=self._base_url,
+                max_retries=0,
+                timeout=httpx2.Timeout(self._timeout),
+                http_client=self._http_client,
+            )
+        return self._client
+
+    async def stream(
+        self, model: str, messages: Sequence[dict], reasoning_effort: str | None, max_tokens: int
+    ) -> AsyncIterator[Chunk]:
+        """Streams one reply. Temperature is never sent: newer Gemini models ignore it."""
+        options = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
+        try:
+            stream = await self._openai().chat.completions.create(
+                model=model,
+                messages=[dict(message) for message in messages],
+                stream=True,
+                stream_options={"include_usage": True},
+                max_tokens=max_tokens,
+                **options,
+            )
+        except openai.APIError as error:
+            raise provider_error(error) from None
+        try:
+            async for chunk in stream:
+                text = "".join(choice.delta.content or "" for choice in chunk.choices if choice.delta)
+                yield Chunk(
+                    text=text,
+                    model=chunk.model or None,
+                    usage=usage_from(chunk.usage) if chunk.usage else None,
+                )
+        except openai.APIError as error:
+            raise provider_error(error) from None
+        finally:
+            # Closing the response stops the download, and with it the reply, when
+            # the creator presses Stop. Shielded, since a dropped connection may
+            # have cancelled the request already.
+            with anyio.CancelScope(shield=True):
+                await stream.close()
+
+    async def list_models(self) -> list[str]:
+        """Model IDs the service offers, without Gemini's "models/" prefix."""
+        try:
+            return [item.id.removeprefix("models/") async for item in self._openai().models.list()]
+        except openai.APIError as error:
+            raise provider_error(error) from None
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+
+
+@dataclass(frozen=True)
+class FakeReply:
+    """One scripted call for FakeProvider. Fields left as None use fake.v1.json."""
+
+    text: str | None = None
+    # Raised before the first chunk.
+    error: ProviderError | None = None
+    # Seconds before the first chunk, and between chunks.
+    first_token_seconds: float | None = None
+    chunk_seconds: float | None = None
+
+
+class FakeProvider:
+    """Streams a canned reply with no network. It records every request it gets."""
+
+    def __init__(
+        self,
+        settings: FakeSettings,
+        replies: Sequence[FakeReply] = (),
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        self.name = "fake"
+        self.ready = True
+        self.settings = settings
+        self.replies = list(replies)
+        self.requests: list[dict] = []
+        self.sleep = sleep
+
+    @classmethod
+    def from_file(cls, path: Path = FAKE_FILE, **kwargs) -> "FakeProvider":
+        return cls(FakeSettings.model_validate_json(path.read_text(encoding="utf-8")), **kwargs)
+
+    async def stream(
+        self, model: str, messages: Sequence[dict], reasoning_effort: str | None, max_tokens: int
+    ) -> AsyncIterator[Chunk]:
+        self.requests.append(
+            {
+                "model": model,
+                "messages": [dict(message) for message in messages],
+                "reasoning_effort": reasoning_effort,
+                "max_tokens": max_tokens,
+            }
+        )
+        script = self.replies.pop(0) if self.replies else FakeReply()
+        if script.error is not None:
+            raise script.error
+        text = self.settings.reply if script.text is None else script.text
+        per_token = self.settings.chars_per_token
+        input_tokens = max(1, sum(len(message["content"]) for message in messages) // per_token)
+        first = self.settings.first_token_seconds if script.first_token_seconds is None else script.first_token_seconds
+        between = self.settings.chunk_seconds if script.chunk_seconds is None else script.chunk_seconds
+
+        await self.sleep(first)
+        size = self.settings.chunk_chars
+        pieces = [text[start : start + size] for start in range(0, len(text), size)] or [""]
+        sent = 0
+        for index, piece in enumerate(pieces):
+            if index:
+                await self.sleep(between)
+            sent += len(piece)
+            # Usage on every chunk, counting up, the way Gemini sends it.
+            output = -(-sent // per_token) if sent else 0
+            yield Chunk(text=piece, model=self.settings.model_reported, usage=Usage(input_tokens, 0, output, 0))
+
+    async def list_models(self) -> list[str]:
+        return []
+
+    async def aclose(self) -> None:
+        return None
+
+
+Provider = OpenAIProvider | FakeProvider
+
+
+def build(settings: Settings) -> Provider:
+    """The provider WORKBENCH_PROVIDER names."""
+    timeout = settings.workbench_first_token_timeout_seconds
+    if settings.workbench_provider == "fake":
+        return FakeProvider.from_file()
+    if settings.workbench_provider == "ollama":
+        # Ollama needs some key but ignores it.
+        return OpenAIProvider(name="ollama", base_url=settings.ollama_base_url, api_key="ollama", timeout=timeout)
+    return OpenAIProvider(
+        name="gemini",
+        base_url=settings.gemini_base_url,
+        api_key=settings.gemini_api_key.get_secret_value(),
+        timeout=timeout,
+    )
