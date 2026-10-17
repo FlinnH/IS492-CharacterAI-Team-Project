@@ -2,7 +2,8 @@
 
 A model_calls row holds names, versions, timings, token counts, and a short
 error, never prompt or chat text. An events row records what the creator did,
-for the CP4 study.
+for the CP4 study, including each call on a flag and each opening of its
+evidence.
 """
 
 from dataclasses import asdict, dataclass
@@ -67,6 +68,24 @@ def calls_on_day(database: db.Database, provider: str, quota_day: str) -> int:
         ).fetchone()[0]
 
 
+def insert_event(
+    conn: db.Connection,
+    kind: str,
+    *,
+    session: str | None = None,
+    transcript_id: int | None = None,
+    flag_id: int | None = None,
+    flag_type: str | None = None,
+    reason: str | None = None,
+) -> int:
+    """One events row on the caller's connection, so it can share the caller's transaction."""
+    return conn.execute(
+        "INSERT INTO events (created_at, session, kind, transcript_id, flag_id, flag_type, reason)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (timestamp(utc_now()), session, kind, transcript_id, flag_id, flag_type, reason),
+    ).lastrowid
+
+
 def record_event(
     database: db.Database,
     kind: str,
@@ -76,7 +95,4 @@ def record_event(
     reason: str | None = None,
 ) -> int:
     with database.connect() as conn:
-        return conn.execute(
-            "INSERT INTO events (created_at, session, kind, transcript_id, reason) VALUES (?, ?, ?, ?, ?)",
-            (timestamp(utc_now()), session, kind, transcript_id, reason),
-        ).lastrowid
+        return insert_event(conn, kind, session=session, transcript_id=transcript_id, reason=reason)

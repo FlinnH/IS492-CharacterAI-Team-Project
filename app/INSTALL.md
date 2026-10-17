@@ -1,6 +1,6 @@
 # Install and run the workbench
 
-Draft for CP3, updated in milestone M3. The app serves the workbench screens from a local server. The Spec editor saves spec versions, Run a conversation streams live chats from a model or imports saved chats, and Check this chat flags breaks with automatic checks and an AI judge. Later milestones add flag review on saved checks and the demo steps.
+Draft for CP3, updated in milestone M4. The app serves the workbench screens from a local server. The Spec editor saves spec versions, Run a conversation streams live chats from a model or imports saved chats, Check this chat flags breaks with automatic checks and an AI judge, and Flag review saves your call on each flag. Later milestones add the demo steps.
 
 ## What you need
 
@@ -78,7 +78,20 @@ Under any chat with a finished reply, Check this chat looks for breaks:
 2. Then the AI judge reads the whole chat in one model call. Each flag has a turn, a type, the spec line it breaks, an exact quote, a confidence, and why. The judge also lists claims about the user, and any the user never made become flags, along with what the judge couldn't check.
 3. Code checks every judge flag before you see it: the line must be in the chat's spec version, and the quote must appear word for word in that reply. A flag that fails is hidden, and the results say how many and why.
 
-Persona exits, guesses near what the character can't know, and lines the spec marks always say "Needs your call." The judge's answer must match `app/prompts/judge.schema.v1.json`. If it doesn't, the judge gets one more try. If that fails too, or the service fails, only the automatic checks show, with a note. Every check is saved, so coming back to the chat shows it with no new call, until the chat changes.
+On Flag review, persona exits, guesses near what the character can't know, and lines the spec marks carry a note that says why only you can settle them. The judge's answer must match `app/prompts/judge.schema.v1.json`. If it doesn't, the judge gets one more try. If that fails too, or the service fails, only the automatic checks show, with a note. Every check is saved, so coming back to the chat shows it with no new call, until the chat changes.
+
+## Review flags
+
+Check results on Run a conversation sum up each check, and Review flags opens its flags on Flag review. Flag review lists every checked chat. The badge on its tab counts the flags that still need your call, across every chat, and each chat in the switcher shows its own count.
+
+1. Each flag shows the quote, the spec line it cites in the spec's own words, a confidence, and why.
+2. Agree stays off until you press Show in context, which shows the turn with the quote marked. The server also refuses an Agree for a flag whose evidence was never opened.
+3. Override asks why the AI is wrong, in at least 3 words, and a count under the field shows how many you have. If the turn does break the spec but in another way, pick the right type: the flag then still counts as a break, with your type.
+4. Undo takes a call back, and the flag needs your call again.
+
+Every call and every opening of the evidence is saved with its time, so a reload or a restart keeps them. If you agree with every flag in a chat, the screen asks you to check again, since the AI makes mistakes too. A live chat that grows after its check moves to a "Changed since its check" notice. Checking it again makes a new set of flags, and each needs your call. Your calls on the old flags stay in the log.
+
+Compare runs uses the same calls. It lines up the checked chats that ran the same scenario on the same spec version, and flags you overrode don't count as breaks.
 
 ## Preflight
 
@@ -108,5 +121,4 @@ app/.venv/bin/pytest tests/test_live.py --live -s
 
 ## Coming in later milestones
 
-- **Flag review on saved checks (M4).** Agree with or override each flag from Check this chat, with your calls saved.
 - **Demo reset (M8).** A script that resets the database to a known state before a demo.

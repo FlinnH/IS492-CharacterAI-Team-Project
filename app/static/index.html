@@ -39,10 +39,6 @@
               <span>Dark</span>
             </button>
           </div>
-          <button type="button" class="btn btn--outlined btn--icon-leading" id="reset-demo" aria-haspopup="dialog">
-            <span class="icon" aria-hidden="true">restart_alt</span>
-            <span>Reset demo</span>
-          </button>
         </div>
       </div>
 
@@ -108,7 +104,7 @@
   </main>
 
   <footer class="app-footer">
-    <p>Workbench for IS 492 CP3. Live chats and Check this chat make model calls. Flag review and Compare runs still show the CP2 flags, written by hand.</p>
+    <p>Workbench for IS 492 CP3. Live chats and Check this chat make model calls. Your calls on Flag review are saved with each check.</p>
   </footer>
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -116,17 +112,6 @@
   <!-- One shared tooltip. Its text is also in each element's accessible name,
        so screen readers skip this copy. -->
   <div class="tooltip" id="tooltip" aria-hidden="true" hidden></div>
-
-  <dialog class="dialog" id="reset-dialog" aria-labelledby="reset-dialog-title" aria-describedby="reset-dialog-text">
-    <form method="dialog">
-      <h2 class="dialog__headline" id="reset-dialog-title">Reset the demo?</h2>
-      <p class="dialog__content" id="reset-dialog-text">This clears your decisions and reasons on Flag review, stops any reply that is streaming, and brings back the starting flags. Saved chats and spec versions stay, and unsaved spec edits are lost. You can't undo this.</p>
-      <div class="dialog__actions">
-        <button type="submit" class="btn btn--text" value="cancel" autofocus>Cancel</button>
-        <button type="submit" class="btn btn--text" value="reset">Reset</button>
-      </div>
-    </form>
-  </dialog>
 
   <dialog class="dialog" id="discard-spec-dialog" aria-labelledby="discard-spec-title" aria-describedby="discard-spec-text">
     <form method="dialog">
@@ -184,7 +169,6 @@
     <div class="side-sheet__body" data-sheet-body></div>
   </dialog>
 
-  <script src="data.js"></script>
   <script src="api.js"></script>
   <script src="app.js"></script>
 </body>

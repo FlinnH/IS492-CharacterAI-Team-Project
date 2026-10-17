@@ -48,7 +48,6 @@ def test_root_serves_four_tabs(make_client):
 
     for name, content_type in [
         ("styles.css", "text/css"),
-        ("data.js", "javascript"),
         ("api.js", "javascript"),
         ("app.js", "javascript"),
     ]:
@@ -57,12 +56,15 @@ def test_root_serves_four_tabs(make_client):
         assert content_type in response.headers["content-type"], name
         assert response.content == (STATIC_DIR / name).read_bytes(), name
 
+    # M4 moved every screen onto the server's data, so the CP2 data.js is gone.
+    assert client.get("/data.js").status_code == 404
+
 
 def test_scripts_load_in_order(make_client):
-    # app.js uses both of the others as soon as it runs.
+    # app.js uses api.js as soon as it runs.
     finder = ScriptFinder()
     finder.feed(make_client().get("/").text)
-    assert finder.sources == ["data.js", "api.js", "app.js"]
+    assert finder.sources == ["api.js", "app.js"]
 
 
 def test_health_never_echoes_key(make_client):

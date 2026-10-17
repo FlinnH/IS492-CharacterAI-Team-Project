@@ -606,3 +606,64 @@ class CheckState(Model):
     running: bool
     # The saved check of the chat as it is now, or None.
     result: CheckView | None
+
+
+# Flag review: the creator's call on each flag of a saved check.
+
+Verdict = Literal["agreed", "overridden"]
+
+
+class FlagCall(Model):
+    verdict: Verdict
+    # Why the creator overrode the flag. None for an agree.
+    reason: str | None
+    # The type an override says is right, when it changes the flag's type. The
+    # flag then still counts as a break, of this type.
+    type: FailureType | None
+    made_at: str
+
+
+class ReviewFlag(CheckFlag):
+    # The creator has opened the flag's evidence at least once, which unlocks Agree.
+    evidence_opened: bool
+    # The creator's standing call, or None while the flag needs one.
+    call: FlagCall | None
+    # True unless the creator overrode the flag without giving another type.
+    counts_as_break: bool
+
+
+class ReviewChat(Model):
+    chat: ChatView
+    spec_version: int
+    judge: JudgeRunView
+    flags: list[ReviewFlag]
+    hidden: list[HiddenCount]
+    not_checked: list[NotCheckedTopic]
+    # Flags with no call yet.
+    open_calls: int
+    # The earliest turn with a flag that counts as a break, or None.
+    first_break: int | None
+    # Every flag has a call, and every call is Agree: the rubber-stamp check.
+    agreed_with_every: bool
+    # The newest event on this chat's flags, or 0, so the screen can tell an older answer from a newer one.
+    last_event_id: int
+
+
+class ReviewState(Model):
+    # The override rules, so the screen checks what the server checks.
+    min_reason_words: int
+    max_reason_chars: int
+    # The types an override may give.
+    failure_types: list[FailureType]
+    # Flags with no call yet, in every chat below.
+    open_calls: int
+    # Every checked chat whose saved check covers it as it stands, oldest first.
+    chats: list[ReviewChat]
+    # Checked chats that changed after their check, so their flags wait for a new one.
+    changed: list[ChatSummary]
+
+
+class OverrideCall(Model):
+    reason: str
+    # The right type, when the flag's own type is wrong. None means it isn't a break.
+    type: FailureType | None = None

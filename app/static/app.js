@@ -1,13 +1,10 @@
 /*
   Character Consistency Workbench: CP3 app, first copied from the CP2 prototype
 
-  A plain script (no modules, no build step). The Spec editor and Run a
-  conversation talk to the workbench server, by way of api.js: specs, live
-  chats, imported chats, and their checks (the automatic checks and the AI
-  judge) are saved there. Flag review and Compare runs still read the CP2
-  chats from data.js (window.WORKBENCH_DATA), and the calls the creator makes
-  there live in memory until M4, so "Reset demo" or reloading the page starts
-  those over.
+  A plain script (no modules, no build step). Every screen talks to the
+  workbench server, by way of api.js: specs, live chats, imported chats, their
+  checks (the automatic checks and the AI judge), and the creator's calls on
+  each flag are saved there, so reloading the page keeps them all.
 
   Sections:
     1. Data and state
@@ -22,31 +19,16 @@
 
   // 1. Data and state ======================================================
 
-  const main = document.getElementById("main");
+  // Everything a screen draws from. The server's data arrives through api.js.
+  const state = createInitialState();
 
-  if (!window.WORKBENCH_DATA) {
-    main.innerHTML =
-      '<p class="load-error">The data did not load. Check that data.js is in the same folder as index.html.</p>';
-    return;
-  }
-
-  // Frozen, so no screen can change the original by accident. Screens read
-  // and change `state`, which is a copy; "Reset demo" makes a fresh one.
-  const DATA = deepFreeze(window.WORKBENCH_DATA);
-
-  let state = createInitialState();
-
-  // Counts spec requests, so only the newest one changes the screen. It lives
-  // outside `state`, so Reset demo can't set it back to zero.
+  // Counts spec requests, so only the newest one changes the screen.
   let specRequest = 0;
   // Gives each new line in the Spec editor form its own key.
   let newLineCount = 0;
 
   function createInitialState() {
     return {
-      // The CP2 chats were made with spec v1, so Flag review and Compare runs
-      // quote v1 from data.js until M4 loads chats from the server.
-      spec: clone(DATA.spec),
       // Spec editor: the version on screen, from the server (see loadSpec).
       // specLoad.status is "loading", "ready", or "failed". specDraft holds
       // the form while the creator edits, and is null otherwise.
@@ -55,14 +37,10 @@
       specDraft: null,
       specSaving: false,
       specSaveError: null, // { message, field } from the last save that failed
-      scenario: clone(DATA.scenario),
-      runs: clone(DATA.runs),
       // Spec editor: the text in the search field.
       specQuery: "",
       // Set by "Go to flag" on the Spec editor; Flag review opens at this flag.
       openFlagId: null,
-      // The data.js chat that Flag review and Compare runs show.
-      runId: DATA.runs[0].id,
       // Run a conversation: the saved chats (live runs and imports) from the
       // server, the one on screen, and the next run's scenario and model.
       chats: [],
@@ -80,15 +58,19 @@
       drafts: {},
       // Check results, per chat ID (see 3.2.2).
       checks: {},
-      // Flag review. Every map is keyed by flag ID unless noted.
-      // decisions: { verdict: "agreed" } or { verdict: "overridden", reason }
-      decisions: {},
+      // Flag review: the saved checks and the creator's calls on their flags,
+      // from the server (see 3.3), or null until they load.
+      review: null,
+      reviewLoad: { status: "loading", message: "" },
+      // The chat Flag review and Compare runs show.
+      reviewChatId: null,
+      // Every map below is keyed by flag ID unless noted.
       contextOpen: {}, // the turn is expanded in the card right now
-      contextSeen: {}, // the creator has opened it at least once (unlocks Agree)
       citesOpen: {}, // "flagId:lineId" when a spec line chip is expanded
       overrideDrafts: {}, // the reason being typed; a key means the field is open
+      overrideTypes: {}, // the right type picked in an open override form
+      overrideErrors: {}, // why the server refused a reason, until the creator types again
       flagFilter: "All",
-      notCheckedReviewed: {}, // "runId:index" when marked as reviewed
       reviewTurn: null, // the turn highlighted in the conversation
       // Set by "Open K2 in the spec" on Compare runs: { lineId, note }. The
       // Spec editor highlights that line once and lands on it.
@@ -97,18 +79,6 @@
   }
 
   // 2. Helpers =============================================================
-
-  function clone(value) {
-    return JSON.parse(JSON.stringify(value));
-  }
-
-  function deepFreeze(value) {
-    if (value && typeof value === "object" && !Object.isFrozen(value)) {
-      Object.freeze(value);
-      Object.values(value).forEach(deepFreeze);
-    }
-    return value;
-  }
 
   // Run any text through this before it goes into innerHTML.
   function escapeHtml(value) {
@@ -144,13 +114,14 @@
     return html + escapeHtml(text.slice(cursor));
   }
 
-  // Every flag in every run, each paired with its run.
+  // Every flag of every checked chat, each paired with its chat's review.
   function allFlags() {
-    return state.runs.flatMap((run) => run.flags.map((flag) => ({ run, flag })));
+    return reviewChats().flatMap((item) => item.flags.map((flag) => ({ item, flag })));
   }
 
+  // Flag IDs are numbers on the server; data-flag attributes hold them as text.
   function findFlag(flagId) {
-    return allFlags().find(({ flag }) => flag.id === flagId) || null;
+    return allFlags().find(({ flag }) => flag.id === Number(flagId)) || null;
   }
 
   // Saved spec versions are numbers on the server; the screens say "v2".
@@ -158,14 +129,9 @@
     return `v${version}`;
   }
 
-  // How the interface names a chat: its tool and receipt, like "Claude (CLA-F2)".
-  function runLabel(run) {
-    return `${run.tool} (${run.receipt})`;
-  }
-
   // Where a flag sits, for example "Claude (CLA-F2), turn 4".
-  function flagPlace(run, flag) {
-    return `${runLabel(run)}, turn ${flag.turn}`;
+  function flagPlace(chat, flag) {
+    return `${reviewLabel(chat)}, ${numberWord(chat).toLowerCase()} ${flag.turn}`;
   }
 
   const CONFIDENCE_ICONS = {
@@ -187,9 +153,10 @@
     F2: "things Harry can't know yet",
   };
 
-  // Tooltip for a spec line, like "K2: knowledge limit".
+  // Tooltip for a spec line, like "K2: knowledge limit", or a field a flag
+  // cites, like "Voice: spec field".
   function lineTip(lineId) {
-    return `${lineId}: ${LINE_MEANINGS[lineId[0]]}`;
+    return `${lineId}: ${citeMeaning(lineId)}`;
   }
 
   // Tooltip for a scenario, like "F2: failure case, things Harry can't know yet".
@@ -516,9 +483,8 @@
     return terms.every((term) => term === id || words.includes(term));
   }
 
-  // A line's text in a spec. By default that's data.js's v1, the version the
-  // CP2 chats were made with.
-  function specLineText(lineId, spec = state.spec) {
+  // A line's text in a spec body.
+  function specLineText(lineId, spec) {
     const line = spec.sections
       .flatMap((section) => section.lines)
       .find((candidate) => candidate.id === lineId);
@@ -526,36 +492,45 @@
   }
 
   // Side sheet body: the line as the version on screen has it, then every
-  // flag that cites it, each with the spec version its chat was made with.
+  // flag of every checked chat that cites it, each with the spec version its
+  // chat was made with.
   function renderCitingFlags(lineId) {
-    const citing = allFlags().filter(({ flag }) => flag.cites.includes(lineId));
+    const line = `
+      <div class="cited-line">
+        <span class="chip" tabindex="0" data-tooltip="${escapeHtml(lineTip(lineId))}">${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(citeMeaning(lineId))}</span></span>
+        <p class="cited-line__text">${escapeHtml(specLineText(lineId, state.specView.body))}</p>
+      </div>`;
+    if (!state.review) {
+      const text = state.reviewLoad.status === "failed"
+        ? `The saved flags didn't load. ${state.reviewLoad.message}`
+        : "The saved flags are still loading.";
+      return `${line}<p class="sheet-summary">${escapeHtml(text)}</p>`;
+    }
+
+    const citing = allFlags().filter(({ flag }) => flag.line_id === lineId);
     let summary = `${citing.length} flags cite this line.`;
     if (citing.length === 0) summary = "No flags cite this line.";
     if (citing.length === 1) summary = "1 flag cites this line.";
-
     return `
-      <div class="cited-line">
-        <span class="chip" tabindex="0" data-tooltip="${escapeHtml(lineTip(lineId))}">${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(LINE_MEANINGS[lineId[0]])}</span></span>
-        <p class="cited-line__text">${escapeHtml(specLineText(lineId, state.specView.body))}</p>
-      </div>
+      ${line}
       <p class="sheet-summary">${summary}</p>
       ${citing.length > 0 ? `<ul class="flag-list">${citing.map(renderFlagSummary).join("")}</ul>` : ""}`;
   }
 
   // A short card for one flag.
-  function renderFlagSummary({ run, flag }) {
-    const place = flagPlace(run, flag);
+  function renderFlagSummary({ item, flag }) {
+    const place = flagPlace(item.chat, flag);
     return `
       <li class="card card--outlined flag-summary">
         <h3 class="flag-summary__title">
           <span class="flag-summary__place">${escapeHtml(place)}<span class="visually-hidden">:</span></span>
-          <span>${escapeHtml(flag.type)}</span>
+          <span>${escapeHtml(capitalized(flag.type))}</span>
         </h3>
-        <p>${confidenceHtml(flag.confidence)}</p>
+        <p>${confidenceHtml(capitalized(flag.confidence))}</p>
         <dl class="flag-summary__details">
           <div>
             <dt>Evidence</dt>
-            <dd><q>${escapeHtml(flag.evidence)}</q></dd>
+            <dd><q>${escapeHtml(flag.quote)}</q></dd>
           </div>
           <div>
             <dt>Why</dt>
@@ -563,7 +538,7 @@
           </div>
           <div>
             <dt>Chat made with</dt>
-            <dd>Spec ${escapeHtml(run.specVersion)}</dd>
+            <dd>Spec ${escapeHtml(specLabel(item.chat.spec_version))}</dd>
           </div>
         </dl>
         <button type="button" class="btn btn--outlined" data-action="go-to-flag" data-flag="${escapeHtml(flag.id)}">
@@ -592,8 +567,10 @@
 
   actions["go-to-flag"] = (button) => {
     const target = findFlag(button.dataset.flag);
-    if (target) selectDataRun(target.run.id);
-    state.openFlagId = button.dataset.flag;
+    if (target) {
+      state.reviewChatId = target.item.chat.id;
+      state.openFlagId = target.flag.id;
+    }
     citingSheet.close();
     goToScreen("diagnose");
   };
@@ -961,14 +938,14 @@
   // screen changes in place, so focus and scrolling stay where the creator
   // left them, and no other screen is redrawn by it.
 
-  // Loaded from the server and kept outside `state`, so Reset demo reloads them.
+  // Loaded from the server and kept outside `state`.
   let runOptions = null;
   let runOptionsLoad = { status: "loading", message: "" };
   let samples = [];
   // Counts runs and chat loads, so a reply that belongs to an older one changes nothing.
   let runTicket = 0;
   let chatRequest = 0;
-  // The reply streaming now, as { chatId, controller }, so Stop and Reset can end it.
+  // The reply streaming now, as { chatId, controller }, so Stop can end it.
   let runStream = null;
   // The chat on screen, kept per tab, so a reload comes back to it.
   const CHAT_KEY = "workbench-chat";
@@ -1400,14 +1377,10 @@
             : ""}
         </div>`);
     } else if (chat.kind !== "live") {
-      const reviewable = chat.kind === "sample" && state.runs.some((run) => run.id === chat.sample);
       parts.push(`
         <div class="card card--filled run-result__card">
           <span class="icon" aria-hidden="true">upload_file</span>
           <p class="run-result__text">Imported chat, pinned to spec ${escapeHtml(specLabel(chat.spec_version))}. Imported chats are read-only.</p>
-          ${reviewable
-            ? `<button type="button" class="btn btn--outlined" data-action="review-flags" data-run="${escapeHtml(chat.sample)}" data-focus-key="review-flags">Review the CP2 flags</button>`
-            : ""}
         </div>`);
     } else if (chat.status === "script_done" || chat.status === "stopped") {
       const ended = chat.status === "stopped" ? "Run stopped. The script won't go on in this chat." : "Script finished.";
@@ -1551,6 +1524,8 @@
       live.waitSeconds = 0;
       addMessage(chatId, { seq: data.seq, turn: data.turn, speaker: "user", text: data.text, source: live.scripted ? "script" : "typed", stopped: false });
       showLiveTurn(chatId);
+      // The chat just changed, so a check of it no longer covers it, and Flag review's count changes.
+      loadReview();
     } else if (name === "wait") {
       live.waitSeconds = data.seconds;
       showLiveText(chatId);
@@ -1581,7 +1556,7 @@
   // Streams one turn: kind "next" (the next scripted line, or the line still
   // waiting for a reply) or "typed". Resolves with { name, data } for done or
   // error, { name: "failed", data: ApiError } when the request failed, or null
-  // when the run was reset or stopped before the server answered.
+  // when Stop or a newer run came before the server answered.
   async function streamTurn(chatId, kind, text, ticket) {
     const controller = new AbortController();
     runStream = { chatId, controller };
@@ -1656,17 +1631,7 @@
     if (state.runError && state.runError.chatId === chatId) announce(state.runError.message);
     // The chat grew, so an earlier check no longer covers it.
     loadCheck(chatId);
-  }
-
-  // Ends a streaming reply for Reset demo: Stop for the server, then the request itself.
-  function stopLiveRun() {
-    runTicket += 1;
-    const live = state.live;
-    if (live) WorkbenchApi.stopChat(live.chatId).catch(() => {});
-    if (runStream) {
-      runStream.controller.abort();
-      runStream = null;
-    }
+    loadReview();
   }
 
   actions["start-run"] = async (button) => {
@@ -1739,8 +1704,9 @@
     await finishRun(chat.id, ticket, outcome);
   };
 
+  // "Review flags" under a check: Flag review opens on that chat.
   actions["review-flags"] = (button) => {
-    if (button && button.dataset.run) selectDataRun(button.dataset.run);
+    state.reviewChatId = Number(button.dataset.chat);
     state.openFlagId = null;
     goToScreen("diagnose");
   };
@@ -1993,26 +1959,16 @@
 
   // 3.2.2 Check a chat ------------------------------------------------------
   // Check this chat runs the automatic checks on every finished reply, then
-  // has the AI judge review the whole chat in one model call. The flags show
-  // under the transcript, read-only for now: making the call on each one moves
-  // to Flag review in M4. The server keeps every check, so coming back to a
-  // chat shows its check with no new call, until the chat changes. Here
-  // "Needs your call" marks only the flags the spec can't settle, which code
-  // routes to the creator (persona exits, guesses near the knowledge
-  // boundary, and lines the spec marks).
+  // has the AI judge review the whole chat in one model call. The results
+  // here sum the check up, and the flags themselves go to Flag review, where
+  // the creator makes the call on each one. The server keeps every check, so
+  // coming back to a chat shows its check with no new call, until the chat
+  // changes.
 
   // state.checks[chatId] is { status, view, message, retry }. status is
   // "loading", "none" (not checked as it stands), "running" (this tab is
   // checking it), "elsewhere" (another tab is), "ready" (view holds the
   // results), or "failed" (the request failed; retry is "check" or "look").
-
-  const NEEDS_CALL_TEXT = {
-    persona_exit: () => "The character stepped out of the role. Only you can judge how much that matters.",
-    near_guess: (chat) => `A guess near what ${chat.character_name} can't know. Only you can tell a guess from a leak.`,
-    unsure_boundary: () => "The AI isn't sure this crosses the knowledge boundary, so it's yours to decide.",
-    line: () => "The spec marks this line for your call.",
-    judge: () => "The AI judge left this one to you.",
-  };
 
   function readyCheck(chatId) {
     const check = state.checks[chatId];
@@ -2060,24 +2016,20 @@
     if (state.chatId === chatId) refreshRun();
   }
 
-  // "8 flags: 1 from automatic checks and 7 from the AI judge. 2 need your call."
+  // "8 flags: 1 from automatic checks and 7 from the AI judge."
   function checkSummary(view) {
     const total = view.flags.length;
     const fromRules = view.flags.filter((flag) => flag.source === "rule").length;
-    const calls = view.flags.filter((flag) => flag.needs_call).length;
     const noun = total === 1 ? "flag" : "flags";
-    let text;
     if (total === 0) {
-      text = view.judge.status === "ok"
+      return view.judge.status === "ok"
         ? "No flags. The automatic checks and the AI judge found no breaks."
         : "No flags from the automatic checks.";
-    } else if (view.judge.status === "ok") {
-      text = `${total} ${noun}: ${fromRules} from automatic checks and ${total - fromRules} from the AI judge.`;
-    } else {
-      text = `${total} ${noun}, all from automatic checks.`;
     }
-    if (calls > 0) text += ` ${calls} ${calls === 1 ? "needs" : "need"} your call.`;
-    return text;
+    if (view.judge.status === "ok") {
+      return `${total} ${noun}: ${fromRules} from automatic checks and ${total - fromRules} from the AI judge.`;
+    }
+    return `${total} ${noun}, all from automatic checks.`;
   }
 
   // "1 flag hidden: its quote wasn't in the chat."
@@ -2178,10 +2130,6 @@
           <span class="check__note-text">The AI judge is the same model that wrote some of these replies, so it may miss its own mistakes. Those flags say "Same model reviewed."</span>
         </li>`);
     }
-    const cards = view.flags.length > 0
-      ? `<ol class="flag-cards">${view.flags.map((flag) => `<li>${renderCheckFlag(chat, flag)}</li>`).join("")}</ol>`
-      : "";
-
     return `
       <section class="check" aria-labelledby="check-title">
         <div class="check__head">
@@ -2194,63 +2142,37 @@
           : ""}</p>
         <p class="check__summary">${escapeHtml(checkSummary(view))}</p>
         ${notes.length ? `<ul class="check__notes">${notes.join("")}</ul>` : ""}
-        ${cards}
+        ${renderCheckReview(chat, view)}
         ${renderCheckGaps(chat, view)}
       </section>`;
   }
 
-  // A read-only flag card: the evidence first, then the spec line in the spec's own words.
-  function renderCheckFlag(chat, flag) {
-    const id = `check-flag-${flag.id}`;
-    const word = numberWord(chat);
-    const title = `${word} ${flag.turn}, ${flag.type}`;
-    const level = capitalized(flag.confidence);
-    const callText = flag.needs_call ? NEEDS_CALL_TEXT[flag.needs_call_reason](chat) : "";
+  // Where the flags went: how many still need the creator's call, from the
+  // saved calls once they have loaded, and the way to Flag review.
+  function renderCheckReview(chat, view) {
+    if (view.flags.length === 0) return "";
+    const item = reviewItem(chat.id);
+    let text = "";
+    if (item) {
+      const open = item.open_calls;
+      text = open === 0
+        ? "Every flag has your call."
+        : `${open} ${open === 1 ? "flag needs" : "flags need"} your call on Flag review.`;
+    }
     return `
-      <article class="card card--outlined flag-card" id="${id}" aria-labelledby="${id}-title">
-        <div class="flag-card__head">
-          <h3 class="flag-card__title" id="${id}-title">${escapeHtml(title)}</h3>
-          ${flag.needs_call
-            ? '<span class="needs-call"><span class="icon" aria-hidden="true">pending</span><span>Needs your call</span></span>'
-            : ""}
-        </div>
-        <figure class="flag-card__evidence">
-          <blockquote><p class="keep-lines"><q>${escapeHtml(flag.quote)}</q></p></blockquote>
-          <figcaption>From ${escapeHtml(chat.character_name)}'s reply</figcaption>
-        </figure>
-        <div class="flag-card__chips">
-          ${flag.source === "rule" ? chip("rule", "Automatic check") : chip("smart_toy", "AI judge")}
-          <span class="chip">${escapeHtml(flag.line_id)}<span class="visually-hidden">: ${escapeHtml(citeMeaning(flag.line_id))}</span></span>
-          <span class="chip chip--icon-leading flag-card__confidence">
-            <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[level]}</span>
-            <span>${level}<span class="visually-hidden"> confidence</span></span>
-          </span>
-          ${flag.same_model ? chip("sync_problem", "Same model reviewed") : ""}
-        </div>
-        <p class="flag-card__cite-text"><span class="flag-card__label">${escapeHtml(flag.line_id)}.</span> ${escapeHtml(flag.line_text)}</p>
-        <p class="flag-card__why"><span class="flag-card__label">Why this flag?</span> ${escapeHtml(flag.why)}</p>
-        ${flag.also_turns.length > 0
-          ? `<p class="flag-card__also">Also in ${word.toLowerCase()}s ${escapeHtml(listText(flag.also_turns))}.</p>`
-          : ""}
-        ${flag.needs_call
-          ? `<p class="flag-card__unsure"><span class="icon" aria-hidden="true">pending</span><span>${escapeHtml(callText)}</span></p>`
-          : ""}
-        ${flag.confidence === "low" && !flag.needs_call
-          ? `<p class="flag-card__unsure">
-              <span class="icon" aria-hidden="true">help</span>
-              <span>The AI is unsure. Read the turn before deciding.</span>
-            </p>`
-          : ""}
-        <button type="button" class="btn btn--text btn--icon-leading" data-action="show-in-transcript" data-turn="${flag.turn}"
-          data-focus-key="show-${flag.id}">
-          <span class="icon" aria-hidden="true">arrow_upward</span>
-          <span>Show in transcript<span class="visually-hidden">: ${escapeHtml(title)}</span></span>
+      <div class="check-review">
+        ${text ? `<p class="check-review__text">${escapeHtml(text)}</p>` : ""}
+        <button type="button" class="btn btn--filled btn--icon-leading" data-action="review-flags" data-chat="${chat.id}"
+          data-focus-key="review-flags">
+          <span class="icon" aria-hidden="true">flag</span>
+          <span>Review flags</span>
         </button>
-      </article>`;
+      </div>`;
   }
 
-  // What the judge said the spec and the chat can't settle.
-  function renderCheckGaps(chat, view) {
+  // What the judge said the spec and the chat can't settle. Flag review shows
+  // it too, under its own heading ID.
+  function renderCheckGaps(chat, view, titleId = "check-gaps-title") {
     if (view.not_checked.length === 0) return "";
     const word = numberWord(chat).toLowerCase();
     const items = view.not_checked.map((gap) => `
@@ -2261,8 +2183,8 @@
           : ""}
       </div>`);
     return `
-      <section class="card card--outlined not-checked" aria-labelledby="check-gaps-title">
-        <h3 class="not-checked__title" id="check-gaps-title">
+      <section class="card card--outlined not-checked" aria-labelledby="${titleId}">
+        <h3 class="not-checked__title" id="${titleId}">
           <span class="icon" aria-hidden="true">visibility_off</span>
           <span>Not checked by the AI</span>
         </h3>
@@ -2293,6 +2215,8 @@
     }
     // The judge's calls count toward today's total, shown by Start run.
     loadRunOptions();
+    // The new check's flags go to Flag review and its badge.
+    loadReview();
   };
 
   actions["reload-check"] = () => {
@@ -2301,44 +2225,44 @@
     loadCheck(state.chat.id);
   };
 
-  // Scrolls the transcript (its own box) to the flagged reply and focuses it.
-  actions["show-in-transcript"] = (button) => {
-    const body = runBody();
-    if (!body) return;
-    const box = body.querySelector(".chat");
-    const bubble = body.querySelector(`.bubble--character[data-turn="${CSS.escape(button.dataset.turn)}"]`);
-    if (!box || !bubble) return;
-    box.scrollTop += bubble.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
-    scrollBelowHeader(box.closest(".transcript"));
-    bubble.focus({ preventScroll: true });
-  };
-
   // 3.3 Flag review (Diagnose) ----------------------------------------------
   // The heart of the workbench: the AI proposes flags, and the creator makes
-  // the call on each one (DESIGN_SPEC 7.1 to 7.4).
-  // - Evidence first: Agree unlocks only after "Show in context".
-  // - An override needs a reason of at least 3 words.
+  // the call on each one (DESIGN_SPEC 7.1 to 7.4). The flags come from the
+  // saved checks, and the server saves every call with its time.
+  // - Evidence first: Agree unlocks only after "Show in context", and the
+  //   server refuses an Agree before the evidence was opened.
+  // - An override needs a reason of at least 3 words. It may name the right
+  //   type instead, and then the flag still counts as a break.
   // - Agree and Override look the same, so the screen doesn't push agreement.
   // - Agreeing with every flag triggers a rubber-stamp check.
   // - What the AI could not check is listed for the creator to read.
-  // Every decision redraws the screen; announceReview() tells screen readers.
-  // Until M4 it reviews the CP2 chats in data.js, apart from the live chats
-  // on Run a conversation.
-
-  // The data.js chat that Flag review and Compare runs show.
-  function selectedRun() {
-    return state.runs.find((run) => run.id === state.runId) || state.runs[0];
-  }
-
-  // Picks that chat. It never touches a run streaming on Run a conversation.
-  function selectDataRun(runId) {
-    if (state.runs.some((run) => run.id === runId)) state.runId = runId;
-  }
+  // Every call redraws the screen from the server's answer; announceReview()
+  // tells screen readers.
 
   const CONFIDENCE_FILTERS = ["All", "High", "Medium", "Low"];
-  const MIN_REASON_WORDS = 3;
   const RUBBER_STAMP_MESSAGE =
     "You agreed with every flag. The AI makes mistakes too, so check again whether each one is really a break.";
+
+  // Why the spec alone can't settle a flag, for the flags code sends to the
+  // creator: persona exits, guesses near the knowledge boundary, and lines
+  // the spec marks.
+  const NEEDS_CALL_TEXT = {
+    persona_exit: () => "The character stepped out of the role. Only you can judge how much that matters.",
+    near_guess: (chat) => `A guess near what ${chat.character_name} can't know. Only you can tell a guess from a leak.`,
+    unsure_boundary: () => "The AI isn't sure this crosses the knowledge boundary, so it's yours to decide.",
+    line: () => "The spec marks this line for your call.",
+    judge: () => "The AI judge left this one to you.",
+  };
+
+  // Counts review loads, so only the newest one changes the screen.
+  let reviewRequest = 0;
+  // A review load is on its way.
+  let reviewLoading = false;
+  // Flags with a call on its way to the server, so a second click waits.
+  const reviewPending = new Set();
+  // Evidence openings on their way to the server, by flag ID, so an Agree
+  // pressed right after "Show in context" waits for the opening to land.
+  const evidenceRequests = new Map();
 
   // Measures the sticky summary bar, so the CSS can keep keyboard focus from
   // scrolling under it (see --review-bar-height in styles.css).
@@ -2349,36 +2273,128 @@
       })
     : null;
 
+  function reviewChats() {
+    return state.review ? state.review.chats : [];
+  }
+
+  function reviewItem(chatId) {
+    return reviewChats().find((item) => item.chat.id === chatId) || null;
+  }
+
+  // The chat on screen: the one picked, else the chat on Run a conversation
+  // if it was checked, else the first with calls left, else the first.
+  function selectedReview() {
+    const chats = reviewChats();
+    return reviewItem(state.reviewChatId) || reviewItem(state.chatId)
+      || chats.find((item) => item.open_calls > 0) || chats[0] || null;
+  }
+
+  // How Flag review names a chat: an imported chat by its title, like
+  // "Claude (CLA-F2)", and a live run by its scenario, model, and start time.
+  function reviewLabel(chat) {
+    if (chat.kind !== "live") return chat.title;
+    return `${chat.scenario} live run, ${modelLabel(chat.model)}, ${chatTime(chat.created_at)}`;
+  }
+
+  // Loads the saved checks and calls, then redraws what shows them. A load
+  // that found nothing new redraws nothing, so a reason being typed while a
+  // run plays keeps its place. A reply streaming on Run a conversation is
+  // never redrawn by this.
+  async function loadReview({ focusKey = null } = {}) {
+    const ticket = ++reviewRequest;
+    reviewLoading = true;
+    let changed;
+    try {
+      const review = await WorkbenchApi.getReview();
+      if (ticket !== reviewRequest) return;
+      changed = state.reviewLoad.status !== "ready" || JSON.stringify(review) !== JSON.stringify(state.review);
+      state.review = review;
+      state.reviewLoad = { status: "ready", message: "" };
+    } catch (error) {
+      if (ticket !== reviewRequest) return;
+      changed = state.reviewLoad.status !== "failed" || state.reviewLoad.message !== error.message;
+      state.reviewLoad = { status: "failed", message: error.message };
+    }
+    reviewLoading = false;
+    if (!changed && !focusKey) return;
+    if (currentScreen === "diagnose" || currentScreen === "compare") refresh({ focusKey });
+    else if (currentScreen === "run" && !state.live) refresh();
+    else updateTodoBadge();
+  }
+
+  // Puts a chat's review, as a call answered it, in place of the one on
+  // screen, unless the one on screen saw a later call. A review load that
+  // started before this answer may not have the call, so a fresh one starts.
+  function replaceReviewChat(updated) {
+    if (reviewLoading) loadReview();
+    if (!state.review) return;
+    const chats = state.review.chats;
+    const index = chats.findIndex((item) => item.chat.id === updated.chat.id);
+    if (index === -1 || chats[index].last_event_id > updated.last_event_id) return;
+    chats[index] = updated;
+    state.review.open_calls = chats.reduce((sum, item) => sum + item.open_calls, 0);
+  }
+
+  // Redraws the screen that shows the review, or only the badge elsewhere.
+  function redrawReview() {
+    if (currentScreen === "diagnose" || currentScreen === "compare") refresh();
+    else updateTodoBadge();
+  }
+
+  // A call the server refused or couldn't take. A 409 means this tab's view
+  // is out of date, so the review loads again.
+  function reviewError(error) {
+    showSnackbar(error.message);
+    if (error.status === 409) loadReview();
+  }
+
   function countWords(text) {
     return text.trim().split(/\s+/).filter(Boolean).length;
   }
 
-  function verdictOf(decisions, flag) {
-    return decisions[flag.id] ? decisions[flag.id].verdict : null;
+  // "At least 3 words. 2 of 3 words." under an override's reason, so a Save
+  // that is off says why. Once the reason is long enough: "At least 3 words. 4 words."
+  function wordCountText(text) {
+    const min = state.review.min_reason_words;
+    const count = countWords(text);
+    return `At least ${min} words. ${count < min ? `${count} of ${min}` : count} words.`;
   }
 
-  // "6 flags, 0 agreed, 0 overridden. First break: turn 3." The first break
-  // is the earliest flag the creator hasn't overridden.
-  function reviewSummary(flags, decisions) {
-    const agreed = flags.filter((flag) => verdictOf(decisions, flag) === "agreed").length;
-    const overridden = flags.filter((flag) => verdictOf(decisions, flag) === "overridden").length;
-    const standing = flags.filter((flag) => verdictOf(decisions, flag) !== "overridden").map((flag) => flag.turn);
-    const firstBreak = standing.length > 0 ? `turn ${Math.min(...standing)}` : "none";
+  // "agreed", "retyped" (overridden with the right type, so still a break),
+  // "overridden", or null while the flag needs the creator's call.
+  function verdictOf(flag) {
+    if (!flag.call) return null;
+    if (flag.call.verdict === "agreed") return "agreed";
+    return flag.call.type ? "retyped" : "overridden";
+  }
+
+  // "6 flags, 2 agreed, 1 overridden. First break: turn 3." Retyped flags
+  // show only when there are some. The first break is the earliest flag that
+  // still counts as one.
+  function reviewSummary(item) {
+    const flags = item.flags;
+    const count = (verdict) => flags.filter((flag) => verdictOf(flag) === verdict).length;
+    const retyped = count("retyped");
     const noun = flags.length === 1 ? "flag" : "flags";
-    return `${flags.length} ${noun}, ${agreed} agreed, ${overridden} overridden. First break: ${firstBreak}.`;
+    const firstBreak = item.first_break === null ? "none" : `${numberWord(item.chat).toLowerCase()} ${item.first_break}`;
+    return `${flags.length} ${noun}, ${count("agreed")} agreed, ${retyped ? `${retyped} retyped, ` : ""}${count("overridden")} overridden. First break: ${firstBreak}.`;
   }
 
-  function agreedWithEvery(flags, decisions) {
-    return flags.length > 0 && flags.every((flag) => verdictOf(decisions, flag) === "agreed");
+  // A checked chat with no flags gets one line instead of an empty list. It
+  // stays true when only the automatic checks ran.
+  function noFlagsText(item) {
+    return item.judge.status === "ok"
+      ? "No flags in this chat. The automatic checks and the AI judge found nothing to decide."
+      : "No flags in this chat. The automatic checks found nothing to decide, and the AI judge didn't finish.";
   }
 
   function visibleFlags(flags, filter) {
-    return filter === "All" ? flags : flags.filter((flag) => flag.confidence === filter);
+    return filter === "All" ? flags : flags.filter((flag) => capitalized(flag.confidence) === filter);
   }
 
-  // "Turn 4, knowledge boundary"
-  function flagTitle(flag) {
-    return `Turn ${flag.turn}, ${flag.type.toLowerCase()}`;
+  // "Turn 4, knowledge-boundary violation"
+  function flagTitle(chat, flag) {
+    return `${numberWord(chat)} ${flag.turn}, ${flag.type}`;
   }
 
   function cardId(flag) {
@@ -2386,11 +2402,31 @@
   }
 
   function renderDiagnose(body) {
-    const run = selectedRun();
-    const flags = [...run.flags].sort((a, b) => a.turn - b.turn);
+    if (!state.review) {
+      body.innerHTML = state.reviewLoad.status === "failed"
+        ? `
+          <div class="card card--outlined spec-empty">
+            <p>The saved flags didn't load. ${escapeHtml(state.reviewLoad.message)}</p>
+            <button type="button" class="btn btn--filled" data-action="retry-review" data-focus-key="retry-review">Try again</button>
+          </div>`
+        : '<p class="spec-status">Loading the saved flags.</p>';
+      return null;
+    }
+    const item = selectedReview();
+    if (!item) {
+      body.innerHTML = `
+        <div class="review">
+          ${renderChangedChats()}
+          <p class="card card--outlined flag-cards__empty">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>
+        </div>`;
+      return null;
+    }
+    // Keeps this chat on screen while calls change which chats have calls left.
+    state.reviewChatId = item.chat.id;
+    const flags = item.flags;
 
     // Arriving from "Go to flag": make sure that flag shows, then land on it.
-    const target = state.openFlagId ? flags.find((flag) => flag.id === state.openFlagId) : null;
+    const target = flags.find((flag) => flag.id === state.openFlagId) || null;
     state.openFlagId = null;
     if (target) {
       if (visibleFlags([target], state.flagFilter).length === 0) state.flagFilter = "All";
@@ -2398,39 +2434,56 @@
     }
 
     const shown = visibleFlags(flags, state.flagFilter);
-    const cards = shown.length > 0
-      ? `<ol class="flag-cards">${shown.map((flag) => `<li>${renderFlagCard(run, flag)}</li>`).join("")}</ol>`
-      : `<p class="card card--outlined flag-cards__empty">No ${state.flagFilter.toLowerCase()}-confidence flags in this run.</p>`;
+    let cards = "";
+    if (shown.length > 0) {
+      cards = `<ol class="flag-cards">${shown.map((flag) => `<li>${renderFlagCard(item, flag)}</li>`).join("")}</ol>`;
+    } else if (flags.length > 0) {
+      cards = `<p class="card card--outlined flag-cards__empty">No ${state.flagFilter.toLowerCase()}-confidence flags in this chat.</p>`;
+    }
+    const bar = flags.length > 0
+      ? `
+        <p class="review__summary">${escapeHtml(reviewSummary(item))}</p>
+        ${item.agreed_with_every
+          ? `<p class="review__nudge">
+              <span class="icon" aria-hidden="true">fact_check</span>
+              <span>${RUBBER_STAMP_MESSAGE}</span>
+            </p>`
+          : ""}
+        ${renderFlagFilters()}`
+      : `<p class="review__empty">${escapeHtml(noFlagsText(item))}</p>`;
 
     body.innerHTML = `
       <div class="review">
         <div class="review__main">
+          ${renderChangedChats()}
           <div class="review__bar-wrap">
-            ${renderChatSwitcher(run)}
-            <div class="review__bar">
-              <p class="review__summary">${escapeHtml(reviewSummary(flags, state.decisions))}</p>
-              ${agreedWithEvery(flags, state.decisions)
-                ? `<p class="review__nudge">
-                    <span class="icon" aria-hidden="true">fact_check</span>
-                    <span>${RUBBER_STAMP_MESSAGE}</span>
-                  </p>`
-                : ""}
-              ${renderFlagFilters()}
-            </div>
+            ${renderChatSwitcher(item)}
+            <div class="review__bar">${bar}</div>
           </div>
+          ${renderCheckSource(item)}
           <h2 class="visually-hidden">Flags</h2>
           ${cards}
-          ${renderNotChecked(run)}
+          ${renderCheckGaps(item.chat, item, "not-checked-title")}
         </div>
-        ${renderConversation(run, flags)}
+        ${renderConversation(item)}
       </div>`;
 
     body.querySelectorAll("[data-reason-for]").forEach((field) => {
       const flagId = field.dataset.reasonFor;
       field.addEventListener("input", () => {
         state.overrideDrafts[flagId] = field.value;
+        // Typing again puts the word count back in place of the server's refusal.
+        if (state.overrideErrors[flagId]) {
+          delete state.overrideErrors[flagId];
+          field.removeAttribute("aria-invalid");
+          field.closest(".text-field").classList.remove("text-field--error");
+        }
+        const ready = countWords(field.value) >= state.review.min_reason_words;
+        body.querySelector(`#reason-${flagId}-help`).textContent = wordCountText(field.value);
         const save = body.querySelector(`[data-focus-key="save-${flagId}"]`);
-        save.setAttribute("aria-disabled", String(countWords(field.value) < MIN_REASON_WORDS));
+        save.setAttribute("aria-disabled", String(!ready));
+        if (ready) save.removeAttribute("aria-describedby");
+        else save.setAttribute("aria-describedby", `reason-${flagId}-help`);
       });
       // Escape closes the reason field, the same as Cancel.
       field.addEventListener("keydown", (event) => {
@@ -2439,11 +2492,13 @@
         cancelOverride(flagId);
       });
     });
-    body.querySelectorAll("[data-reviewed]").forEach((box) => {
-      box.addEventListener("change", () => {
-        state.notCheckedReviewed[box.dataset.reviewed] = box.checked;
+    body.querySelectorAll("[data-type-for]").forEach((menu) => {
+      menu.addEventListener("change", () => {
+        state.overrideTypes[menu.dataset.typeFor] = menu.value;
       });
     });
+    const picker = body.querySelector("#review-chat");
+    if (picker) picker.addEventListener("change", () => pickReviewChat(Number(picker.value), "review-chat"));
     if (reviewBarObserver) {
       reviewBarObserver.disconnect();
       reviewBarObserver.observe(body.querySelector(".review__bar-wrap"));
@@ -2454,56 +2509,82 @@
     return body.querySelector(`#${cardId(target)}`);
   }
 
+  // When the chat was checked and which judge read it, plus the judge's note
+  // when only the automatic checks ran.
+  function renderCheckSource(item) {
+    const judge = item.judge;
+    const note = judge.status === "ok" ? "" : ` ${judge.note}`;
+    return `<p class="review__source">Checked ${escapeHtml(chatTime(judge.checked_at))}. AI judge: ${escapeHtml(judge.model_label)}.${escapeHtml(note)}</p>`;
+  }
+
+  // Checked chats that changed after their check, like a live run that went
+  // on. A new check makes new flags, and the calls on the old ones stay in the log.
+  function renderChangedChats() {
+    const changed = state.review ? state.review.changed : [];
+    if (changed.length === 0) return "";
+    const one = changed.length === 1;
+    const rows = changed.map((chat) => `
+      <li class="changed-chats__item">
+        <span>${escapeHtml(reviewLabel(chat))}</span>
+        <button type="button" class="btn btn--text" data-action="check-changed-chat" data-chat="${chat.id}"
+          data-focus-key="changed-${chat.id}">Check it again<span class="visually-hidden">: ${escapeHtml(reviewLabel(chat))}</span></button>
+      </li>`);
+    return `
+      <section class="card card--filled changed-chats" aria-labelledby="changed-chats-title">
+        <h2 class="changed-chats__title" id="changed-chats-title">
+          <span class="icon" aria-hidden="true">update</span>
+          <span>${one ? "Changed since its check" : "Changed since their checks"}</span>
+        </h2>
+        <p class="changed-chats__text">${one
+          ? "This chat grew after it was checked. Checking it again makes a new set of flags, and each needs your call. Your calls on the old flags stay in the log."
+          : "These chats grew after they were checked. Checking one again makes a new set of flags, and each needs your call. Your calls on the old flags stay in the log."}</p>
+        <ul class="changed-chats__list">${rows.join("")}</ul>
+      </section>`;
+  }
+
   // The human-in-the-loop to-do. Every flag needs the creator's call, agree
   // or override, before the review is done. The cues below count calls made,
   // never agreements, so they push the creator to decide, not to agree
   // quickly (the rubber-stamp risk in THEORY_LENS Part 1). They show in four
   // places: the badge on the Flag review tab, each chat in the chat switcher,
   // a "Needs your call" label on each open card, and a notice on Compare runs.
-
-  // Every chat of the scenario on screen, one per tool.
-  function scenarioChats() {
-    const scenarioId = selectedRun().scenarioId;
-    return state.runs.filter((run) => run.scenarioId === scenarioId);
-  }
-
-  // Flags still waiting for the creator's call, in every chat of the scenario.
-  function openFlags() {
-    return scenarioChats().flatMap((run) =>
-      run.flags.filter((flag) => !verdictOf(state.decisions, flag)).map((flag) => ({ run, flag })),
-    );
-  }
+  // The server counts them from the saved calls, so they follow each check.
 
   // "2 need your call", or "All 3 decided" once every flag has a call.
-  function decidedText(run) {
-    const total = run.flags.length;
-    const open = run.flags.filter((flag) => !verdictOf(state.decisions, flag)).length;
+  function decidedText(item) {
+    const total = item.flags.length;
+    const open = item.open_calls;
     if (total === 0) return "No flags";
     if (open > 0) return `${open} ${open === 1 ? "needs" : "need"} your call`;
     return total === 1 ? "Decided" : `All ${total} decided`;
   }
 
-  // Switches between the chats of this scenario without leaving the screen,
-  // one button per tool. Each shows how many calls are left, with a progress
-  // bar, so a chat nobody has reviewed stands out. It shares the chosen chat
-  // with Run a conversation. On phones the buttons stack (see styles.css).
-  function renderChatSwitcher(run) {
-    const chats = scenarioChats();
+  // Switches between the checked chats without leaving the screen. Each shows
+  // how many calls are left, with a progress bar, so a chat nobody has
+  // reviewed stands out. Past five chats it becomes a menu (DESIGN_SPEC 3).
+  // On phones the buttons stack (see styles.css).
+  function renderChatSwitcher(item) {
+    const chats = reviewChats();
     if (chats.length < 2) return "";
-    const buttons = chats.map((chat) => {
-      const selected = chat.id === run.id;
-      const total = chat.flags.length;
-      const decided = chat.flags.filter((flag) => verdictOf(state.decisions, flag)).length;
-      const done = decided === total;
+    if (chats.length > 5) {
+      const options = chats
+        .map((other) => `<option value="${other.chat.id}"${other.chat.id === item.chat.id ? " selected" : ""}>${escapeHtml(`${reviewLabel(other.chat)}: ${decidedText(other)}`)}</option>`)
+        .join("");
+      return `<div class="chat-switcher-menu">${selectField("review-chat", "Chat to review", options)}</div>`;
+    }
+    const buttons = chats.map((other) => {
+      const selected = other.chat.id === item.chat.id;
+      const total = other.flags.length;
+      const done = other.open_calls === 0;
       const icon = selected ? "check" : done ? "task_alt" : "pending";
       return `
         <button type="button" class="segmented__button chat-switcher__button" aria-pressed="${selected}"
-          data-action="pick-chat" data-run="${escapeHtml(chat.id)}" data-focus-key="chat-${escapeHtml(chat.id)}">
+          data-action="pick-chat" data-chat="${other.chat.id}" data-focus-key="chat-${other.chat.id}">
           <span class="icon${done && !selected ? " icon--filled" : ""}" aria-hidden="true">${icon}</span>
           <span class="chat-switcher__text">
-            <span class="chat-switcher__name">${escapeHtml(runLabel(chat))}</span>
-            <span class="chat-switcher__count">${decidedText(chat)}</span>
-            <progress class="linear-progress chat-switcher__progress" max="${Math.max(total, 1)}" value="${total ? decided : 1}" aria-hidden="true"></progress>
+            <span class="chat-switcher__name">${escapeHtml(reviewLabel(other.chat))}</span>
+            <span class="chat-switcher__count">${decidedText(other)}</span>
+            <progress class="linear-progress chat-switcher__progress" max="${Math.max(total, 1)}" value="${total ? total - other.open_calls : 1}" aria-hidden="true"></progress>
           </span>
         </button>`;
     });
@@ -2511,9 +2592,9 @@
   }
 
   // The badge on the Flag review tab: how many calls are left across every
-  // chat of the scenario, so the open work shows from any screen.
+  // checked chat, so the open work shows from any screen.
   function updateTodoBadge() {
-    const open = openFlags().length;
+    const open = state.review ? state.review.open_calls : 0;
     const badge = document.querySelector("[data-todo-badge]");
     badge.hidden = open === 0;
     badge.textContent = String(open);
@@ -2521,13 +2602,17 @@
       open === 0 ? "" : `, ${open} ${open === 1 ? "flag needs" : "flags need"} your call`;
   }
 
-  actions["pick-chat"] = (button) => {
-    if (button.dataset.run === state.runId) return;
-    selectDataRun(button.dataset.run);
+  function pickReviewChat(chatId, focusKey) {
+    if (chatId === state.reviewChatId) return;
+    state.reviewChatId = chatId;
     state.reviewTurn = null;
-    refresh({ focusKey: `chat-${button.dataset.run}` });
-    const run = selectedRun();
-    announce(`Showing ${runLabel(run)}. ${reviewSummary(run.flags, state.decisions)}`);
+    refresh({ focusKey });
+    const item = selectedReview();
+    if (item) announce(`Showing ${reviewLabel(item.chat)}. ${item.flags.length ? reviewSummary(item) : noFlagsText(item)}`);
+  }
+
+  actions["pick-chat"] = (button) => {
+    pickReviewChat(Number(button.dataset.chat), `chat-${button.dataset.chat}`);
   };
 
   function renderFlagFilters() {
@@ -2543,37 +2628,50 @@
     return `<div class="filter-chips" role="group" aria-label="Show flags by confidence">${chips}</div>`;
   }
 
-  function renderFlagCard(run, flag) {
+  function renderFlagCard(item, flag) {
+    const chat = item.chat;
     const id = cardId(flag);
-    const verdict = verdictOf(state.decisions, flag);
+    const verdict = verdictOf(flag);
     const contextOpen = Boolean(state.contextOpen[flag.id]);
     const classes = `card card--outlined flag-card${verdict ? ` is-${verdict}` : ""}`;
+    const level = capitalized(flag.confidence);
+    let note = "";
+    if (flag.needs_call) {
+      note = NEEDS_CALL_TEXT[flag.needs_call_reason](chat);
+    } else if (flag.confidence === "low") {
+      note = "The AI is unsure. Read the turn before deciding.";
+    }
 
     return `
       <article class="${classes}" id="${id}" tabindex="-1" aria-labelledby="${id}-title">
         <div class="flag-card__head">
-          <h3 class="flag-card__title" id="${id}-title">${escapeHtml(flagTitle(flag))}</h3>
+          <h3 class="flag-card__title" id="${id}-title">${escapeHtml(flagTitle(chat, flag))}</h3>
           ${verdict
             ? ""
             : '<span class="needs-call"><span class="icon" aria-hidden="true">pending</span><span>Needs your call</span></span>'}
         </div>
         <figure class="flag-card__evidence">
-          <blockquote><p><q>${escapeHtml(flag.evidence)}</q></p></blockquote>
-          <figcaption>From ${escapeHtml(state.scenario.characterName)}'s reply</figcaption>
+          <blockquote><p class="keep-lines"><q>${escapeHtml(flag.quote)}</q></p></blockquote>
+          <figcaption>From ${escapeHtml(chat.character_name)}'s reply</figcaption>
         </figure>
         <div class="flag-card__chips">
-          ${flag.cites.map((lineId) => renderCiteChip(flag, lineId)).join("")}
+          ${flag.source === "rule" ? chip("rule", "Automatic check") : chip("smart_toy", "AI judge")}
+          ${renderCiteChip(flag)}
           <span class="chip chip--icon-leading flag-card__confidence">
-            <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[flag.confidence]}</span>
-            <span>${escapeHtml(flag.confidence)}<span class="visually-hidden"> confidence</span></span>
+            <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[level]}</span>
+            <span>${level}<span class="visually-hidden"> confidence</span></span>
           </span>
+          ${flag.same_model ? chip("sync_problem", "Same model reviewed") : ""}
         </div>
-        ${flag.cites.map((lineId) => renderCiteText(flag, lineId)).join("")}
+        ${renderCiteText(flag)}
         <p class="flag-card__why"><span class="flag-card__label">Why this flag?</span> ${escapeHtml(flag.why)}</p>
-        ${flag.confidence === "Low"
+        ${flag.also_turns.length > 0
+          ? `<p class="flag-card__also">Also in ${numberWord(chat).toLowerCase()}s ${escapeHtml(listText(flag.also_turns))}.</p>`
+          : ""}
+        ${note
           ? `<p class="flag-card__unsure">
               <span class="icon" aria-hidden="true">help</span>
-              <span>The AI is unsure. Read the turn before deciding.</span>
+              <span>${escapeHtml(note)}</span>
             </p>`
           : ""}
         <button type="button" class="btn btn--text btn--icon-leading" data-action="toggle-context" data-flag="${flag.id}"
@@ -2582,68 +2680,79 @@
           <span>${contextOpen ? "Hide context" : "Show in context"}</span>
         </button>
         <div class="flag-card__context" id="${id}-context"${contextOpen ? "" : " hidden"}>
-          ${renderFlagContext(run, flag)}
+          ${renderFlagContext(item, flag)}
         </div>
-        ${renderDecision(flag)}
+        ${renderDecision(item, flag)}
       </article>`;
   }
 
-  // A spec line chip, like K2, that expands to show the line's full text.
-  function renderCiteChip(flag, lineId) {
+  // The cited line's chip, like K2, which expands to show the line's own words.
+  function renderCiteChip(flag) {
+    const lineId = flag.line_id;
     const open = Boolean(state.citesOpen[`${flag.id}:${lineId}`]);
-    const key = `cite-${flag.id}-${lineId}`;
+    const key = `cite-${flag.id}`;
     return `
       <button type="button" class="chip chip--assist chip--icon-trailing" data-action="toggle-cite"
         data-flag="${flag.id}" data-line="${escapeHtml(lineId)}" aria-expanded="${open}"
-        aria-controls="${escapeHtml(key)}-text" data-focus-key="${escapeHtml(key)}"
+        aria-controls="${key}-text" data-focus-key="${key}"
         data-tooltip="${escapeHtml(lineTip(lineId))}">
-        <span>${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(LINE_MEANINGS[lineId[0]])}</span></span>
+        <span>${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(citeMeaning(lineId))}</span></span>
         <span class="icon" aria-hidden="true">${open ? "expand_less" : "expand_more"}</span>
       </button>`;
   }
 
-  function renderCiteText(flag, lineId) {
-    const open = Boolean(state.citesOpen[`${flag.id}:${lineId}`]);
+  // The cited line in the spec's own words, from the chat's spec version.
+  function renderCiteText(flag) {
+    const open = Boolean(state.citesOpen[`${flag.id}:${flag.line_id}`]);
     return `
-      <p class="flag-card__cite-text" id="cite-${flag.id}-${escapeHtml(lineId)}-text"${open ? "" : " hidden"}>
-        <span class="flag-card__label">${escapeHtml(lineId)}.</span> ${escapeHtml(specLineText(lineId))}
+      <p class="flag-card__cite-text" id="cite-${flag.id}-text"${open ? "" : " hidden"}>
+        <span class="flag-card__label">${escapeHtml(flag.line_id)}.</span> ${escapeHtml(flag.line_text)}
       </p>`;
   }
 
-  // The turn in context: Alex's line, the reply with the evidence marked,
-  // and the full text of every spec line the flag cites.
-  function renderFlagContext(run, flag) {
-    const userLine = state.scenario.userLines.find((line) => line.turn === flag.turn);
-    const reply = run.replies.find((candidate) => candidate.turn === flag.turn);
-    const specLines = flag.cites.map(
-      (lineId) => `
+  // The turn in context: the creator's line before the reply, every finished
+  // reply in that turn with the quote marked, and the cited line in the
+  // spec's own words.
+  function renderFlagContext(item, flag) {
+    const chat = item.chat;
+    const word = numberWord(chat).toLowerCase();
+    const replies = chat.messages.filter(
+      (message) => message.speaker === "character" && message.turn === flag.turn && !message.stopped,
+    );
+    const first = replies[0];
+    const before = first ? chat.messages.filter((message) => message.speaker === "user" && message.seq < first.seq) : [];
+    const userLine = before[before.length - 1];
+    const lines = replies.map(
+      (reply) => `
         <p class="context-line">
-          <span class="context-line__speaker">Spec ${escapeHtml(lineId)}</span>
-          ${escapeHtml(specLineText(lineId))}
+          <span class="context-line__speaker">${escapeHtml(chat.character_name)}, ${word} ${reply.turn}</span>
+          <span class="keep-lines">${highlight(reply.text, [flag.quote.toLowerCase()])}</span>
         </p>`,
     );
     return `
+      ${userLine
+        ? `<p class="context-line">
+            <span class="context-line__speaker">${escapeHtml(chat.user_name)}, ${word} ${userLine.turn}</span>
+            <span class="keep-lines">${escapeHtml(userLine.text)}</span>
+          </p>`
+        : ""}
+      ${lines.join("")}
       <p class="context-line">
-        <span class="context-line__speaker">${escapeHtml(state.scenario.userName)}, turn ${flag.turn}</span>
-        ${escapeHtml(userLine ? userLine.text : "")}
-      </p>
-      <p class="context-line">
-        <span class="context-line__speaker">${escapeHtml(state.scenario.characterName)}, turn ${flag.turn}</span>
-        <span class="keep-lines">${highlight(reply ? reply.text : "", [flag.evidence.toLowerCase()])}</span>
-      </p>
-      ${specLines.join("")}`;
+        <span class="context-line__speaker">Spec ${escapeHtml(flag.line_id)}</span>
+        ${escapeHtml(flag.line_text)}
+      </p>`;
   }
 
-  // The bottom of a card: Agree and Override, the override reason field, or
-  // the creator's decision with Undo.
-  function renderDecision(flag) {
-    const decision = state.decisions[flag.id];
+  // The bottom of a card: Agree and Override, the override form, or the
+  // creator's call with Undo.
+  function renderDecision(item, flag) {
+    const verdict = verdictOf(flag);
     const undo = `
       <button type="button" class="btn btn--text" data-action="undo-decision" data-flag="${flag.id}" data-focus-key="undo-${flag.id}">
-        Undo<span class="visually-hidden">: ${escapeHtml(flagTitle(flag))}</span>
+        Undo<span class="visually-hidden">: ${escapeHtml(flagTitle(item.chat, flag))}</span>
       </button>`;
 
-    if (decision && decision.verdict === "agreed") {
+    if (verdict === "agreed") {
       return `
         <div class="flag-card__actions">
           <p class="flag-card__status">
@@ -2654,42 +2763,58 @@
         </div>`;
     }
 
-    if (decision && decision.verdict === "overridden") {
+    if (verdict) {
+      const status = verdict === "retyped"
+        ? `<span class="icon" aria-hidden="true">edit</span><span>Retyped by you: ${escapeHtml(flag.call.type)}</span>`
+        : '<span class="icon" aria-hidden="true">block</span><span>Overridden by you</span>';
       return `
         <div class="flag-card__actions">
-          <p class="flag-card__status">
-            <span class="icon" aria-hidden="true">block</span>
-            <span>Overridden by you</span>
-          </p>
-          <p class="flag-card__reason"><span class="flag-card__label">Your reason:</span> ${escapeHtml(decision.reason)}</p>
+          <p class="flag-card__status">${status}</p>
+          <p class="flag-card__reason"><span class="flag-card__label">Your reason:</span> ${escapeHtml(flag.call.reason)}</p>
           ${undo}
         </div>`;
     }
 
     if (flag.id in state.overrideDrafts) {
       const draft = state.overrideDrafts[flag.id];
-      const ready = countWords(draft) >= MIN_REASON_WORDS;
+      const ready = countWords(draft) >= state.review.min_reason_words;
+      const error = state.overrideErrors[flag.id];
+      const picked = state.overrideTypes[flag.id] || "";
+      const types = state.review.failure_types
+        .filter((type) => type !== flag.type)
+        .map((type) => `<option value="${escapeHtml(type)}"${type === picked ? " selected" : ""}>${escapeHtml(capitalized(type))}</option>`)
+        .join("");
       return `
         <div class="flag-card__override">
-          <div class="text-field">
+          <div class="text-field${error ? " text-field--error" : ""}">
             <textarea class="text-field__input" id="reason-${flag.id}" rows="2" placeholder=" "
-              aria-describedby="reason-${flag.id}-help" data-reason-for="${flag.id}"
-              data-focus-key="reason-${flag.id}">${escapeHtml(draft)}</textarea>
+              maxlength="${state.review.max_reason_chars}" aria-describedby="reason-${flag.id}-help"${error ? ' aria-invalid="true"' : ""}
+              data-reason-for="${flag.id}" data-focus-key="reason-${flag.id}">${escapeHtml(draft)}</textarea>
             <label class="text-field__label" for="reason-${flag.id}">Why is the AI wrong?</label>
-            <p class="text-field__support" id="reason-${flag.id}-help">Use at least ${MIN_REASON_WORDS} words.</p>
+            <p class="text-field__support" id="reason-${flag.id}-help">${escapeHtml(error || wordCountText(draft))}</p>
+          </div>
+          <div class="text-field text-field--select">
+            <select class="text-field__input" id="type-${flag.id}" aria-describedby="type-${flag.id}-help"
+              data-type-for="${flag.id}" data-focus-key="type-${flag.id}">
+              <option value="">None: it isn't a break</option>
+              ${types}
+            </select>
+            <label class="text-field__label" for="type-${flag.id}">Right type</label>
+            <p class="text-field__support" id="type-${flag.id}-help">Pick one if the turn breaks the spec in another way. It stays a break, with your type.</p>
           </div>
           <div class="flag-card__actions">
             <button type="button" class="btn btn--filled" data-action="save-override" data-flag="${flag.id}"
-              aria-disabled="${!ready}" data-focus-key="save-${flag.id}">Save</button>
+              aria-disabled="${!ready}"${ready ? "" : ` aria-describedby="reason-${flag.id}-help"`} data-focus-key="save-${flag.id}">Save</button>
             <button type="button" class="btn btn--text" data-action="cancel-override" data-flag="${flag.id}"
               data-focus-key="cancel-${flag.id}">Cancel</button>
           </div>
         </div>`;
     }
 
-    // Evidence first: Agree stays off until the creator has seen the turn.
-    // aria-disabled (not disabled) keeps it reachable, with the reason linked.
-    const seen = Boolean(state.contextSeen[flag.id]);
+    // Evidence first: Agree stays off until the server has saved an opening
+    // of this flag's evidence. aria-disabled (not disabled) keeps it
+    // reachable, with the reason linked.
+    const seen = flag.evidence_opened;
     return `
       <div class="flag-card__actions">
         <button type="button" class="btn btn--outlined" data-action="agree" data-flag="${flag.id}"
@@ -2701,70 +2826,60 @@
       </div>`;
   }
 
-  function renderNotChecked(run) {
-    if (run.notChecked.length === 0) return "";
-    const items = run.notChecked.map((item, index) => {
-      const key = `${run.id}:${index}`;
-      const boxId = `reviewed-${run.id}-${index}`;
-      return `
-        <div class="not-checked__item">
-          <p><span class="flag-card__label">${escapeHtml(item.topic)}.</span> ${escapeHtml(item.text)}</p>
-          <label class="checkbox" for="${boxId}">
-            <input type="checkbox" id="${boxId}" data-reviewed="${key}" data-focus-key="${boxId}"${state.notCheckedReviewed[key] ? " checked" : ""}>
-            <span>Mark as reviewed<span class="visually-hidden">: ${escapeHtml(item.topic)}</span></span>
-          </label>
-        </div>`;
+  // The compact conversation, one item per turn, or per line when the chat
+  // numbers lines. Flagged turns get a colored border, a flag icon, and the
+  // word "Flagged", plus the creator's call once every flag there has the same one.
+  function renderConversation(item) {
+    const chat = item.chat;
+    const word = numberWord(chat);
+    const groups = [];
+    chat.messages.forEach((message) => {
+      const last = groups[groups.length - 1];
+      if (last && last.turn === message.turn) last.messages.push(message);
+      else groups.push({ turn: message.turn, messages: [message] });
     });
-    return `
-      <section class="card card--outlined not-checked" aria-labelledby="not-checked-title">
-        <h3 class="not-checked__title" id="not-checked-title">
-          <span class="icon" aria-hidden="true">visibility_off</span>
-          <span>Not checked by the AI</span>
-        </h3>
-        ${items.join("")}
-      </section>`;
-  }
+    const statusText = { agreed: "Agreed by you", retyped: "Retyped by you", overridden: "Overridden by you" };
 
-  // The compact conversation. Flagged turns get a colored border, a flag
-  // icon, and the word "Flagged", plus the creator's decision once made.
-  function renderConversation(run, flags) {
-    const turns = state.scenario.userLines.map((line) => {
-      const reply = run.replies.find((candidate) => candidate.turn === line.turn);
-      const turnFlags = flags.filter((flag) => flag.turn === line.turn);
-      const verdicts = turnFlags.map((flag) => verdictOf(state.decisions, flag));
-      let status = "";
-      if (turnFlags.length > 0 && verdicts.every((verdict) => verdict === "agreed")) status = "Agreed by you";
-      if (turnFlags.length > 0 && verdicts.every((verdict) => verdict === "overridden")) status = "Overridden by you";
-
+    const turns = groups.map((group) => {
+      const turnFlags = item.flags.filter((flag) => flag.turn === group.turn);
+      const verdicts = turnFlags.map(verdictOf);
+      const shared = verdicts.length > 0 && verdicts.every((verdict) => verdict && verdict === verdicts[0]) ? verdicts[0] : null;
       let classes = "convo-turn";
       if (turnFlags.length > 0) classes += " convo-turn--flagged";
-      if (status === "Overridden by you") classes += " convo-turn--overridden";
-      const evidence = turnFlags.map((flag) => flag.evidence.toLowerCase());
-
+      if (shared === "overridden") classes += " convo-turn--overridden";
+      const quotes = turnFlags.map((flag) => flag.quote.toLowerCase());
+      const lines = group.messages.map((message) => {
+        const name = message.speaker === "user" ? chat.user_name : chat.character_name;
+        const text = message.speaker === "character" ? highlight(message.text, quotes) : escapeHtml(message.text);
+        return `<p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(name)}${message.stopped ? " (stopped)" : ""}:</span> <span class="keep-lines">${text}</span></p>`;
+      });
       return `
-        <li class="${classes}" data-turn="${line.turn}"${state.reviewTurn === line.turn ? ' aria-current="true"' : ""}>
+        <li class="${classes}" data-turn="${group.turn}"${state.reviewTurn === group.turn ? ' aria-current="true"' : ""}>
           <p class="convo-turn__head">
-            <span>Turn ${line.turn}</span>
+            <span>${word} ${group.turn}</span>
             ${turnFlags.length > 0
               ? `<span class="convo-turn__flag"><span class="icon icon--filled" aria-hidden="true">flag</span>Flagged</span>`
               : ""}
-            ${status ? `<span class="convo-turn__status">${status}</span>` : ""}
+            ${shared ? `<span class="convo-turn__status">${statusText[shared]}</span>` : ""}
           </p>
-          <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.userName)}:</span> ${escapeHtml(line.text)}</p>
-          <p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(state.scenario.characterName)}:</span> <span class="keep-lines">${highlight(reply ? reply.text : "", evidence)}</span></p>
+          ${lines.join("")}
         </li>`;
     });
+    // Turn 1 of every scripted chat is the spec itself.
+    const specLine = chat.numbering === "turn" && (chat.kind === "live" || chat.scenario)
+      ? `<li class="convo__system">Turn 1: character spec ${escapeHtml(specLabel(chat.spec_version))} loaded</li>`
+      : "";
 
     return `
       <div class="review__conversation">
         <div class="review__convo-head">
           <h2 class="review__convo-title" id="review-convo-title">Conversation</h2>
-          <p class="review__convo-run">${escapeHtml(runLabel(run))}</p>
+          <p class="review__convo-run">${escapeHtml(reviewLabel(chat))}</p>
         </div>
         <div class="review__convo-scroll" tabindex="0" role="region" aria-labelledby="review-convo-title"
           data-scroll-key="review-convo">
           <ol class="convo">
-            <li class="convo__system">Turn 1: character spec ${escapeHtml(run.specVersion)} loaded</li>
+            ${specLine}
             ${turns.join("")}
           </ol>
         </div>
@@ -2782,17 +2897,58 @@
     if (above || below) scroller.scrollTop = turn.offsetTop - 8;
   }
 
-  // Screen readers hear the new summary after each decision, and the
+  // Screen readers hear the new summary after each call, and the
   // rubber-stamp check when it applies.
   function announceReview() {
-    const flags = selectedRun().flags;
-    const summary = reviewSummary(flags, state.decisions);
-    announce(agreedWithEvery(flags, state.decisions) ? `${summary} ${RUBBER_STAMP_MESSAGE}` : summary);
+    const item = selectedReview();
+    if (!item) return;
+    const summary = item.flags.length ? reviewSummary(item) : noFlagsText(item);
+    announce(item.agreed_with_every ? `${summary} ${RUBBER_STAMP_MESSAGE}` : summary);
   }
 
   function diagnoseBody() {
     return panelFor("diagnose").querySelector("[data-screen-body]");
   }
+
+  // Sends one call, then redraws from the server's answer. Focus moves to
+  // focusKey only if Flag review still shows that chat and focus is still in
+  // the flag's card. A refused call throws, and the screen stays as it was.
+  async function sendCall(found, request, focusKey) {
+    const flagId = found.flag.id;
+    reviewPending.add(flagId);
+    let updated;
+    try {
+      updated = await request();
+    } finally {
+      reviewPending.delete(flagId);
+    }
+    replaceReviewChat(updated);
+    delete state.overrideDrafts[flagId];
+    delete state.overrideTypes[flagId];
+    delete state.overrideErrors[flagId];
+    const body = currentScreen === "diagnose" ? diagnoseBody() : null;
+    const card = body ? body.querySelector(`#${cardId(found.flag)}`) : null;
+    const inCard = Boolean(card && card.contains(document.activeElement)) && state.reviewChatId === found.item.chat.id;
+    if (body) refresh(inCard ? { focusKey } : {});
+    else redrawReview();
+    if (state.reviewChatId === found.item.chat.id) announceReview();
+  }
+
+  actions["retry-review"] = () => {
+    state.reviewLoad = { status: "loading", message: "" };
+    refresh();
+    loadReview();
+  };
+
+  // Opens a changed chat on Run a conversation, where Check this chat checks it again.
+  actions["check-changed-chat"] = (button) => {
+    goToScreen("run");
+    if (state.live) {
+      announce("Stop the run to switch chats.");
+      return;
+    }
+    loadChat(Number(button.dataset.chat), { focusKey: "check-chat" });
+  };
 
   actions["filter-flags"] = (chip) => {
     state.flagFilter = chip.dataset.filter;
@@ -2805,38 +2961,59 @@
     refresh();
   };
 
-  actions["toggle-context"] = (button) => {
-    const flagId = button.dataset.flag;
+  // Every opening of the evidence is saved, and the server's answer unlocks Agree.
+  actions["toggle-context"] = async (button) => {
+    const found = findFlag(button.dataset.flag);
+    if (!found) return;
+    const flagId = found.flag.id;
     const opening = !state.contextOpen[flagId];
     state.contextOpen[flagId] = opening;
-    if (opening) {
-      state.contextSeen[flagId] = true;
-      state.reviewTurn = findFlag(flagId).flag.turn;
-    }
+    if (opening) state.reviewTurn = found.flag.turn;
     refresh();
-    if (opening) revealTurn(diagnoseBody());
+    if (!opening) return;
+    revealTurn(diagnoseBody());
+    const request = WorkbenchApi.openEvidence(flagId);
+    evidenceRequests.set(flagId, request);
+    try {
+      replaceReviewChat(await request);
+      redrawReview();
+    } catch (error) {
+      reviewError(error);
+    } finally {
+      if (evidenceRequests.get(flagId) === request) evidenceRequests.delete(flagId);
+    }
   };
 
-  actions["agree"] = (button) => {
-    const flagId = button.dataset.flag;
-    if (!state.contextSeen[flagId]) {
+  actions["agree"] = async (button) => {
+    const flagId = Number(button.dataset.flag);
+    if (reviewPending.has(flagId)) return;
+    // An opening on its way lands first, so Agree right after "Show in context" works.
+    if (evidenceRequests.has(flagId)) await evidenceRequests.get(flagId).catch(() => {});
+    const found = findFlag(flagId);
+    if (!found) return;
+    if (!found.flag.evidence_opened) {
       // Not yet: send the creator to the evidence instead.
-      diagnoseBody().querySelector(`[data-focus-key="context-${flagId}"]`).focus();
+      const toggle = diagnoseBody().querySelector(`[data-focus-key="context-${flagId}"]`);
+      if (toggle) toggle.focus();
       return;
     }
-    state.decisions[flagId] = { verdict: "agreed" };
-    refresh({ focusKey: `undo-${flagId}` });
-    announceReview();
+    try {
+      await sendCall(found, () => WorkbenchApi.agreeFlag(flagId), `undo-${flagId}`);
+    } catch (error) {
+      reviewError(error);
+    }
   };
 
   actions["start-override"] = (button) => {
-    const flagId = button.dataset.flag;
+    const flagId = Number(button.dataset.flag);
     state.overrideDrafts[flagId] = "";
     refresh({ focusKey: `reason-${flagId}` });
   };
 
   function cancelOverride(flagId) {
     delete state.overrideDrafts[flagId];
+    delete state.overrideTypes[flagId];
+    delete state.overrideErrors[flagId];
     refresh({ focusKey: `override-${flagId}` });
   }
 
@@ -2844,67 +3021,135 @@
     cancelOverride(button.dataset.flag);
   };
 
-  actions["save-override"] = (button) => {
-    const flagId = button.dataset.flag;
+  actions["save-override"] = async (button) => {
+    const found = findFlag(button.dataset.flag);
+    if (!found || reviewPending.has(found.flag.id)) return;
+    const flagId = found.flag.id;
     const reason = (state.overrideDrafts[flagId] || "").trim();
-    if (countWords(reason) < MIN_REASON_WORDS) {
+    if (countWords(reason) < state.review.min_reason_words) {
       diagnoseBody().querySelector(`[data-focus-key="reason-${flagId}"]`).focus();
       return;
     }
-    state.decisions[flagId] = { verdict: "overridden", reason };
-    delete state.overrideDrafts[flagId];
-    refresh({ focusKey: `undo-${flagId}` });
-    announceReview();
+    const type = state.overrideTypes[flagId] || null;
+    try {
+      await sendCall(found, () => WorkbenchApi.overrideFlag(flagId, reason, type), `undo-${flagId}`);
+    } catch (error) {
+      if (error.status !== 422) {
+        reviewError(error);
+        return;
+      }
+      // The server's own check of the reason, shown under the field like the word count.
+      state.overrideErrors[flagId] = error.message;
+      if (currentScreen === "diagnose") refresh({ focusKey: `reason-${flagId}` });
+      announce(error.message);
+    }
   };
 
-  actions["undo-decision"] = (button) => {
-    const flagId = button.dataset.flag;
-    delete state.decisions[flagId];
-    refresh({ focusKey: `agree-${flagId}` });
-    announceReview();
+  actions["undo-decision"] = async (button) => {
+    const found = findFlag(button.dataset.flag);
+    if (!found || reviewPending.has(found.flag.id)) return;
+    try {
+      await sendCall(found, () => WorkbenchApi.undoCall(found.flag.id), `agree-${found.flag.id}`);
+    } catch (error) {
+      reviewError(error);
+    }
   };
 
   // 3.4 Compare runs (Repair) -----------------------------------------------
-  // Same script, same spec, different results: where each tool's chat broke,
-  // the replies side by side, and a next step for every spec line that broke
-  // in every chat, which leads back to the Spec editor (Repair closes the loop
-  // to Define). It compares the chats of the scenario on screen, however many
-  // tools ran it. A break is any flag the creator hasn't overridden on Flag
-  // review, so the creator's calls shape this screen.
+  // Same script, same spec, different results: where each chat broke, the
+  // replies side by side, and a next step for every spec line that broke in
+  // every chat, which leads back to the Spec editor (Repair closes the loop
+  // to Define). It compares the checked chats that ran the same scenario on
+  // the same spec version as the chat on Flag review, however many there are,
+  // turn by turn through the script. A break is any flag that still counts as
+  // one: open, agreed, or retyped. Flags the creator overrode don't, so the
+  // creator's calls shape this screen.
 
-  // "break" when a flag on the turn still stands, "overridden" when the
-  // creator overrode every flag on it, "clean" when nothing was flagged.
-  function turnStatus(run, turn, decisions) {
-    const turnFlags = run.flags.filter((flag) => flag.turn === turn);
+  // The checked chats that ran the same script on the same spec version as
+  // this one, or none when this chat has no script.
+  function compareGroup(item) {
+    if (!item.chat.scenario) return [];
+    return reviewChats().filter(
+      (other) => other.chat.scenario === item.chat.scenario && other.chat.spec_version === item.chat.spec_version,
+    );
+  }
+
+  // A chat's scripted lines, by turn. A typed line can reuse the next
+  // scripted turn's number, so typed lines never count here.
+  function scriptedLines(item) {
+    const lines = new Map();
+    item.chat.messages.forEach((message) => {
+      if (message.speaker === "user" && message.source !== "typed" && !lines.has(message.turn)) {
+        lines.set(message.turn, message);
+      }
+    });
+    return lines;
+  }
+
+  // Every scripted turn of the compared chats, in order.
+  function comparedTurns(items) {
+    const turns = new Set();
+    items.forEach((item) => scriptedLines(item).forEach((line, turn) => turns.add(turn)));
+    return [...turns].sort((a, b) => a - b);
+  }
+
+  // A chat's reply to its own scripted line at that turn, or null.
+  function scriptedReply(item, turn) {
+    if (!scriptedLines(item).has(turn)) return null;
+    const replies = item.chat.messages.filter((message) => message.speaker === "character" && message.turn === turn);
+    return replies[replies.length - 1] || null;
+  }
+
+  // The flags at a turn: those on the turn itself, plus rule flags that list
+  // it among the other turns that broke the same line.
+  function flagsAt(item, turn) {
+    return item.flags.filter((flag) => flag.turn === turn || flag.also_turns.includes(turn));
+  }
+
+  // "missing" when the chat has no reply at that scripted turn, "clean" when
+  // nothing there was flagged, "break" when a flag there still counts as one,
+  // and "overridden" when the creator overrode every flag there.
+  function turnStatus(item, turn) {
+    if (!scriptedReply(item, turn)) return "missing";
+    const turnFlags = flagsAt(item, turn);
     if (turnFlags.length === 0) return "clean";
-    return turnFlags.some((flag) => verdictOf(decisions, flag) !== "overridden") ? "break" : "overridden";
+    return turnFlags.some((flag) => flag.counts_as_break) ? "break" : "overridden";
   }
 
-  function breaksIn(run, decisions) {
-    return run.flags.filter((flag) => verdictOf(decisions, flag) !== "overridden");
+  // The flags on the compared turns that are this chat's own scripted turns.
+  // A typed line can reuse a scripted turn's number, so its flags stay on Flag review.
+  function comparedFlags(item, turns) {
+    const own = scriptedLines(item);
+    return item.flags.filter((flag) => turns.includes(flag.turn) && own.has(flag.turn));
   }
 
-  function firstBreakText(run, decisions) {
-    const turns = breaksIn(run, decisions).map((flag) => flag.turn);
-    return turns.length > 0 ? `First break: turn ${Math.min(...turns)}.` : "No breaks.";
+  function breaksIn(item, turns) {
+    return comparedFlags(item, turns).filter((flag) => flag.counts_as_break);
   }
 
-  // Spec lines that a standing flag cites in every run, in spec order.
-  function linesBrokenInAll(runs, decisions, specOrder) {
-    const citedPerRun = runs.map((run) => new Set(breaksIn(run, decisions).flatMap((flag) => flag.cites)));
-    return specOrder.filter((lineId) => citedPerRun.every((cited) => cited.has(lineId)));
+  function firstBreakText(item, turns) {
+    const found = breaksIn(item, turns).map((flag) => flag.turn);
+    return found.length > 0 ? `First break: turn ${Math.min(...found)}.` : "No breaks.";
   }
 
-  // "v1" becomes "v2".
-  function nextVersion(version) {
-    const number = parseInt(String(version).replace(/^v/, ""), 10);
-    return Number.isNaN(number) ? "the next version" : `v${number + 1}`;
+  // Spec lines that a standing flag cites in every chat, in the order of the
+  // spec on screen. A field, like Voice, has no line to open, so it isn't listed.
+  function linesBrokenInAll(items, turns) {
+    const citedPerChat = items.map((item) => new Set(breaksIn(item, turns).map((flag) => flag.line_id)));
+    const shared = [...(citedPerChat[0] || [])].filter(
+      (lineId) => /^[A-Z][0-9]+$/.test(lineId) && citedPerChat.every((cited) => cited.has(lineId)),
+    );
+    const order = state.specView
+      ? state.specView.body.sections.flatMap((section) => section.lines.map((line) => line.id))
+      : [];
+    const rank = (lineId) => (order.includes(lineId) ? order.indexOf(lineId) : order.length);
+    return shared.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, undefined, { numeric: true }));
   }
 
   // The version a fix would make: one past the latest saved version, once
   // the spec has loaded from the server.
   function nextSpecLabel() {
-    return state.specView ? specLabel(state.specView.latest + 1) : nextVersion(state.spec.version);
+    return state.specView ? specLabel(state.specView.latest + 1) : "the next version";
   }
 
   // "both chats" for two, "all 3 chats" for three or more.
@@ -2915,8 +3160,8 @@
 
   // While any flag is still open, this comparison counts it as a break, so
   // the creator hears that before trusting the numbers.
-  function renderReviewNotice() {
-    const open = openFlags().length;
+  function renderReviewNotice(items, turns) {
+    const open = items.reduce((sum, item) => sum + comparedFlags(item, turns).filter((flag) => !flag.call).length, 0);
     if (open === 0) {
       return `
         <p class="compare-done">
@@ -2937,16 +3182,40 @@
   }
 
   function renderCompare(body) {
-    const runs = scenarioChats();
-    const specOrder = state.spec.sections.flatMap((section) => section.lines.map((line) => line.id));
-    const broken = linesBrokenInAll(runs, state.decisions, specOrder);
+    if (!state.review) {
+      body.innerHTML = state.reviewLoad.status === "failed"
+        ? `
+          <div class="card card--outlined spec-empty">
+            <p>The saved flags didn't load. ${escapeHtml(state.reviewLoad.message)}</p>
+            <button type="button" class="btn btn--filled" data-action="retry-review" data-focus-key="retry-review">Try again</button>
+          </div>`
+        : '<p class="spec-status">Loading the saved flags.</p>';
+      return null;
+    }
+    const item = selectedReview();
+    if (!item) {
+      body.innerHTML =
+        '<p class="card card--outlined flag-cards__empty">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>';
+      return null;
+    }
+    // The same chat stays on Flag review and here.
+    state.reviewChatId = item.chat.id;
+    const items = compareGroup(item);
+    if (items.length === 0) {
+      body.innerHTML = `
+        <p class="card card--outlined flag-cards__empty">Compare runs lines up chats that ran the same test script. ${escapeHtml(reviewLabel(item.chat))} was imported without one, so there's nothing to compare it with. On Flag review, pick a chat from a scenario run.</p>`;
+      return null;
+    }
+    const turns = comparedTurns(items);
+    const broken = linesBrokenInAll(items, turns);
+    const missing = items.some((other) => turns.some((turn) => turnStatus(other, turn) === "missing"));
 
     body.innerHTML = `
       <div class="compare">
-        ${renderReviewNotice()}
+        ${renderReviewNotice(items, turns)}
         <section aria-labelledby="drift-title">
           <h2 class="compare__heading" id="drift-title">Where each chat broke</h2>
-          <div class="drift">${runs.map(renderDriftRow).join("")}</div>
+          <div class="drift">${items.map((other) => renderDriftRow(other, turns)).join("")}</div>
           <ul class="drift__legend">
             <li><span class="drift__turn drift__turn--sample" aria-hidden="true"></span>Clean turn</li>
             <li>
@@ -2955,77 +3224,88 @@
               </span>Break
             </li>
             <li><span class="drift__turn drift__turn--overridden drift__turn--sample" aria-hidden="true"></span>Flag you overrode</li>
+            ${missing
+              ? '<li><span class="drift__turn drift__turn--missing drift__turn--sample" aria-hidden="true"></span>No reply</li>'
+              : ""}
           </ul>
         </section>
 
         <section aria-labelledby="side-by-side-title">
           <h2 class="compare__heading" id="side-by-side-title">Turn by turn</h2>
-          ${renderCompareTable(runs)}
+          ${renderCompareTable(items, turns)}
         </section>
 
         <div class="compare__next">
           ${broken.length > 0
-            ? broken.map((lineId) => renderNextStep(lineId, runs.length)).join("")
-            : `<p class="card card--outlined">No spec line broke in ${chatsText(runs.length)}.</p>`}
+            ? broken.map((lineId) => renderNextStep(lineId, items.length)).join("")
+            : `<p class="card card--outlined">No spec line broke in ${chatsText(items.length)}.</p>`}
         </div>
       </div>`;
+    return null;
   }
 
-  // One small square per turn: outlined when clean, filled with a flag icon
-  // when it broke, dashed when the creator overrode its flag.
-  function renderDriftRow(run) {
-    const lines = state.scenario.userLines;
-    const squares = lines.map((line) => {
-      const status = turnStatus(run, line.turn, state.decisions);
-      const said = { clean: "clean", break: "break", overridden: "flag overridden by you" }[status];
+  // One small square per scripted turn: outlined when clean, filled with a
+  // flag icon when it broke, dashed when the creator overrode its flags, and
+  // dotted when the chat has no reply there. A chat whose AI judge didn't
+  // finish says so, since only its automatic checks could flag a break.
+  function renderDriftRow(item, turns) {
+    const said = { clean: "clean", break: "break", overridden: "flag overridden by you", missing: "no reply" };
+    const squares = turns.map((turn) => {
+      const status = turnStatus(item, turn);
       return `
         <li class="drift__turn${status === "clean" ? "" : ` drift__turn--${status}`}">
           ${status === "break" ? '<span class="icon icon--filled" aria-hidden="true">flag</span>' : ""}
-          <span><span class="visually-hidden">Turn </span>${line.turn}<span class="visually-hidden">, ${said}</span></span>
+          <span><span class="visually-hidden">Turn </span>${turn}<span class="visually-hidden">, ${said[status]}</span></span>
         </li>`;
     });
-    const range = `turns ${lines[0].turn} to ${lines[lines.length - 1].turn}`;
+    const label = reviewLabel(item.chat);
+    const range = turns.length > 0 ? `, turns ${turns[0]} to ${turns[turns.length - 1]}` : "";
+    const judge = item.judge.status === "ok" ? "" : " Automatic checks only: the AI judge didn't finish.";
     return `
       <div class="drift__row">
-        <p class="drift__run">${escapeHtml(runLabel(run))}</p>
-        <ol class="drift__strip" aria-label="${escapeHtml(runLabel(run))}, ${range}">${squares.join("")}</ol>
-        <p class="drift__first">${firstBreakText(run, state.decisions)}</p>
+        <p class="drift__run">${escapeHtml(label)}</p>
+        <ol class="drift__strip" aria-label="${escapeHtml(label + range)}">${squares.join("")}</ol>
+        <p class="drift__first">${firstBreakText(item, turns)}${judge}</p>
       </div>`;
   }
 
-  // The chats side by side: one row per turn with Alex's line, then each
-  // chat's reply. Replies that broke are highlighted, with the evidence
-  // underlined.
-  function renderCompareTable(runs) {
-    const heads = runs.map((run) => `<th scope="col">${escapeHtml(runLabel(run))}</th>`);
-    const rows = state.scenario.userLines.map(
-      (line) => `
+  // The chats side by side: one row per scripted turn with the user's line,
+  // then each chat's reply. Replies that broke are highlighted, with the
+  // evidence marked.
+  function renderCompareTable(items, turns) {
+    const heads = items.map((item) => `<th scope="col">${escapeHtml(reviewLabel(item.chat))}</th>`);
+    const rows = turns.map((turn) => {
+      const owner = items.find((item) => scriptedLines(item).has(turn));
+      const line = scriptedLines(owner).get(turn);
+      return `
         <tr>
           <th scope="row">
-            <span class="compare-table__turn">Turn ${line.turn}</span>
-            <span><span class="compare-table__speaker">${escapeHtml(state.scenario.userName)}:</span> ${escapeHtml(line.text)}</span>
+            <span class="compare-table__turn">Turn ${turn}</span>
+            <span><span class="compare-table__speaker">${escapeHtml(owner.chat.user_name)}:</span> ${escapeHtml(line.text)}</span>
           </th>
-          ${runs.map((run) => renderCompareCell(run, line.turn)).join("")}
-        </tr>`,
-    );
+          ${items.map((item) => renderCompareCell(item, turn)).join("")}
+        </tr>`;
+    });
     return `
       <div class="compare-table-wrap" tabindex="0" role="region" aria-labelledby="side-by-side-title">
-        <table class="compare-table" style="min-width: ${12 + runs.length * 14}rem">
+        <table class="compare-table" style="min-width: ${12 + items.length * 14}rem">
           <thead><tr><th scope="col">Turn</th>${heads.join("")}</tr></thead>
           <tbody>${rows.join("")}</tbody>
         </table>
       </div>`;
   }
 
-  function renderCompareCell(run, turn) {
-    const reply = run.replies.find((candidate) => candidate.turn === turn);
-    const status = turnStatus(run, turn, state.decisions);
-    const standing = breaksIn(run, state.decisions).filter((flag) => flag.turn === turn);
+  function renderCompareCell(item, turn) {
+    const reply = scriptedReply(item, turn);
+    if (!reply) return '<td class="compare-reply compare-reply--missing"><p>No reply at this turn.</p></td>';
+    const status = turnStatus(item, turn);
+    const standing = flagsAt(item, turn).filter((flag) => flag.counts_as_break);
 
     let label = "";
     if (status === "break") {
-      const types = [...new Set(standing.map((flag) => flag.type.toLowerCase()))].join(", ");
-      const cites = [...new Set(standing.flatMap((flag) => flag.cites))].join(", ");
+      // A retyped flag is a break of the type the creator gave it.
+      const types = [...new Set(standing.map((flag) => (verdictOf(flag) === "retyped" ? flag.call.type : flag.type)))].join(", ");
+      const cites = [...new Set(standing.map((flag) => flag.line_id))].join(", ");
       label = `
         <p class="compare-reply__label">
           <span class="icon icon--filled" aria-hidden="true">flag</span>
@@ -3034,12 +3314,14 @@
     } else if (status === "overridden") {
       label = '<p class="compare-reply__label compare-reply__label--quiet">Flag overridden by you</p>';
     }
-
-    const evidence = standing.map((flag) => flag.evidence.toLowerCase());
+    const stopped = reply.stopped ? '<p class="compare-reply__label compare-reply__label--quiet">Stopped</p>' : "";
+    // A rule flag's quote is from its first break, so only flags on this turn mark this reply.
+    const quotes = standing.filter((flag) => flag.turn === turn).map((flag) => flag.quote.toLowerCase());
     return `
       <td class="compare-reply${status === "break" ? " compare-reply--break" : ""}">
         ${label}
-        <p class="keep-lines">${highlight(reply ? reply.text : "", evidence)}</p>
+        ${stopped}
+        <p class="keep-lines">${highlight(reply.text, quotes)}</p>
       </td>`;
   }
 
@@ -3060,7 +3342,8 @@
   }
 
   actions["open-spec-line"] = (button) => {
-    const note = `From Compare runs: this line broke in ${chatsText(scenarioChats().length)}.`;
+    const item = selectedReview();
+    const note = `From Compare runs: this line broke in ${chatsText(item ? compareGroup(item).length : 0)}.`;
     state.specHighlight = { lineId: button.dataset.line, note };
     // The spotlight lands on the latest version, the one a fix would edit.
     const view = state.specView;
@@ -3068,13 +3351,21 @@
     goToScreen("define");
   };
 
-  // "Review them": Flag review opens at the first flag still waiting for a call.
+  // "Review them": Flag review opens at the first compared flag still waiting for a call.
   actions["review-open-flags"] = () => {
-    const [first] = openFlags();
-    if (!first) return;
-    selectDataRun(first.run.id);
-    state.openFlagId = first.flag.id;
-    goToScreen("diagnose");
+    const item = selectedReview();
+    if (!item) return;
+    const items = compareGroup(item);
+    const turns = comparedTurns(items);
+    for (const other of items) {
+      const open = comparedFlags(other, turns).find((flag) => !flag.call);
+      if (open) {
+        state.reviewChatId = other.chat.id;
+        state.openFlagId = open.id;
+        goToScreen("diagnose");
+        return;
+      }
+    }
   };
 
   // 4. Router and tabs =====================================================
@@ -3169,6 +3460,10 @@
     const active = document.activeElement;
     const focusWasInBody = body.contains(active);
     const key = focusKey || (focusWasInBody ? active.getAttribute("data-focus-key") : null);
+    // A text field that gets focus back also keeps its caret, so typing goes on where it was.
+    const caret = focusWasInBody && typeof active.selectionStart === "number" && key === active.getAttribute("data-focus-key")
+      ? [active.selectionStart, active.selectionEnd, active.selectionDirection]
+      : null;
     const scrolls = Array.from(body.querySelectorAll("[data-scroll-key]"), (box) => [box.dataset.scrollKey, box.scrollTop]);
 
     // A redraw replaces the element a tooltip belongs to, so the tooltip goes.
@@ -3188,8 +3483,12 @@
     }
     if (!focusWasInBody && !focusKey) return;
     const target = key ? body.querySelector(`[data-focus-key="${CSS.escape(key)}"]`) : null;
-    if (target) target.focus();
-    else panel.querySelector(".screen__title").focus({ preventScroll: true });
+    if (target) {
+      target.focus();
+      if (caret && typeof target.setSelectionRange === "function") target.setSelectionRange(...caret);
+    } else {
+      panel.querySelector(".screen__title").focus({ preventScroll: true });
+    }
   }
 
   function onHashChange() {
@@ -3304,24 +3603,6 @@
     if (!draftChanged() && !state.live) return;
     event.preventDefault();
     event.returnValue = "";
-  });
-
-  const resetButton = document.getElementById("reset-demo");
-  const resetDialog = document.getElementById("reset-dialog");
-
-  resetButton.addEventListener("click", () => {
-    openDialog(resetDialog, resetButton, (choice) => {
-      if (choice !== "reset") return;
-      stopLiveRun();
-      state = createInitialState();
-      refresh();
-      // Saved spec versions, chats, and checks never change, so the screens load them again.
-      loadSpec();
-      loadRunOptions();
-      loadSamples();
-      loadChats();
-      showSnackbar("Demo reset. Saved spec versions, chats, and checks stay.");
-    });
   });
 
   const codesDialog = document.getElementById("codes-dialog");
@@ -3479,7 +3760,7 @@
 
   // Theme: the M3 baseline light or dark scheme. It follows the system
   // setting until the creator picks one with the Light and Dark buttons.
-  // Like everything else it lives in memory, but Reset demo leaves it alone.
+  // It lives in memory, so a reload follows the system setting again.
   const darkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
   let themePicked = false;
 
@@ -3534,4 +3815,5 @@
   loadRunOptions();
   loadSamples();
   loadChats();
+  loadReview();
 })();

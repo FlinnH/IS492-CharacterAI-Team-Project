@@ -126,16 +126,33 @@ class Judge:
 
     def state(self, chat_id: int) -> CheckState:
         chat = self._chat(chat_id)
-        content_key, cache_key = self.keys(chat, self.transcript(chat))
-        return CheckState(running=chat_id in self.running, result=self._view(chat, content_key, cache_key, cached=True))
+        return CheckState(running=chat_id in self.running, result=self.saved_check(chat))
 
-    def _view(self, chat: ChatView, content_key: str, cache_key: str, *, cached: bool) -> CheckView | None:
-        """The saved check: the rule flags, plus the ok judge run, or else the latest failed one."""
+    def saved_check(self, chat: ChatView, *, fallback: bool = False) -> CheckView | None:
+        """The saved check of the chat as it stands, or None. Never calls a model.
+
+        It is the run with today's judge settings. With fallback, when no run has
+        today's settings, it is the chat's newest run with any settings, so Flag
+        review keeps a chat and its calls after the provider or a prompt changes.
+        """
+        content_key, cache_key = self.keys(chat, self.transcript(chat))
+        view = self._view(chat, content_key, cache_key, cached=True)
+        if view is None and fallback:
+            view = self._view(chat, content_key, None, cached=True)
+        return view
+
+    def _view(self, chat: ChatView, content_key: str, cache_key: str | None, *, cached: bool) -> CheckView | None:
+        """The saved check: the rule flags, plus the ok judge run, or else the latest failed one.
+        With no cache_key, a run with any judge settings counts."""
+        if cache_key is not None:
+            where, key = "cache_key = ?", cache_key
+        else:
+            where, key = "content_key = ?", content_key
         with self.database.connect() as conn:
             run = conn.execute(
-                "SELECT * FROM judge_runs WHERE transcript_id = ? AND cache_key = ?"
+                f"SELECT * FROM judge_runs WHERE transcript_id = ? AND {where}"
                 " ORDER BY status = 'ok' DESC, id DESC LIMIT 1",
-                (chat.id, cache_key),
+                (chat.id, key),
             ).fetchone()
             if run is None:
                 return None
