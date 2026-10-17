@@ -165,6 +165,15 @@ window.WorkbenchApi = (() => {
     // Runs the automatic checks and the AI judge, or returns the saved check when one covers the chat.
     checkChat: (id) => request("POST", `/api/chats/${part(id)}/check`),
 
+    // Flag review. getReview returns every checked chat with its flags and the
+    // creator's calls. Each call returns the flag's chat as it now stands.
+    getReview: () => request("GET", "/api/review"),
+    openEvidence: (flagId) => request("POST", `/api/flags/${part(flagId)}/evidence`),
+    agreeFlag: (flagId) => request("POST", `/api/flags/${part(flagId)}/agree`),
+    // type is the right failure type, or null when the flag isn't a break.
+    overrideFlag: (flagId, reason, type) => request("POST", `/api/flags/${part(flagId)}/override`, { reason, type }),
+    undoCall: (flagId) => request("POST", `/api/flags/${part(flagId)}/undo`),
+
     // Import.
     listSamples: () => request("GET", "/api/samples"),
     previewImport: (body) => request("POST", "/api/imports/preview", body),

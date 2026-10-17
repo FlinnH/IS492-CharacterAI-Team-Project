@@ -185,9 +185,6 @@ def test_migration_002_makes_the_chat_tables(tmp_path):
     with db.Database(tmp_path / "workbench.db").connect() as conn:
         assert db.migrate(conn) >= 2
         assert {"transcripts", "messages", "model_calls", "events"} <= set(table_names(conn))
-        # Later milestones add a column the same way, as M4 will for events.flag_id
-        # (flags itself comes in migration 003).
-        conn.execute("ALTER TABLE events ADD COLUMN flag_id INTEGER REFERENCES flags (id)")
 
 
 @pytest.fixture
@@ -218,7 +215,7 @@ def check_conn(chat_conn):
 
 def test_migration_003_makes_the_check_tables(tmp_path):
     with db.Database(tmp_path / "workbench.db").connect() as conn:
-        assert db.migrate(conn) == 3
+        assert db.migrate(conn) >= 3
         assert {"judge_runs", "flags", "rejected_flags", "not_checked"} <= set(table_names(conn))
 
 
@@ -278,3 +275,64 @@ def test_rule_flags_have_no_run_and_judge_flags_need_one(check_conn):
             " first_confidence, why, created_at) VALUES (1, 'content', NULL, 'judge', 2, 'style drift', 'X1', 'Hello.',"
             " 'high', 'high', 'Why.', 'x')"
         )
+
+
+def test_migration_004_adds_calls_to_events(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) >= 4
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(events)")}
+        assert {"flag_id", "flag_type"} <= columns
+        assert [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'view'")] == ["decisions"]
+
+
+def call(conn, kind, flag_id=1, flag_type=None, reason=None):
+    """One event on a flag of the check_conn chat, as review.py writes it."""
+    conn.execute(
+        "INSERT INTO events (created_at, kind, transcript_id, flag_id, flag_type, reason)"
+        " VALUES ('2026-10-12T00:00:00Z', ?, 1, ?, ?, ?)",
+        (kind, flag_id, flag_type, reason),
+    )
+
+
+@pytest.mark.parametrize(
+    ("before", "refused", "message"),
+    [
+        ([], ("agree",), "after the evidence"),
+        ([("evidence_opened",), ("agree",)], ("agree",), "one call at a time"),
+        ([("evidence_opened",), ("agree",)], ("override", 1, None, "The quote is fine."), "one call at a time"),
+        ([], ("undo",), "no call to undo"),
+        ([], ("override", 1, None, "   "), "needs a reason"),
+        ([], ("agree", None), "CHECK|after the evidence"),
+        ([], ("evidence_opened", 1, "persona drift"), "CHECK"),
+        ([], ("evidence_opened", 99), "FOREIGN KEY"),
+    ],
+    ids=[
+        "agree-before-evidence",
+        "second-agree",
+        "override-while-agreed",
+        "undo-without-a-call",
+        "override-without-a-reason",
+        "call-without-a-flag",
+        "type-on-an-opening",
+        "unknown-flag",
+    ],
+)
+def test_the_database_backs_up_the_call_rules(check_conn, before, refused, message):
+    # review.py refuses these first, with a plain message. The database refuses
+    # them too, for any other connection.
+    for event in before:
+        call(check_conn, *event)
+    with pytest.raises(sqlite3.IntegrityError, match=message):
+        call(check_conn, *refused)
+    assert check_conn.execute("SELECT COUNT(*) FROM events WHERE flag_id IS NOT NULL").fetchone()[0] == len(before)
+
+
+def test_decisions_take_the_latest_call_per_flag(check_conn):
+    call(check_conn, "evidence_opened")
+    call(check_conn, "agree")
+    call(check_conn, "undo")
+    call(check_conn, "override", 1, "persona drift", "a b c")
+    # Only the four flag calls must name a flag; another kind may, as a later re-check might.
+    call(check_conn, "recheck", 2)
+    rows = [tuple(row) for row in check_conn.execute("SELECT flag_id, kind, reason, flag_type FROM decisions")]
+    assert rows == [(1, "override", "a b c", "persona drift")]

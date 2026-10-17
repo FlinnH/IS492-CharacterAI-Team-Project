@@ -1990,6 +1990,19 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-body-medium-tracking);
 }
 
+/* "2 flags need your call on Flag review" and the Review flags button */
+.check-review {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.check-review__text {
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+}
+
 /* Import a chat (dialog) ----------------------------------------------------- */
 
 .dialog--import {
@@ -2218,6 +2231,61 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-body-medium-tracking);
 }
 
+/* A checked chat with no flags: one line in the bar instead of an empty list */
+.review__empty {
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+}
+
+/* When the chat was checked, and by which judge */
+.review__source {
+  margin-top: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* Past five chats, a menu takes the switcher's place */
+.chat-switcher-menu {
+  margin-bottom: 12px;
+}
+
+/* Chats that changed after their check, with a way to check each again */
+.changed-chats {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.changed-chats__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.changed-chats__text {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.changed-chats__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changed-chats__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
@@ -2250,7 +2318,9 @@ button.chip:active::before {
   outline-offset: 2px;
 }
 
-.flag-card.is-agreed {
+/* A retyped flag still stands as a break, so it looks like an agreed one */
+.flag-card.is-agreed,
+.flag-card.is-retyped {
   border-color: var(--md-sys-color-primary);
 }
 
@@ -2397,14 +2467,16 @@ button.chip:active::before {
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
 }
 
-.flag-card.is-agreed .flag-card__status .icon {
+.flag-card.is-agreed .flag-card__status .icon,
+.flag-card.is-retyped .flag-card__status .icon {
   color: var(--md-sys-color-primary);
 }
 
+/* The reason, the right type, and Save, with room between the two fields' labels */
 .flag-card__override {
   display: grid;
   justify-self: stretch;
-  gap: 8px;
+  gap: 16px;
 }
 
 /* Not checked by the AI */
@@ -2430,23 +2502,6 @@ button.chip:active::before {
   display: grid;
   justify-items: start;
   gap: 4px;
-}
-
-/* Checkbox: the native control in the M3 primary color, on a 40px row */
-.checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 40px;
-  cursor: pointer;
-}
-
-.checkbox input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--md-sys-color-primary);
-  cursor: pointer;
 }
 
 /* The compact conversation */
@@ -2671,6 +2726,11 @@ button.chip:active::before {
   border-style: dashed;
 }
 
+/* No reply at this scripted turn, as when a run stopped early */
+.drift__turn--missing {
+  border-style: dotted;
+}
+
 .drift__first {
   font: var(--type-label-large);
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
@@ -2793,7 +2853,8 @@ button.chip:active::before {
   font-size: 16px;
 }
 
-.compare-reply__label--quiet {
+.compare-reply__label--quiet,
+.compare-reply--missing {
   color: var(--md-sys-color-on-surface-variant);
 }
 
