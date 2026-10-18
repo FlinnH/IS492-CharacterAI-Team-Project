@@ -1,5 +1,6 @@
-"""M2 gateway tests: one log row per call with its tokens, call spacing on a
-fake clock, and the daily cap, counted by Pacific day."""
+"""M2 and M6 gateway tests: one log row per attempt with its tokens, call
+spacing on a fake clock, the daily cap counted by Pacific day, and, for a busy
+service, retries with doubling pauses and then the fallback model."""
 
 import asyncio
 from datetime import datetime, timezone
@@ -10,7 +11,9 @@ from conftest import FakeTime, default_model, fake_settings, query, settings_for
 from workbench.config import load_prompts
 from workbench.gateway import CapReached, Delta, Gateway, Wait
 from workbench.limiter import Limiter
-from workbench.providers import Chunk, FakeProvider, Usage
+from workbench.providers import RATE_LIMITED, Chunk, FakeProvider, FakeReply, ProviderError, Usage
+
+BUSY = ProviderError("rate_limited", RATE_LIMITED, "HTTP 429: quota")
 
 # 23:59 and 00:01 Pacific time on the night of Oct 11 to 12, 2026 (PDT is UTC-7).
 BEFORE_MIDNIGHT = datetime(2026, 10, 12, 6, 59, tzinfo=timezone.utc)
@@ -191,3 +194,119 @@ def test_the_daily_count_follows_pacific_days(tmp_path, database):
     assert result.status == "ok"
     days = [row["quota_day"] for row in query(database, "SELECT quota_day FROM model_calls ORDER BY id")]
     assert days == ["2026-10-11", "2026-10-11", "2026-10-12"]
+
+
+# Retries and the fallback model (M6).
+
+
+def fallback_of(model_id):
+    return load_prompts().models.fallback_for(model_id)
+
+
+def test_a_forced_429_is_tried_again_then_the_fallback_model_answers(tmp_path, database):
+    time = FakeTime()
+    provider = FakeProvider(fake_settings())
+    gateway = make_gateway(tmp_path, database, provider, time=time, workbench_force_model_error="primary")
+    model_id = default_model()
+    fallback = fallback_of(model_id)
+
+    events, result = run_call(gateway, model_id)
+    assert (result.status, result.text) == ("ok", fake_settings().reply)
+    assert (result.model_used, result.fallback, result.attempts) == (fallback, True, 4)
+    assert [(event.reason, event.seconds) for event in events if isinstance(event, Wait)] == [
+        ("retry", 2),
+        ("retry", 4),
+        ("fallback", 0),
+    ]
+    # The pauses double on the fake clock. A forced attempt takes no call slot, so nothing else waits.
+    assert time.sleeps == [2, 4]
+    forced = "forced 429 (WORKBENCH_FORCE_MODEL_ERROR=primary)"
+    assert query(database, "SELECT attempt, fallback, forced, model_asked, status, error FROM model_calls ORDER BY id") == [
+        {"attempt": 1, "fallback": 0, "forced": 1, "model_asked": model_id, "status": "error", "error": forced},
+        {"attempt": 2, "fallback": 0, "forced": 1, "model_asked": model_id, "status": "error", "error": forced},
+        {"attempt": 3, "fallback": 0, "forced": 1, "model_asked": model_id, "status": "error", "error": forced},
+        {"attempt": 4, "fallback": 1, "forced": 0, "model_asked": fallback, "status": "ok", "error": None},
+    ]
+    # Only the fallback model's call reached the provider, so only it counts toward the daily cap.
+    assert [request["model"] for request in provider.requests] == [fallback]
+    assert gateway.used_today() == 1
+    assert result.model_call_id == query(database, "SELECT MAX(id) AS id FROM model_calls")[0]["id"]
+
+
+def test_with_every_attempt_forced_to_fail_the_call_ends_in_an_error(tmp_path, database):
+    provider = FakeProvider(fake_settings())
+    gateway = make_gateway(tmp_path, database, provider, workbench_force_model_error="all")
+    events, result = run_call(gateway, default_model())
+    assert (result.status, result.message, result.fallback, result.attempts) == ("error", RATE_LIMITED, True, 4)
+    assert provider.requests == [] and gateway.used_today() == 0
+    rows = query(database, "SELECT forced, fallback FROM model_calls ORDER BY id")
+    assert [(row["forced"], row["fallback"]) for row in rows] == [(1, 0), (1, 0), (1, 0), (1, 1)]
+
+
+@pytest.mark.parametrize(
+    ("kind", "requests"),
+    [("rate_limited", 4), ("server", 4), ("auth", 1), ("not_found", 1), ("bad_request", 1), ("connection", 1), ("timeout", 1)],
+)
+def test_only_a_busy_service_is_tried_again(tmp_path, database, kind, requests):
+    failure = ProviderError(kind, "It failed.", f"{kind} detail")
+    provider = FakeProvider(fake_settings(), replies=[FakeReply(error=failure)] * 4)
+    gateway = make_gateway(tmp_path, database, provider)
+    events, result = run_call(gateway, default_model())
+    assert (result.status, result.message, len(provider.requests)) == ("error", "It failed.", requests)
+
+
+def test_with_no_retries_the_fallback_model_comes_next(tmp_path, database):
+    provider = FakeProvider(fake_settings(), replies=[FakeReply(error=BUSY)])
+    gateway = make_gateway(tmp_path, database, provider, workbench_retries=0)
+    events, result = run_call(gateway, default_model())
+    assert (result.status, result.fallback) == ("ok", True)
+    assert [request["model"] for request in provider.requests] == [default_model(), fallback_of(default_model())]
+
+
+def test_a_reply_that_breaks_after_its_first_words_is_not_started_over(tmp_path, database):
+    class Breaks(ScriptedProvider):
+        async def stream(self, model, messages, reasoning_effort, max_tokens):
+            self.starts.append(model)
+            yield Chunk("Hel", "reported-model-1", Usage(10, 0, 1, 0))
+            raise BUSY
+
+    provider = Breaks([])
+    gateway = make_gateway(tmp_path, database, provider)
+    events, result = run_call(gateway, default_model())
+    assert (result.status, result.text, result.attempts) == ("error", "Hel", 1)
+    assert provider.starts == [default_model()]
+
+
+def test_stop_during_a_retry_pause_ends_the_call(tmp_path, database):
+    provider = FakeProvider(fake_settings(), replies=[FakeReply(error=BUSY)])
+    gateway = make_gateway(tmp_path, database, provider)
+    stop = asyncio.Event()
+
+    def stop_at_the_pause(event, call):
+        if isinstance(event, Wait) and event.reason == "retry":
+            stop.set()
+
+    events, result = run_call(gateway, default_model(), stop=stop, on_event=stop_at_the_pause)
+    assert (result.status, result.message) == ("stopped", "")
+    assert len(provider.requests) == 1
+    assert [row["status"] for row in query(database, "SELECT status FROM model_calls")] == ["error"]
+
+
+def test_every_message_sent_to_a_model_is_redacted(tmp_path, database):
+    provider = FakeProvider(fake_settings())
+    gateway = make_gateway(tmp_path, database, provider)
+
+    async def run():
+        call = gateway.call(
+            role="character",
+            model_id=default_model(),
+            messages=[{"role": "system", "content": "spec"}, {"role": "user", "content": "Mail me at alex@example.com."}],
+            prompt_version="character.v1",
+            session=None,
+            stop=asyncio.Event(),
+        )
+        async for _ in call.events():
+            pass
+
+    asyncio.run(run())
+    assert provider.requests[0]["messages"][1]["content"] == "Mail me at [email removed]."

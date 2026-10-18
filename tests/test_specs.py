@@ -161,3 +161,29 @@ def test_render_text_puts_the_setting_after_the_fields(database):
     assert f"**Voice:** {voice.text}\n\n**Setting:** Alex knocks at 4 Privet Drive.\n\n**{first_heading}:**" in text
     # The same body always renders the same text.
     assert specs.render_text(body) == text
+
+
+def test_a_save_that_races_another_gets_a_conflict(database, monkeypatch):
+    first = edit_of(specs.get_spec(database, "harry"))
+    second = edit_of(specs.get_spec(database, "harry"))
+    set_line(first, "C2", "He lives with the Dursleys.")
+    save(database, first)
+
+    # A save that read v1 as the latest just before the first one landed: only
+    # the database's own check on the version number can catch it.
+    monkeypatch.setattr(specs, "_latest", lambda conn, character_id: 1)
+    set_line(second, "C3", "He lives at 4 Privet Drive.")
+    with pytest.raises(specs.SpecConflict, match="A newer version was saved while you were editing"):
+        save(database, second)
+    monkeypatch.undo()
+    assert [summary.version for summary in specs.get_spec(database, "harry").versions] == [2, 1]
+
+
+def test_a_save_says_what_redaction_took_out(database):
+    edit = edit_of(specs.get_spec(database, "harry"))
+    add_line(edit, "Relationships", "He writes to Alex at alex@example.com or rings 217-555-0142.")
+    saved = save(database, edit)
+    assert (saved.removed.emails, saved.removed.phone_numbers, saved.removed.keys) == (1, 1, 0)
+    assert saved.body.sections[5].lines[-1].text == "He writes to Alex at [email removed] or rings [phone number removed]."
+    # A version read later has nothing to report.
+    assert specs.get_spec(database, "harry", saved.version).removed.total == 0

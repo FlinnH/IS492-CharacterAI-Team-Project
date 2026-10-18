@@ -146,6 +146,17 @@ def pad_line(edit, line_id):
                 line["text"] = "  " + line["text"].replace(" ", " \n ") + "\t"
 
 
+def move_line(edit, line_id, heading):
+    """Moves a kept line, ID and all, to the end of another section."""
+    for item in edit["sections"]:
+        for line in item["lines"]:
+            if line["id"] == line_id:
+                item["lines"].remove(line)
+                section(edit, heading)["lines"].append(line)
+                return
+    raise KeyError(line_id)
+
+
 INVALID_EDITS = {
     # name: (change to an unchanged v1 edit, field key the server reports, words in its message)
     "empty-kept-line": (lambda edit: set_line(edit, "C2", "   "), "line-0-1", "C2"),
@@ -170,6 +181,21 @@ INVALID_EDITS = {
     "lone-surrogate": (lambda edit: set_line(edit, "B2", "Don't guess \ud800"), "line-7-1", "B2"),
     "nothing-changed": (lambda edit: None, None, "Nothing changed"),
     "only-whitespace-changed": (lambda edit: pad_line(edit, "C1"), None, "Nothing changed"),
+    # The rest of specs.py's checks (M6).
+    "renamed-field": (lambda edit: edit["fields"][0].update(label="Full name"), None, "fields changed"),
+    "empty-opening-instruction": (lambda edit: edit.update(preamble="  \n "), "preamble", "The opening instruction is empty"),
+    "empty-field": (lambda edit: edit["fields"][1].update(text="\u200b"), "field-1", "is empty. Write it before you save."),
+    "line-moved-to-another-section": (
+        lambda edit: move_line(edit, "C2", "Relationships"),
+        "line-5-15",
+        "C2 can't move to Relationships",
+    ),
+    "parent-from-the-future": (lambda edit: edit.update(parent=9), None, "There is no v9 to edit"),
+    "lone-surrogate-in-the-note": (
+        lambda edit: (set_line(edit, "C2", "He lives with the Dursleys."), edit.update(note="Fixed \ud800")),
+        "note",
+        "The note has a character that can't be saved",
+    ),
 }
 
 
@@ -185,6 +211,22 @@ def test_invalid_edits_are_rejected(client, case):
     assert isinstance(error["detail"], str)
     assert words in error["detail"]
     assert error.get("field") == field
+    assert latest(client)["version"] == 1
+
+
+@pytest.mark.parametrize(
+    "line_id",
+    ["R1'; DROP TABLE spec_versions; --", "\ud800", "r1", "R0", "R1 "],
+    ids=["sql", "lone-surrogate", "lowercase", "zero", "trailing-space"],
+)
+def test_a_made_up_line_id_gets_a_plain_422(client, line_id):
+    # Checked like a stored line's ID before the edit is read, so a crafted one
+    # can't reach a message that echoes it, as a lone surrogate once did with a 500.
+    edit = edit_payload(latest(client))
+    section(edit, "Relationships")["lines"].append({"id": line_id, "text": "Made up."})
+    response = post(client, edit)
+    assert response.status_code == 422
+    assert response.json() == {"detail": "The request has a missing or wrong value at sections.5.lines.15.id."}
     assert latest(client)["version"] == 1
 
 

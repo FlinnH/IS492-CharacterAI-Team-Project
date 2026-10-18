@@ -8,6 +8,11 @@ its messages are append-only.
 The seeded transcript is read only by read_sample(), and only when the creator
 picks it in Import. Listing the samples checks that its file exists and never
 opens it.
+
+Nothing is saved unredacted: an import is redacted message by message once it
+is parsed, with its title, tool, receipt, and source notes, and a live
+message is redacted as it is saved. A message that reads like an instruction
+to the AI is marked as possible injection wherever it shows, and is saved as it is.
 """
 
 import hashlib
@@ -19,7 +24,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from workbench import db, specs, telemetry
+from workbench import db, injection, redact, specs, telemetry
 from workbench.config import APP_DIR, Settings, app_path
 from workbench.schemas import (
     Character,
@@ -30,6 +35,7 @@ from workbench.schemas import (
     ImportRequest,
     MessageView,
     PreviewRow,
+    Removed,
     RowProblem,
     SampleChat,
     SampleInfo,
@@ -125,6 +131,8 @@ class ImportPlan:
     speakers: list[SpeakerCount]
     needs_roles: bool
     content_sha256: str
+    # What redaction took out of the pasted or loaded text.
+    removed: Removed
 
 
 # Parsing.
@@ -500,14 +508,25 @@ def plan_import(database: db.Database, settings: Settings, request: ImportReques
                 message=f"Row {first_row} adds a third speaker, {extra}. A chat can have the character and one other speaker.",
             )
         )
-    messages = _numbered(parsed.rows, roles)
     user_name = next((s.label for s in speakers if s.role == "user"), "User")
     character_name = next((s.label for s in speakers if s.role == "character"), view.character.name.split()[0])
 
-    tool = (chat.tool if chat else "") or request.tool.strip()
-    receipt = (chat.receipt if chat else "") or request.receipt.strip()
+    # Redacted after parsing, so a label like [email removed] can't read as a
+    # note in brackets and change what the parser keeps.
+    removed = Removed()
+
+    def scrub(value: str) -> str:
+        nonlocal removed
+        value, found = redact.scrub(value)
+        removed += found
+        return value
+
+    messages = [(number, speaker, scrub(words)) for number, speaker, words in _numbered(parsed.rows, roles)]
+    tool = scrub((chat.tool if chat else "") or request.tool.strip())
+    receipt = scrub((chat.receipt if chat else "") or request.receipt.strip())
+    source = ChatSource(**{name: scrub(value) for name, value in chat.source.model_dump().items()}) if chat else ChatSource()
     if chat is not None:
-        title = chat.title
+        title = scrub(chat.title)
     elif seeded:
         title = "Seeded transcript"
     elif tool and receipt:
@@ -523,13 +542,15 @@ def plan_import(database: db.Database, settings: Settings, request: ImportReques
         tool=tool,
         receipt=receipt,
         scenario=chat.scenario if chat else None,
-        source=chat.source if chat else ChatSource(),
+        source=source,
         user_name=user_name,
         character_name=character_name,
         messages=messages,
         speakers=speakers,
         needs_roles=needs_roles,
-        content_sha256=_content_sha256(text),
+        # Of the redacted text, so the saved hash never stands for the personal data.
+        content_sha256=_content_sha256(redact.text(text)),
+        removed=removed,
     )
 
 
@@ -553,7 +574,16 @@ def _preview_rows(plan: ImportPlan, indexes: range) -> list[PreviewRow]:
     for i in indexes:
         number, speaker, text = plan.messages[i]
         short = text if len(text) <= PREVIEW_CHARS else text[: PREVIEW_CHARS - 3].rstrip() + "..."
-        out.append(PreviewRow(row=rows[i].row, number=number, label=rows[i].label, speaker=None if plan.needs_roles else speaker, text=short))
+        out.append(
+            PreviewRow(
+                row=rows[i].row,
+                number=number,
+                label=rows[i].label,
+                speaker=None if plan.needs_roles else speaker,
+                text=short,
+                injection=injection.marked(text),
+            )
+        )
     return out
 
 
@@ -577,6 +607,8 @@ def preview(database: db.Database, settings: Settings, request: ImportRequest) -
         spec_version=plan.spec_version,
         title=plan.title,
         duplicate_of=duplicate,
+        removed=plan.removed,
+        injection_numbers=[number for number, _, text in plan.messages if injection.marked(text)],
     )
 
 
@@ -677,6 +709,7 @@ def add_message(
     stopped: bool = False,
     model_call_id: int | None = None,
 ) -> MessageView:
+    text = redact.text(text)
     with database.connect() as conn, db.transaction(conn):
         seq = conn.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE transcript_id = ?", (chat_id,)).fetchone()[0]
         conn.execute(
@@ -684,12 +717,20 @@ def add_message(
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (chat_id, seq, turn, speaker, text, source, int(stopped), model_call_id, telemetry.timestamp(telemetry.utc_now())),
         )
-    return MessageView(seq=seq, turn=turn, speaker=speaker, text=text, source=source, stopped=stopped)
+    return MessageView(seq=seq, turn=turn, speaker=speaker, text=text, source=source, stopped=stopped, injection=injection.marked(text))
 
 
 def set_status(database: db.Database, chat_id: int, status: str) -> None:
     with database.connect() as conn:
         conn.execute("UPDATE transcripts SET status = ? WHERE id = ?", (status, chat_id))
+
+
+def session_runs(database: db.Database, session: str | None) -> int:
+    """Live chats this browser session started. Requests that name no session count as one session."""
+    with database.connect() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM transcripts WHERE session IS ? AND kind = 'live'", (session,)
+        ).fetchone()[0]
 
 
 # Reading chats.
@@ -730,22 +771,39 @@ def _summary(row, scenarios: dict[str, Scenario], busy: set[int]) -> dict:
     }
 
 
+def _message_view(row) -> MessageView:
+    """A messages row with what its model call says about it: the model, a fallback, an error that cut it off."""
+    stopped = bool(row["stopped"])
+    return MessageView(
+        seq=row["seq"],
+        turn=row["turn"],
+        speaker=row["speaker"],
+        text=row["text"],
+        source=row["source"],
+        stopped=stopped,
+        model=row["model_asked"],
+        fallback=bool(row["fallback"]),
+        failed=stopped and row["call_status"] == "error",
+        injection=injection.marked(row["text"]),
+    )
+
+
 def get_chat(database: db.Database, chat_id: int, *, scenarios: dict[str, Scenario], busy: set[int] = frozenset()) -> ChatView:
     with database.connect() as conn:
         row = conn.execute(f"{_SUMMARY_SQL} WHERE transcripts.id = ?", (chat_id,)).fetchone()
         if row is None:
             raise ChatNotFound(f"There is no chat {chat_id}.")
         messages = conn.execute(
-            "SELECT seq, turn, speaker, text, source, stopped FROM messages WHERE transcript_id = ? ORDER BY seq",
+            "SELECT messages.seq, messages.turn, messages.speaker, messages.text, messages.source, messages.stopped,"
+            " model_calls.model_asked, model_calls.fallback, model_calls.status AS call_status"
+            " FROM messages LEFT JOIN model_calls ON model_calls.id = messages.model_call_id"
+            " WHERE messages.transcript_id = ? ORDER BY messages.seq",
             (chat_id,),
         ).fetchall()
     return ChatView(
         **_summary(row, scenarios, busy),
         source=ChatSource.model_validate_json(row["source_json"]),
-        messages=[
-            MessageView(seq=m["seq"], turn=m["turn"], speaker=m["speaker"], text=m["text"], source=m["source"], stopped=bool(m["stopped"]))
-            for m in messages
-        ],
+        messages=[_message_view(message) for message in messages],
     )
 
 

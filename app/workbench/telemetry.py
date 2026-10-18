@@ -3,13 +3,13 @@
 A model_calls row holds names, versions, timings, token counts, and a short
 error, never prompt or chat text. An events row records what the creator did,
 for the CP4 study, including each call on a flag and each opening of its
-evidence.
+evidence. Errors and reasons are redacted before they are saved.
 """
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 
-from workbench import db
+from workbench import db, redact
 
 
 def utc_now() -> datetime:
@@ -41,6 +41,8 @@ class CallRecord:
     error: str | None = None
     attempt: int = 1
     fallback: bool = False
+    # Failed on purpose for the demo (WORKBENCH_FORCE_MODEL_ERROR), so the provider never saw it.
+    forced: bool = False
     same_model: bool = False
     ttft_ms: int | None = None
     latency_ms: int | None = None
@@ -53,6 +55,8 @@ class CallRecord:
 
 def record_call(database: db.Database, record: CallRecord) -> int:
     values = asdict(record)
+    # A service's error message could quote what it was sent.
+    values["error"] = redact.optional(values["error"])
     columns = ", ".join(values)
     marks = ", ".join("?" for _ in values)
     with database.connect() as conn:
@@ -60,10 +64,10 @@ def record_call(database: db.Database, record: CallRecord) -> int:
 
 
 def calls_on_day(database: db.Database, provider: str, quota_day: str) -> int:
-    """Calls that reached this provider on this quota day. Capped attempts never did."""
+    """Calls that reached this provider on this quota day. Capped and forced attempts never did."""
     with database.connect() as conn:
         return conn.execute(
-            "SELECT COUNT(*) FROM model_calls WHERE quota_day = ? AND provider = ? AND status != 'capped'",
+            "SELECT COUNT(*) FROM model_calls WHERE quota_day = ? AND provider = ? AND status != 'capped' AND forced = 0",
             (quota_day, provider),
         ).fetchone()[0]
 
@@ -78,11 +82,14 @@ def insert_event(
     flag_type: str | None = None,
     reason: str | None = None,
 ) -> int:
-    """One events row on the caller's connection, so it can share the caller's transaction."""
+    """One events row on the caller's connection, so it can share the caller's transaction.
+
+    The reason is redacted first: an override reason or a question is the creator's own text.
+    """
     return conn.execute(
         "INSERT INTO events (created_at, session, kind, transcript_id, flag_id, flag_type, reason)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (timestamp(utc_now()), session, kind, transcript_id, flag_id, flag_type, reason),
+        (timestamp(utc_now()), session, kind, transcript_id, flag_id, flag_type, redact.optional(reason)),
     ).lastrowid
 
 

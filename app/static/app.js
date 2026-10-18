@@ -652,7 +652,8 @@
               </p>`
             : ""}
           <div class="spec-save-bar__actions">
-            <button type="button" class="btn btn--text" data-action="cancel-spec-edit" data-focus-key="cancel-spec-edit">Cancel</button>
+            <button type="button" class="btn btn--text" data-action="cancel-spec-edit" data-focus-key="cancel-spec-edit"
+              aria-disabled="${state.specSaving}">Cancel</button>
             <button type="button" class="btn btn--filled" data-action="save-spec" data-focus-key="save-spec"
               aria-disabled="${state.specSaving}">${state.specSaving ? "Saving" : `Save as ${next}`}</button>
           </div>
@@ -676,11 +677,13 @@
 
   // One outlined field of the form; key is its data-draft-key. single makes a
   // one-line input, where Enter does nothing, since there is no form to submit.
+  // While a save is on its way the field is read-only, since the saved version
+  // replaces the draft and anything typed then would be lost.
   function textField(key, label, text, { hint = "", invalid = false, single = false, labelExtra = "" } = {}) {
     const id = `spec-${key}`;
     const describedBy = [hint && `${id}-hint`, invalid && "spec-save-error"].filter(Boolean).join(" ");
     const attributes = `class="text-field__input" id="${escapeHtml(id)}" placeholder=" " data-draft-key="${escapeHtml(key)}"
-      data-focus-key="${escapeHtml(id)}"${invalid ? ' aria-invalid="true"' : ""}${describedBy ? ` aria-describedby="${escapeHtml(describedBy)}"` : ""}`;
+      data-focus-key="${escapeHtml(id)}"${invalid ? ' aria-invalid="true"' : ""}${describedBy ? ` aria-describedby="${escapeHtml(describedBy)}"` : ""}${state.specSaving ? " readonly" : ""}`;
     // Nothing but the text goes between the textarea tags, or every field
     // would count as changed.
     const input = single
@@ -701,7 +704,7 @@
         <h2 class="spec-card__title" id="${headingId}">${escapeHtml(section.heading)}</h2>
         <ul class="spec-lines">${section.lines.map((line) => renderEditLine(section, line, invalid)).join("")}</ul>
         <button type="button" class="btn btn--text btn--icon-leading spec-add-line" data-action="add-spec-line"
-          data-section="${s}" data-focus-key="add-line-${s}">
+          data-section="${s}" data-focus-key="add-line-${s}" aria-disabled="${state.specSaving}">
           <span class="icon" aria-hidden="true">add</span>
           <span>Add a line<span class="visually-hidden"> to ${escapeHtml(section.heading)}</span></span>
         </button>
@@ -717,7 +720,7 @@
         <li class="spec-edit-line is-removed">
           <p class="spec-edit-line__removed">${escapeHtml(line.id)} will be removed when you save.</p>
           <button type="button" class="btn btn--text" data-action="undo-delete-spec-line" data-line-key="${escapeHtml(line.key)}"
-            data-focus-key="undo-${escapeHtml(line.key)}">Undo<span class="visually-hidden">: keep ${escapeHtml(line.id)}</span></button>
+            data-focus-key="undo-${escapeHtml(line.key)}" aria-disabled="${state.specSaving}">Undo<span class="visually-hidden">: keep ${escapeHtml(line.id)}</span></button>
         </li>`;
     }
     const field = line.id
@@ -734,7 +737,7 @@
       <li class="spec-edit-line">
         ${field}
         <button type="button" class="btn btn--text btn--icon-leading" data-action="delete-spec-line"
-          data-line-key="${escapeHtml(line.key)}" data-focus-key="delete-${escapeHtml(line.key)}">
+          data-line-key="${escapeHtml(line.key)}" data-focus-key="delete-${escapeHtml(line.key)}" aria-disabled="${state.specSaving}">
           <span class="icon" aria-hidden="true">delete</span>
           <span>Delete<span class="visually-hidden"> ${escapeHtml(line.id || "this new line")}</span></span>
         </button>
@@ -870,7 +873,15 @@
 
   actions["add-setting"] = () => startEditing("spec-setting");
 
-  actions["add-spec-line"] = (button) => {
+  // Adding, deleting, and restoring lines wait while a save is on its way. A
+  // double click counts once: the first click redraws the form, so the second
+  // would land on whatever moved under the pointer, like the next Delete.
+  function editorBusy(event) {
+    return !state.specDraft || state.specSaving || Boolean(event && event.detail > 1);
+  }
+
+  actions["add-spec-line"] = (button, event) => {
+    if (editorBusy(event)) return;
     const section = state.specDraft.sections[Number(button.dataset.section)];
     newLineCount += 1;
     const key = `new-${newLineCount}`;
@@ -879,8 +890,10 @@
     announce(`New line added to ${section.heading}. It gets its ID when you save.`);
   };
 
-  actions["delete-spec-line"] = (button) => {
-    const { section, line } = findDraftLine(button.dataset.lineKey);
+  actions["delete-spec-line"] = (button, event) => {
+    const found = editorBusy(event) ? null : findDraftLine(button.dataset.lineKey);
+    if (!found) return;
+    const { section, line } = found;
     if (line.id) {
       // A saved line stays in the form until Save, so Undo can bring it back.
       line.removed = true;
@@ -893,14 +906,17 @@
     }
   };
 
-  actions["undo-delete-spec-line"] = (button) => {
-    const { line } = findDraftLine(button.dataset.lineKey);
+  actions["undo-delete-spec-line"] = (button, event) => {
+    const found = editorBusy(event) ? null : findDraftLine(button.dataset.lineKey);
+    if (!found) return;
+    const { line } = found;
     line.removed = false;
     redrawEditor(`spec-line-${line.key}`);
     announce(`${line.id} is back.`);
   };
 
   actions["cancel-spec-edit"] = (button) => {
+    if (state.specSaving) return;
     if (!draftChanged()) {
       leaveEditing();
       return;
@@ -927,7 +943,11 @@
       state.specDraft = null;
       state.specSaving = false;
       refreshDefine("edit-spec");
-      showSnackbar(`Saved ${specLabel(saved.version)}. Earlier runs keep the version they used.`);
+      // The server takes emails, phone numbers, and keys out of a spec before saving it.
+      const removed = removedParts(saved.removed);
+      showSnackbar(`Saved ${specLabel(saved.version)}. Earlier runs keep the version they used.${removed.length
+        ? ` Removed ${listText(removed)}.`
+        : ""}`);
     } catch (error) {
       state.specSaving = false;
       const field = error.field ? lineKeys[error.field] || error.field : null;
@@ -997,23 +1017,29 @@
     return chat.numbering === "line" ? "Line" : "Turn";
   }
 
+  // A model's name, from every model of the provider, the fallback models too.
   function modelLabel(id) {
-    const model = runOptions && runOptions.models.find((item) => item.id === id);
-    return model ? model.label : id;
+    return (runOptions && runOptions.model_labels && runOptions.model_labels[id]) || id;
   }
 
   function isLive(chatId) {
     return Boolean(state.live && state.live.chatId === chatId);
   }
 
-  // The last line is still waiting for a reply, after a turn that failed.
+  // The last line is still waiting for a reply, after a turn that failed:
+  // nothing answered it, or a model error cut the reply off.
   function pendingLine(chat) {
     const last = chat.messages[chat.messages.length - 1];
-    return Boolean(last && last.speaker === "user");
+    return Boolean(last && (last.speaker === "user" || last.failed));
   }
 
   function canContinue(chat) {
     return chat.kind === "live" && chat.status === "active" && !isLive(chat.id) && (chat.script_left > 0 || pendingLine(chat));
+  }
+
+  // Try again answers the line still waiting, in a chat whose script has ended too.
+  function canRetry(chat) {
+    return chat.kind === "live" && !isLive(chat.id) && pendingLine(chat);
   }
 
   function canType(chat) {
@@ -1026,11 +1052,24 @@
     if (runOptions.used_today >= runOptions.daily_cap) {
       return `Today's ${runOptions.daily_cap} model calls are used up. The count starts over at midnight Pacific time.`;
     }
+    const limit = runOptions.session_run_limit;
+    if (runOptions.session_runs >= limit) {
+      return `This browser session has started ${limit} ${limit === 1 ? "run" : "runs"}, the most one session may start. To allow more, raise WORKBENCH_SESSION_RUN_LIMIT in app/.env and restart app/run.sh.`;
+    }
     return "";
   }
 
   function waitText(seconds) {
     return `Waiting ${secondsText(seconds)} so calls stay under ${runOptions.calls_per_minute} a minute.`;
+  }
+
+  // The notice under the progress bar while the next words are on their way:
+  // the server's words for a retry or the fallback model, or the call slot's
+  // wait. Empty when there is nothing to say.
+  function waitNotice(live) {
+    if (live.phase !== "waiting") return "";
+    if (live.waitMessage) return live.waitMessage;
+    return live.waitSeconds > 0 ? waitText(live.waitSeconds) : "";
   }
 
   function progressText(chat, live) {
@@ -1123,7 +1162,8 @@
       rememberChat(chat.id);
       updateChatSummary(chat);
       refreshRun({ focusKey });
-      loadCheck(chat.id);
+      // The check's buttons appear only once it loads, so focus meant for one lands then.
+      loadCheck(chat.id, { focusKey });
       return true;
     } catch (error) {
       if (ticket !== chatRequest) return false;
@@ -1307,12 +1347,34 @@
       </section>`;
   }
 
-  // A reply the last check flagged says so, with the flags' quotes marked.
+  // A line that reads like an instruction to the AI, marked for the creator.
+  // Nothing about the line changes. With explain, a tooltip and hidden words say
+  // what the mark means; the Import dialog leaves them out, since its note says it.
+  const INJECTION_MEANS = "This line reads like an instruction to the AI. The AI judge reads it as chat data and doesn't follow it.";
+
+  function injectionStatus(className, { explain = true } = {}) {
+    return `<span class="${className}"${explain ? ` data-tooltip="${INJECTION_MEANS}"` : ""}>
+      <span class="icon" aria-hidden="true">gpp_maybe</span><span>Possible injection</span>${explain
+        ? `<span class="visually-hidden">. ${INJECTION_MEANS}</span>`
+        : ""}</span>`;
+  }
+
+  // A reply the last check flagged says so, with the flags' quotes marked. A
+  // reply also says when a model error cut it off, when the fallback model
+  // wrote it, and when a line reads like an instruction to the AI.
   function renderBubble(chat, message) {
     const name = message.speaker === "user" ? chat.user_name : chat.character_name;
-    const stopped = message.stopped
-      ? `<span class="bubble__status"><span class="icon" aria-hidden="true">stop_circle</span><span>Stopped</span></span>`
+    let stopped = "";
+    if (message.failed) {
+      stopped = `<span class="bubble__status"><span class="icon" aria-hidden="true">error</span><span>Cut off by an error</span></span>`;
+    } else if (message.stopped) {
+      stopped = `<span class="bubble__status"><span class="icon" aria-hidden="true">stop_circle</span><span>Stopped</span></span>`;
+    }
+    const fallback = message.fallback
+      ? `<span class="bubble__status" data-tooltip="The chat's own model stayed busy, so its fallback model wrote this reply.">
+          <span class="icon" aria-hidden="true">swap_horiz</span><span>Fallback: ${escapeHtml(modelLabel(message.model))}</span></span>`
       : "";
+    const injected = message.injection ? injectionStatus("bubble__status bubble__status--injection") : "";
     const check = message.speaker === "character" && !message.stopped ? readyCheck(chat.id) : null;
     const flags = check ? check.flags.filter((flag) => flag.turn === message.turn) : [];
     // A rule flag sits at its first break and lists the other turns that broke the same line.
@@ -1332,6 +1394,8 @@
           <span class="bubble__speaker">${escapeHtml(name)}</span>
           <span class="bubble__turn">${numberWord(chat)} ${message.turn}<span class="visually-hidden">:</span></span>
           ${stopped}
+          ${fallback}
+          ${injected}
           ${flagStatus}
         </p>
         <p class="bubble__text keep-lines">${highlight(message.text, flags.map((flag) => flag.quote.toLowerCase()))}</p>
@@ -1356,7 +1420,7 @@
   function renderRunProgress(chat, live) {
     const scripted = live.scripted && chat.script_last_turn;
     const stopping = live.phase === "stopping";
-    const waiting = live.phase === "waiting" && live.waitSeconds > 0;
+    const notice = waitNotice(live);
     return `
       <div class="run-progress">
         <p class="run-progress__label" id="run-progress-label" data-run-progress>${escapeHtml(progressText(chat, live))}</p>
@@ -1368,7 +1432,7 @@
           <span>${stopping ? "Stopping" : "Stop"}</span>
         </button>
       </div>
-      <p class="run-wait" data-run-wait${waiting ? "" : " hidden"}>${waiting ? escapeHtml(waitText(live.waitSeconds)) : ""}</p>`;
+      <p class="run-wait" data-run-wait${notice ? "" : " hidden"}>${escapeHtml(notice)}</p>`;
   }
 
   // Below the transcript: what went wrong, what happens next, and the message box.
@@ -1381,7 +1445,7 @@
         <div class="card card--outlined run-error">
           <span class="icon" aria-hidden="true">error</span>
           <p class="run-error__text">${escapeHtml(error.message)}</p>
-          ${error.retry && canContinue(chat)
+          ${error.retry && canRetry(chat)
             ? '<button type="button" class="btn btn--filled" data-action="retry-turn" data-focus-key="retry-turn">Try again</button>'
             : ""}
         </div>`);
@@ -1454,9 +1518,9 @@
     if (bar && live.turn) bar.value = live.turn;
     const wait = body.querySelector("[data-run-wait]");
     if (wait) {
-      const waiting = live.phase === "waiting" && live.waitSeconds > 0;
-      wait.hidden = !waiting;
-      wait.textContent = waiting ? waitText(live.waitSeconds) : "";
+      const notice = waitNotice(live);
+      wait.hidden = !notice;
+      wait.textContent = notice;
     }
     const stop = body.querySelector('[data-action="stop-run"]');
     if (stop) {
@@ -1531,17 +1595,30 @@
       live.phase = live.phase === "stopping" ? "stopping" : "waiting";
       live.text = "";
       live.waitSeconds = 0;
-      addMessage(chatId, { seq: data.seq, turn: data.turn, speaker: "user", text: data.text, source: live.scripted ? "script" : "typed", stopped: false });
+      live.waitMessage = "";
+      addMessage(chatId, {
+        seq: data.seq,
+        turn: data.turn,
+        speaker: "user",
+        text: data.text,
+        source: live.scripted ? "script" : "typed",
+        stopped: false,
+        injection: data.injection,
+      });
       showLiveTurn(chatId);
       // The chat just changed, so a check of it no longer covers it, and Flag review's count changes.
       loadReview();
     } else if (name === "wait") {
+      // A retry or the fallback model comes with the server's own words.
       live.waitSeconds = data.seconds;
+      live.waitMessage = data.message || "";
       showLiveText(chatId);
+      if (data.message) announce(data.message);
     } else if (name === "delta") {
       if (!live.turn && state.chat) live.turn = state.chat.messages[state.chat.messages.length - 1].turn;
       if (live.phase !== "stopping") live.phase = "writing";
       live.waitSeconds = 0;
+      live.waitMessage = "";
       live.text += data.text;
       if (runBody() && state.chatId === chatId && !runBody().querySelector("[data-live-bubble]")) showLiveTurn(chatId);
       else showLiveText(chatId);
@@ -1558,6 +1635,8 @@
       if (data.message && !data.stopped && state.chat) announce(`${state.chat.character_name} replied.`);
     } else if (name === "error") {
       state.runError = { chatId, message: data.message, retry: data.retry };
+      // The words that came before the error are saved, marked as cut off.
+      if (data.partial) addMessage(chatId, data.partial);
       if (state.chat && state.chat.id === chatId) state.chat.status = data.status;
     }
   }
@@ -1594,7 +1673,7 @@
   async function playRun(chatId) {
     const ticket = ++runTicket;
     state.runError = null;
-    state.live = { chatId, phase: "waiting", turn: null, text: "", waitSeconds: 0, scripted: true, stopRequested: false };
+    state.live = { chatId, phase: "waiting", turn: null, text: "", waitSeconds: 0, waitMessage: "", scripted: true, stopRequested: false };
     refreshRun({ focusKey: "stop-run" });
     let outcome = null;
     for (;;) {
@@ -1631,7 +1710,7 @@
     state.live = null;
     let focusKey = null;
     if (stopHadFocus && state.chat) {
-      if (state.runError && state.runError.chatId === chatId && state.runError.retry && canContinue(state.chat)) focusKey = "retry-turn";
+      if (state.runError && state.runError.chatId === chatId && state.runError.retry && canRetry(state.chat)) focusKey = "retry-turn";
       else if (canType(state.chat)) focusKey = "run-message";
       else if (canContinue(state.chat)) focusKey = "continue-run";
       else focusKey = "start-run";
@@ -1654,6 +1733,8 @@
         model: state.runSetup.modelId,
       });
       state.runStarting = false;
+      // Counts toward this session's run limit, so Start run can say when it's reached.
+      runOptions.session_runs += 1;
       if (ticket !== runTicket) return;
       state.chatId = chat.id;
       state.chat = chat;
@@ -1673,9 +1754,11 @@
     playRun(state.chat.id);
   };
 
-  // Try again after a failed turn answers the line that is still waiting.
+  // Try again after a failed turn answers the line that is still waiting. In a
+  // chat whose script has ended, that is the one turn; otherwise the run goes on.
   actions["retry-turn"] = () => {
-    actions["continue-run"]();
+    if (state.live || !state.chat || !canRetry(state.chat)) return;
+    playRun(state.chat.id);
   };
 
   actions["stop-run"] = async (button) => {
@@ -1704,7 +1787,7 @@
     }
     const ticket = ++runTicket;
     state.runError = null;
-    state.live = { chatId: chat.id, phase: "waiting", turn: null, text: "", waitSeconds: 0, scripted: false, stopRequested: false };
+    state.live = { chatId: chat.id, phase: "waiting", turn: null, text: "", waitSeconds: 0, waitMessage: "", scripted: false, stopRequested: false };
     refreshRun({ focusKey: "stop-run" });
     const outcome = await streamTurn(chat.id, "typed", text, ticket);
     if (ticket !== runTicket) return;
@@ -1888,22 +1971,52 @@
       : "";
     const row = (item) => `
       <li>
-        <span class="import__row-meta">${escapeHtml(item.label)}, ${word} ${item.number}</span>
+        <span class="import__row-meta">${escapeHtml(item.label)}, ${word} ${item.number}${item.injection
+          ? `<span class="visually-hidden">,</span> ${injectionStatus("import__row-injection", { explain: false })}`
+          : ""}</span>
         <span class="import__row-text">${escapeHtml(item.text)}</span>
       </li>`;
     const gap = preview.last_rows.length && preview.message_count > preview.first_rows.length + preview.last_rows.length
       ? '<li class="import__row-gap" aria-hidden="true">...</li>'
       : "";
+    const removed = removedNote(preview.removed);
+    const injected = injectionNote(preview);
     return `
       <div class="import-preview">
         <p class="import-preview__summary">${escapeHtml(preview.title)}: ${preview.message_count} ${preview.message_count === 1 ? "message" : "messages"}${escapeHtml(range)}, pinned to ${escapeHtml(specLabel(preview.spec_version))}.</p>
         <ul class="import-preview__speakers">${speakers}</ul>
         ${roles}
         <ol class="import-preview__rows">${preview.first_rows.map(row).join("")}${gap}${preview.last_rows.map(row).join("")}</ol>
+        ${removed
+          ? `<p class="import-preview__note import-preview__note--icon"><span class="icon" aria-hidden="true">privacy_tip</span><span>${escapeHtml(removed)}</span></p>`
+          : ""}
+        ${injected
+          ? `<p class="import-preview__note import-preview__note--icon"><span class="icon" aria-hidden="true">gpp_maybe</span><span>${escapeHtml(injected)}</span></p>`
+          : ""}
         ${preview.skipped_rows.length ? `<p class="import-preview__note">Skipped ${preview.skipped_rows.length} ${preview.skipped_rows.length === 1 ? "line that isn't a message" : "lines that aren't messages"} (rows ${escapeHtml(rowsText(preview.skipped_rows))}).</p>` : ""}
         ${preview.duplicate_of ? '<p class="import-preview__note">This chat is already imported. Import shows the saved chat.</p>' : ""}
         ${preview.problems.length ? renderProblems(preview.problems) : ""}
       </div>`;
+  }
+
+  // "Removed 3 items before saving: 1 email, 1 phone number, and 1 key. Each
+  // shows as a label, like [email removed]." Empty when nothing was removed.
+  function removedNote(removed) {
+    const parts = removedParts(removed);
+    if (!parts.length) return "";
+    const total = REMOVED_KINDS.reduce((sum, [field]) => sum + removed[field], 0);
+    const [, , , label] = REMOVED_KINDS.find(([field]) => removed[field] > 0);
+    return `Removed ${total} ${total === 1 ? "item" : "items"} before saving: ${listText(parts)}. ${total === 1 ? "It shows" : "Each shows"} as a label, like ${label}.`;
+  }
+
+  // "Turn 3 reads like an instruction to the AI, so it's marked as possible
+  // injection. The AI judge reads it as chat data." Empty when no line does.
+  function injectionNote(preview) {
+    const numbers = preview.injection_numbers || [];
+    if (!numbers.length) return "";
+    const one = numbers.length === 1;
+    const word = capitalized(preview.numbering === "line" ? "line" : "turn");
+    return `${word}${one ? "" : "s"} ${listText(numbers.map(String))} ${one ? "reads" : "read"} like an instruction to the AI, so ${one ? "it's" : "they're"} marked as possible injection. The AI judge reads ${one ? "it" : "them"} as chat data.`;
   }
 
   actions["open-import"] = (button) => {
@@ -1923,7 +2036,8 @@
       const problems = preview.problems.length
         ? `${preview.problems.length} ${preview.problems.length === 1 ? "problem" : "problems"}`
         : "no problems";
-      announce(`${preview.message_count} messages, ${speakers}, ${problems}.${preview.needs_roles ? " Say which speaker is the character." : ""}`);
+      const notes = [removedNote(preview.removed), injectionNote(preview)].filter(Boolean).map((note) => ` ${note}`).join("");
+      announce(`${preview.message_count} messages, ${speakers}, ${problems}.${notes}${preview.needs_roles ? " Say which speaker is the character." : ""}`);
       const problemBox = area.querySelector("[data-import-problems]");
       if (problemBox) problemBox.focus();
     } catch (error) {
@@ -1998,6 +2112,19 @@
     return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
   }
 
+  // What redaction took out, as ["1 email", "2 phone numbers"], with the label each kind shows as.
+  const REMOVED_KINDS = [
+    ["emails", "email", "emails", "[email removed]"],
+    ["phone_numbers", "phone number", "phone numbers", "[phone number removed]"],
+    ["keys", "key", "keys", "[key removed]"],
+  ];
+
+  function removedParts(removed) {
+    if (!removed) return [];
+    return REMOVED_KINDS.filter(([field]) => removed[field] > 0)
+      .map(([field, one, many]) => `${removed[field]} ${removed[field] === 1 ? one : many}`);
+  }
+
   // What a cited line or field is, for screen readers: "behavior rule", or "spec field" for a label like Voice.
   function citeMeaning(lineId) {
     return /^[A-Z][0-9]+$/.test(lineId) && LINE_MEANINGS[lineId[0]] ? LINE_MEANINGS[lineId[0]] : "spec field";
@@ -2007,8 +2134,11 @@
     return word.charAt(0).toUpperCase() + word.slice(1);
   }
 
-  // Loads the saved check, which never calls a model, and redraws if the chat is on screen.
-  async function loadCheck(chatId) {
+  // Loads the saved check, which never calls a model, and redraws if the chat
+  // is on screen. focusKey names a control of the check, like Check this chat,
+  // that focus was meant for: it moves there once drawn, if focus is still on
+  // the screen's heading, where it went while the control wasn't there yet.
+  async function loadCheck(chatId, { focusKey = null } = {}) {
     if (checkRunning(chatId)) return;
     if (!state.checks[chatId]) state.checks[chatId] = { status: "loading", view: null, message: "", retry: null };
     let next;
@@ -2022,7 +2152,9 @@
     }
     if (checkRunning(chatId)) return;
     state.checks[chatId] = next;
-    if (state.chatId === chatId) refreshRun();
+    if (state.chatId !== chatId) return;
+    const heading = currentScreen === "run" ? panelFor("run").querySelector(".screen__title") : null;
+    refreshRun(focusKey && heading && document.activeElement === heading ? { focusKey } : {});
   }
 
   // "8 flags: 1 from automatic checks and 7 from the AI judge." After a
@@ -2061,6 +2193,12 @@
         : `their ${word}s have no finished reply from ${chat.character_name}`,
     };
     return `${item.count} ${one ? noun : `${noun}s`} hidden: ${reasons[item.reason]}.`;
+  }
+
+  // "AI judge: Gemini 3.5 Flash-Lite", "(fallback)" after one, or "unavailable" when it gave no answer.
+  function judgeText(judge) {
+    if (judge.status !== "ok") return "AI judge: unavailable";
+    return `AI judge: ${judge.model_label}${judge.fallback ? " (fallback)" : ""}`;
   }
 
   function checkButton(label, focusKey) {
@@ -2137,6 +2275,13 @@
           <span class="check__note-text">${escapeHtml(hiddenText(chat, item))}</span>
         </li>`);
     });
+    if (judge.fallback) {
+      notes.push(`
+        <li class="check__note">
+          <span class="icon" aria-hidden="true">swap_horiz</span>
+          <span class="check__note-text">The AI judge's own model stayed busy, so its fallback model, ${escapeHtml(judge.model_label)}, read the chat.</span>
+        </li>`);
+    }
     if (judge.same_model) {
       notes.push(`
         <li class="check__note">
@@ -2149,7 +2294,7 @@
         <div class="check__head">
           <h2 class="check__title" id="check-title" tabindex="-1" data-focus-key="check-results">Check results</h2>
           ${chip("description", `Spec ${specLabel(view.spec_version)}`)}
-          ${chip("smart_toy", `AI judge: ${judge.model_label}`)}
+          ${chip("smart_toy", judgeText(judge))}
         </div>
         <p class="check__source">Checked ${escapeHtml(chatTime(judge.checked_at))}${escapeHtml(effort)}.${view.cached
           ? " Shown from the saved check, with no new model call."
@@ -2565,7 +2710,7 @@
   function renderCheckSource(item) {
     const judge = item.judge;
     const note = judge.status === "ok" ? "" : ` ${judge.note}`;
-    return `<p class="review__source">Checked ${escapeHtml(chatTime(judge.checked_at))}. AI judge: ${escapeHtml(judge.model_label)}.${escapeHtml(note)}</p>`;
+    return `<p class="review__source">Checked ${escapeHtml(chatTime(judge.checked_at))}. ${escapeHtml(judgeText(judge))}.${escapeHtml(note)}</p>`;
   }
 
   // The flags the follow-up re-check looks at again: the AI's, rated Low or Medium.
@@ -3158,7 +3303,11 @@
       const lines = group.messages.map((message) => {
         const name = message.speaker === "user" ? chat.user_name : chat.character_name;
         const text = message.speaker === "character" ? highlight(message.text, quotes) : escapeHtml(message.text);
-        return `<p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(name)}${message.stopped ? " (stopped)" : ""}:</span> <span class="keep-lines">${text}</span></p>`;
+        let cut = "";
+        if (message.failed) cut = " (cut off by an error)";
+        else if (message.stopped) cut = " (stopped)";
+        const mark = message.injection ? ` ${injectionStatus("convo-turn__injection")}` : "";
+        return `<p class="convo-turn__line"><span class="convo-turn__speaker">${escapeHtml(name)}${cut}:</span>${mark} <span class="keep-lines">${text}</span></p>`;
       });
       return `
         <li class="${classes}" data-turn="${group.turn}"${state.reviewTurn === group.turn ? ' aria-current="true"' : ""}>
@@ -3294,20 +3443,24 @@
   actions["agree"] = async (button) => {
     const flagId = Number(button.dataset.flag);
     if (reviewPending.has(flagId)) return;
-    // An opening on its way lands first, so Agree right after "Show in context" works.
-    if (evidenceRequests.has(flagId)) await evidenceRequests.get(flagId).catch(() => {});
-    const found = findFlag(flagId);
-    if (!found) return;
-    if (!found.flag.evidence_opened) {
-      // Not yet: send the creator to the evidence instead.
-      const toggle = diagnoseBody().querySelector(`[data-focus-key="context-${flagId}"]`);
-      if (toggle) toggle.focus();
-      return;
-    }
+    // Marked before anything waits, so a second click while the first is on its way does nothing.
+    reviewPending.add(flagId);
     try {
+      // An opening on its way lands first, so Agree right after "Show in context" works.
+      if (evidenceRequests.has(flagId)) await evidenceRequests.get(flagId).catch(() => {});
+      const found = findFlag(flagId);
+      if (!found) return;
+      if (!found.flag.evidence_opened) {
+        // Not yet: send the creator to the evidence instead.
+        const toggle = diagnoseBody().querySelector(`[data-focus-key="context-${flagId}"]`);
+        if (toggle) toggle.focus();
+        return;
+      }
       await sendCall(found, () => WorkbenchApi.agreeFlag(flagId), `undo-${flagId}`);
     } catch (error) {
       reviewError(error);
+    } finally {
+      reviewPending.delete(flagId);
     }
   };
 
@@ -3940,7 +4093,8 @@
   // redraws never stack listeners. It updates the draft and grows the field.
   document.addEventListener("input", (event) => {
     const field = event.target.closest("[data-draft-key]");
-    if (!field || !state.specDraft) return;
+    // While a save is on its way the fields are read-only, and the saved version replaces the draft.
+    if (!field || !state.specDraft || state.specSaving) return;
     setDraftText(field.dataset.draftKey, field.value);
     if (field.tagName === "TEXTAREA") fitTextareas([field]);
   });

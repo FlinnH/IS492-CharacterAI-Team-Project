@@ -10,6 +10,27 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class Removed(Model):
+    """What redaction took out of some text before a model or the database saw it (M6)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    emails: int = 0
+    phone_numbers: int = 0
+    keys: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.emails + self.phone_numbers + self.keys
+
+    def __add__(self, other: "Removed") -> "Removed":
+        return Removed(
+            emails=self.emails + other.emails,
+            phone_numbers=self.phone_numbers + other.phone_numbers,
+            keys=self.keys + other.keys,
+        )
+
+
 # A stored spec body. Saved JSON leaves out attributes at their defaults, so
 # adding an attribute with a default later doesn't change a saved version's hash.
 
@@ -52,7 +73,8 @@ class SpecBody(Model):
 
 
 class LineEdit(Model):
-    id: str | None = None
+    # Checked like a stored line's ID, so a made-up one is refused before the edit is read.
+    id: str | None = Field(default=None, pattern=r"^[A-Z][1-9][0-9]*$")
     text: str
 
 
@@ -107,6 +129,8 @@ class SpecView(Model):
     warnings: list[SpecWarning]
     # Newest first.
     versions: list[VersionSummary]
+    # What redaction took out of the edit that saved this version. Zero except in a save's answer.
+    removed: Removed = Field(default_factory=Removed)
 
 
 # Model settings: the models file in app/prompts/ (models.v1.toml).
@@ -165,6 +189,9 @@ class ModelSettings(Model):
     judge: JudgeSettings
     preflight: PreflightSettings
     models: dict[str, ModelSpec]
+    # The model to ask instead when a call to the model on the left still gets
+    # 429 or a 5xx after its retries (M6). A model with no entry has no fallback.
+    fallback: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def menus_name_known_models(self) -> "ModelSettings":
@@ -177,6 +204,12 @@ class ModelSettings(Model):
             spec = self.models.get(judge_id)
             if spec is None or spec.provider != provider:
                 raise ValueError(f"the {provider} judge is {judge_id}, which has no {provider} entry under models")
+        for model_id, other in self.fallback.items():
+            first, second = self.models.get(model_id), self.models.get(other)
+            if first is None or second is None:
+                raise ValueError(f"the fallback for {model_id} is {other}, and both need an entry under models")
+            if model_id == other or first.provider != second.provider:
+                raise ValueError(f"{model_id} must fall back to another model of its own provider, not {other}")
         return self
 
     def character_models(self, provider: str) -> list[str]:
@@ -184,6 +217,9 @@ class ModelSettings(Model):
 
     def judge_model(self, provider: str) -> str:
         return getattr(self.judge, provider)
+
+    def fallback_for(self, model_id: str) -> str | None:
+        return self.fallback.get(model_id)
 
 
 # Scenarios: the fixed test scripts (app/samples/scenarios.v1.json).
@@ -265,6 +301,14 @@ class MessageView(Model):
     text: str
     source: Literal["script", "typed", "import", "model"]
     stopped: bool
+    # The model whose call wrote this reply, or None for a line no model wrote.
+    model: str | None = None
+    # The fallback model wrote this reply, after the first model kept failing.
+    fallback: bool = False
+    # A model error cut this reply off partway, so Try again answers its line again.
+    failed: bool = False
+    # The line reads like an instruction to the AI: possible prompt injection.
+    injection: bool = False
 
 
 ChatKind = Literal["live", "import", "sample"]
@@ -353,10 +397,15 @@ class RunOptions(Model):
     key_set: bool
     scenarios: list[ScenarioOption]
     models: list[ModelOption]
+    # Every model of the provider by ID, the fallback models too, so a reply can name its model.
+    model_labels: dict[str, str]
     default_model: str
     calls_per_minute: int
     daily_cap: int
     used_today: int
+    # Runs this browser session has started, and how many one session may start.
+    session_runs: int
+    session_run_limit: int
     max_typed_chars: int
     max_import_chars: int
 
@@ -388,6 +437,8 @@ class PreviewRow(Model):
     label: str
     speaker: Speaker | None
     text: str
+    # The line reads like an instruction to the AI: possible prompt injection.
+    injection: bool
 
 
 class ImportPreview(Model):
@@ -407,6 +458,10 @@ class ImportPreview(Model):
     title: str
     # The saved chat this import would return, when it is already imported.
     duplicate_of: int | None
+    # What redaction took out before anything was saved.
+    removed: Removed
+    # The numbers of the messages that read like instructions to the AI, in source order.
+    injection_numbers: list[int]
 
 
 # Server-sent events for one live turn.
@@ -416,10 +471,18 @@ class UserEvent(Model):
     seq: int
     turn: int
     text: str
+    injection: bool
 
 
 class WaitEvent(Model):
     seconds: float
+    # slot: the call waits for its slot under the per-minute limit. retry: the
+    # service was busy, so the call is tried again after a pause. fallback: the
+    # fallback model answers instead.
+    reason: Literal["slot", "retry", "fallback"] = "slot"
+    # What the Run screen shows for a retry or a fallback. Empty for a slot,
+    # which the screen words itself.
+    message: str = ""
 
 
 class DeltaEvent(Model):
@@ -439,6 +502,8 @@ class ErrorEvent(Model):
     message: str
     retry: bool
     status: ChatStatus
+    # The part of the reply that came before the error, saved as cut off, or None.
+    partial: MessageView | None = None
 
 
 # The AI judge's answer. app/prompts/judge.schema.v1.json is this model's JSON
@@ -613,6 +678,8 @@ class JudgeRunView(Model):
     prompt_version: str
     schema_version: str
     same_model: bool
+    # The fallback model answered, after the judge's own model kept failing.
+    fallback: bool
     # For the creator when the judge's flags are missing. Empty when it worked.
     note: str
     checked_at: str

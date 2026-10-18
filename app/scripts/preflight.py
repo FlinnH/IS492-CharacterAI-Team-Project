@@ -10,7 +10,9 @@ scenario as one chat for each reasoning effort in the models file. Earlier
 replies go back as plain assistant text, the way the Run screen sends them.
 Every call is logged in the database like any other (role "preflight") and
 counts toward the daily cap. It prints no chat text. It exits 1 if a model
-fails with the reasoning effort the models file sets for it.
+fails with the reasoning effort the models file sets for it. A busy model is
+retried like any call, but never swapped for its fallback model, so each
+model's numbers stay its own.
 """
 
 import asyncio
@@ -51,9 +53,12 @@ async def run_chat(gateway, prompts, system, lines, model_id, effort) -> dict:
             stop=asyncio.Event(),
             turn=line.turn,
             reasoning_effort=effort,
+            allow_fallback=False,
         )
         async for event in call.events():
-            if isinstance(event, Wait):
+            if isinstance(event, Wait) and event.reason == "retry":
+                print(f"  the model is busy, trying again in {event.seconds:.1f} s", flush=True)
+            elif isinstance(event, Wait):
                 print(f"  waiting {event.seconds:.1f} s for the next call slot", flush=True)
         result = call.result
         if result.status != "ok":
@@ -79,6 +84,9 @@ async def main() -> int:
     if provider_name == "fake":
         print("WORKBENCH_PROVIDER is fake, so there is no model service to check.")
         return 0
+    if settings.workbench_force_model_error != "off":
+        print("WORKBENCH_FORCE_MODEL_ERROR is on in app/.env. Set it to off first: preflight times real calls.")
+        return 1
 
     provider = build(settings)
     print(f"Provider: {provider_name}. Key set: {'yes' if provider.ready else 'no'}.")
