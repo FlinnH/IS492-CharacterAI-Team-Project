@@ -146,8 +146,9 @@ LAYERS = {
     "transcripts": 6,
     "runtime": 7,
     "judge": 7,
-    "review": 8,
-    "main": 9,
+    "recheck": 8,
+    "review": 9,
+    "main": 10,
 }
 
 

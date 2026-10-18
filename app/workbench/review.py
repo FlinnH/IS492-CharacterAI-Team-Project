@@ -16,6 +16,11 @@ The rules:
 
 A refused call writes nothing. Migration 004's triggers back up the rules for
 every connection.
+
+Each flag also carries the latest re-check's word on it. When the re-check
+looked again at a flag and disagrees with its standing on whether it is a
+break, the flag is disputed, and Flag review shows both views. The creator's
+call still decides.
 """
 
 import typing
@@ -23,6 +28,7 @@ import typing
 from workbench import db, telemetry, transcripts
 from workbench.config import Settings
 from workbench.judge import Judge
+from workbench.recheck import Recheck, disagrees
 from workbench.schemas import (
     ChatSummary,
     ChatView,
@@ -65,10 +71,11 @@ def _call(row) -> FlagCall | None:
 
 
 class Review:
-    def __init__(self, database: db.Database, settings: Settings, judge: Judge) -> None:
+    def __init__(self, database: db.Database, settings: Settings, judge: Judge, recheck: Recheck) -> None:
         self.database = database
         self.settings = settings
         self.judge = judge
+        self.recheck = recheck
 
     # Reading.
 
@@ -94,6 +101,14 @@ class Review:
             changed=changed,
         )
 
+    def chat(self, chat_id: int) -> ReviewChat:
+        """One checked chat as it now stands, like after a re-check."""
+        chat = self._chat(chat_id)
+        check = self.judge.saved_check(chat, fallback=True)
+        if check is None:
+            raise FlagOutdated("This chat changed after its check. Reload Flag review to see where it stands.")
+        return self._review(chat, check)
+
     def _chat(self, chat_id: int) -> ChatView:
         return transcripts.get_chat(self.database, chat_id, scenarios=self.judge.scenarios)
 
@@ -112,15 +127,20 @@ class Review:
                 }
                 last = conn.execute(f"SELECT MAX(id) FROM events WHERE flag_id IN ({marks})", ids).fetchone()[0] or 0
 
+        views = self.recheck.flag_views(ids)
         flags = []
         for flag in check.flags:
             call = _call(calls.get(flag.id))
+            counts = call is None or call.verdict == "agreed" or call.type is not None
+            view = views.get(flag.id)
             flags.append(
                 ReviewFlag(
                     **flag.model_dump(),
                     evidence_opened=flag.id in opened,
                     call=call,
-                    counts_as_break=call is None or call.verdict == "agreed" or call.type is not None,
+                    counts_as_break=counts,
+                    recheck=view,
+                    disputed=disagrees(view, counts),
                 )
             )
         breaks = [flag.turn for flag in flags if flag.counts_as_break]
@@ -131,6 +151,7 @@ class Review:
             flags=flags,
             hidden=check.hidden,
             not_checked=check.not_checked,
+            recheck=self.recheck.latest(check),
             open_calls=sum(flag.call is None for flag in flags),
             first_break=min(breaks, default=None),
             agreed_with_every=bool(flags) and all(flag.call is not None and flag.call.verdict == "agreed" for flag in flags),
@@ -170,9 +191,11 @@ class Review:
     def _current(self, flag_id: int) -> tuple[ChatView, CheckView, CheckFlag]:
         """The flag's chat, its saved check, and the flag. Raises for an unknown or outdated flag."""
         with self.database.connect() as conn:
-            row = conn.execute("SELECT transcript_id FROM flags WHERE id = ?", (flag_id,)).fetchone()
+            row = conn.execute("SELECT transcript_id, status FROM flags WHERE id = ?", (flag_id,)).fetchone()
         if row is None:
             raise FlagNotFound(f"There is no flag {flag_id}.")
+        if row["status"] == "withdrawn":
+            raise FlagOutdated("The AI re-check withdrew this flag. Reload Flag review to see the current flags.")
         chat = self._chat(row["transcript_id"])
         check = self.judge.saved_check(chat, fallback=True)
         flag = next((item for item in check.flags if item.id == flag_id), None) if check else None

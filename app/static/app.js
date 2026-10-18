@@ -3,8 +3,9 @@
 
   A plain script (no modules, no build step). Every screen talks to the
   workbench server, by way of api.js: specs, live chats, imported chats, their
-  checks (the automatic checks and the AI judge), and the creator's calls on
-  each flag are saved there, so reloading the page keeps them all.
+  checks (the automatic checks, the AI judge, and its follow-up re-checks),
+  and the creator's calls on each flag are saved there, so reloading the page
+  keeps them all.
 
   Sections:
     1. Data and state
@@ -70,6 +71,11 @@
       overrideDrafts: {}, // the reason being typed; a key means the field is open
       overrideTypes: {}, // the right type picked in an open override form
       overrideErrors: {}, // why the server refused a reason, until the creator types again
+      // Follow-up re-checks, keyed by chat ID: { status, message, id } while
+      // one runs ("running"), after its request failed ("failed"), or after
+      // the server kept saved re-check id with no new call ("saved").
+      rechecks: {},
+      recheckDrafts: {}, // the question being typed, keyed by chat ID
       flagFilter: "All",
       reviewTurn: null, // the turn highlighted in the conversation
       // Set by "Open K2 in the spec" on Compare runs: { lineId, note }. The
@@ -565,6 +571,8 @@
     openDialog(citingSheet, chip);
   };
 
+  // From the citing-flags sheet, or from What changed on Flag review itself,
+  // where the screen redraws and lands on the card.
   actions["go-to-flag"] = (button) => {
     const target = findFlag(button.dataset.flag);
     if (target) {
@@ -572,7 +580,8 @@
       state.openFlagId = target.flag.id;
     }
     citingSheet.close();
-    goToScreen("diagnose");
+    if (currentScreen === "diagnose") refresh();
+    else goToScreen("diagnose");
   };
 
   actions["retry-spec"] = () => {
@@ -2016,10 +2025,13 @@
     if (state.chatId === chatId) refreshRun();
   }
 
-  // "8 flags: 1 from automatic checks and 7 from the AI judge."
+  // "8 flags: 1 from automatic checks and 7 from the AI judge." After a
+  // re-check: "8 flags: 1 from automatic checks, 6 from the AI judge, and 1
+  // from its re-check."
   function checkSummary(view) {
     const total = view.flags.length;
     const fromRules = view.flags.filter((flag) => flag.source === "rule").length;
+    const fromRecheck = view.flags.filter((flag) => flag.source === "recheck").length;
     const noun = total === 1 ? "flag" : "flags";
     if (total === 0) {
       return view.judge.status === "ok"
@@ -2027,13 +2039,15 @@
         : "No flags from the automatic checks.";
     }
     if (view.judge.status === "ok") {
-      return `${total} ${noun}: ${fromRules} from automatic checks and ${total - fromRules} from the AI judge.`;
+      return fromRecheck
+        ? `${total} ${noun}: ${fromRules} from automatic checks, ${total - fromRules - fromRecheck} from the AI judge, and ${fromRecheck} from its re-check.`
+        : `${total} ${noun}: ${fromRules} from automatic checks and ${total - fromRules} from the AI judge.`;
     }
     return `${total} ${noun}, all from automatic checks.`;
   }
 
-  // "1 flag hidden: its quote wasn't in the chat."
-  function hiddenText(chat, item) {
+  // "1 flag hidden: its quote wasn't in the chat." What changed says "new flag".
+  function hiddenText(chat, item, noun = "flag") {
     const one = item.count === 1;
     const word = numberWord(chat).toLowerCase();
     const spec = specLabel(chat.spec_version);
@@ -2046,7 +2060,7 @@
         ? `its ${word} has no finished reply from ${chat.character_name}`
         : `their ${word}s have no finished reply from ${chat.character_name}`,
     };
-    return `${item.count} ${one ? "flag" : "flags"} hidden: ${reasons[item.reason]}.`;
+    return `${item.count} ${one ? noun : `${noun}s`} hidden: ${reasons[item.reason]}.`;
   }
 
   function checkButton(label, focusKey) {
@@ -2236,6 +2250,10 @@
   // - Agree and Override look the same, so the screen doesn't push agreement.
   // - Agreeing with every flag triggers a rubber-stamp check.
   // - What the AI could not check is listed for the creator to read.
+  // - The follow-up re-check (DESIGN_SPEC 7.2) looks again at the AI's
+  //   weakest flags, with the creator's question if they ask one. What
+  //   changed lists what it did, and a flag where it and the creator's call
+  //   (or the first pass) disagree shows both views (DESIGN_SPEC 7.4).
   // Every call redraws the screen from the server's answer; announceReview()
   // tells screen readers.
 
@@ -2253,6 +2271,30 @@
     line: () => "The spec marks this line for your call.",
     judge: () => "The AI judge left this one to you.",
   };
+
+  // Where a flag came from, as its chip's icon and words.
+  const SOURCE_CHIPS = {
+    rule: ["rule", "Automatic check"],
+    judge: ["smart_toy", "AI judge"],
+    recheck: ["manage_search", "AI re-check"],
+  };
+
+  // Why a flag the re-check would withdraw stayed in the review.
+  const KEPT_BECAUSE_TEXT = {
+    needs_call: "only you can settle it",
+    your_call: "it has your call",
+  };
+
+  // The groups in What changed, in order. "stayed" holds the flags the
+  // re-check would withdraw but that stayed for the creator's call, and
+  // "against" the ones it still calls breaks after the creator said they aren't.
+  const CHANGE_GROUPS = [
+    { key: "added", title: "Added", icon: "add_circle" },
+    { key: "withdrawn", title: "Withdrawn", icon: "remove_circle" },
+    { key: "rerated", title: "Re-rated", icon: "swap_vert" },
+    { key: "stayed", title: "Stayed for your call", icon: "pending" },
+    { key: "against", title: "Kept against your call", icon: "compare_arrows" },
+  ];
 
   // Counts review loads, so only the newest one changes the screen.
   let reviewRequest = 0;
@@ -2461,8 +2503,10 @@
             <div class="review__bar">${bar}</div>
           </div>
           ${renderCheckSource(item)}
+          ${renderWhatChanged(item)}
           <h2 class="visually-hidden">Flags</h2>
           ${cards}
+          ${renderFollowUp(item)}
           ${renderCheckGaps(item.chat, item, "not-checked-title")}
         </div>
         ${renderConversation(item)}
@@ -2497,6 +2541,13 @@
         state.overrideTypes[menu.dataset.typeFor] = menu.value;
       });
     });
+    // Typing the question only updates the draft, since the field already shows it.
+    const question = body.querySelector("[data-question-for]");
+    if (question) {
+      question.addEventListener("input", () => {
+        state.recheckDrafts[question.dataset.questionFor] = question.value;
+      });
+    }
     const picker = body.querySelector("#review-chat");
     if (picker) picker.addEventListener("change", () => pickReviewChat(Number(picker.value), "review-chat"));
     if (reviewBarObserver) {
@@ -2515,6 +2566,200 @@
     const judge = item.judge;
     const note = judge.status === "ok" ? "" : ` ${judge.note}`;
     return `<p class="review__source">Checked ${escapeHtml(chatTime(judge.checked_at))}. AI judge: ${escapeHtml(judge.model_label)}.${escapeHtml(note)}</p>`;
+  }
+
+  // The flags the follow-up re-check looks at again: the AI's, rated Low or Medium.
+  function weakFlags(item) {
+    return item.flags.filter((flag) => flag.source !== "rule" && (flag.confidence === "low" || flag.confidence === "medium"));
+  }
+
+  // Which group of What changed a change goes in. A flag the re-check kept or
+  // re-rated that is now disputed goes in "against", since the creator overrode it.
+  function changeGroup(item, change) {
+    if (change.kept_because) return "stayed";
+    const flag = item.flags.find((found) => found.id === change.flag_id);
+    return flag && flag.disputed ? "against" : change.change;
+  }
+
+  // What changed in the latest re-check of this chat's check (DESIGN_SPEC
+  // 7.2): the flags it added, withdrew, and re-rated, each with its one-line
+  // reason, the ones it would withdraw that stayed for the creator's call,
+  // and its answer to the creator's question. A withdrawn flag is gone from
+  // the flags below, so its evidence shows here.
+  function renderWhatChanged(item) {
+    const recheck = item.recheck;
+    if (!recheck) return "";
+    const chat = item.chat;
+    const shown = state.rechecks[chat.id];
+    const saved = Boolean(shown && shown.status === "saved" && shown.id === recheck.id);
+    const source = `Re-checked ${chatTime(recheck.checked_at)}. AI judge: ${recheck.model_label}.${saved
+      ? " Shown from the saved re-check, with no new model call."
+      : ""}`;
+    const head = `
+      <h2 class="what-changed__title" id="what-changed-title" tabindex="-1" data-focus-key="what-changed">
+        <span class="icon" aria-hidden="true">published_with_changes</span>
+        <span>What changed in the re-check</span>
+      </h2>
+      <p class="what-changed__source">${escapeHtml(source)}</p>`;
+
+    if (recheck.status !== "ok") {
+      return `
+        <section class="card card--outlined what-changed" aria-labelledby="what-changed-title">
+          ${head}
+          <p class="what-changed__error">
+            <span class="icon" aria-hidden="true">error</span>
+            <span>${escapeHtml(recheck.note)}</span>
+          </p>
+        </section>`;
+    }
+
+    const looked = recheck.picked === 0
+      ? "No flags were rated Low or Medium, so it read the chat again for anything missed."
+      : `It looked again at ${recheck.picked === 1 ? "the one flag" : `the ${recheck.picked} flags`} rated Low or Medium, and read the chat again for anything missed.`;
+    const question = recheck.question
+      ? `
+        <div class="what-changed__qa">
+          <p><span class="flag-card__label">Your question:</span> <span class="keep-lines">${escapeHtml(recheck.question)}</span></p>
+          <p><span class="flag-card__label">The AI's answer:</span> <span class="keep-lines">${escapeHtml(recheck.answer || "It gave no answer.")}</span></p>
+          <p class="what-changed__hint">The answer is the AI's own words. Only its flags pass the evidence checks.</p>
+        </div>`
+      : "";
+    const groups = CHANGE_GROUPS.map((group) => {
+      const changes = recheck.changes.filter((change) => changeGroup(item, change) === group.key);
+      if (changes.length === 0) return "";
+      const id = `what-changed-${group.key}`;
+      return `
+        <section class="what-changed__group" aria-labelledby="${id}">
+          <h3 class="what-changed__group-title" id="${id}">
+            <span class="icon" aria-hidden="true">${group.icon}</span>
+            <span>${group.title} (${changes.length})</span>
+          </h3>
+          <ul class="what-changed__list">${changes.map((change) => renderChange(item, change)).join("")}</ul>
+        </section>`;
+    }).join("");
+
+    const notes = [];
+    const kept = recheck.changes.filter((change) => changeGroup(item, change) === "kept").length;
+    if (!groups) {
+      notes.push(recheck.picked > 0
+        ? "Nothing changed. The re-check kept every flag it looked at and added none."
+        : "Nothing changed. The re-check added no flags.");
+    } else if (kept > 0) {
+      notes.push(`Kept ${kept} ${kept === 1 ? "flag as it was" : "flags as they were"}.`);
+    }
+    recheck.hidden.forEach((hidden) => notes.push(hiddenText(chat, hidden, "new flag")));
+
+    return `
+      <section class="card card--filled what-changed" aria-labelledby="what-changed-title">
+        ${head}
+        <p class="what-changed__text">${escapeHtml(looked)}</p>
+        ${question}
+        ${groups}
+        ${notes.length ? `<ul class="what-changed__notes">${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>` : ""}
+      </section>`;
+  }
+
+  // One line of What changed: where the flag is, its quote, what the re-check
+  // did and why, and Go to flag while the flag is still in the review.
+  function renderChange(item, change) {
+    const flag = item.flags.find((found) => found.id === change.flag_id) || null;
+    const place = `${numberWord(item.chat)} ${change.turn}, ${change.type}, ${change.line_id}`;
+    let did = "";
+    if (change.change === "rerated") {
+      did = `${capitalized(change.from_confidence)} to ${capitalized(change.to_confidence)}. `;
+    }
+    if (change.kept_because) {
+      did = `It would withdraw this flag, but ${KEPT_BECAUSE_TEXT[change.kept_because]}.${flag && flag.disputed ? " Both views are on its card." : ""} `;
+    } else if (flag && flag.disputed) {
+      did += "It still calls this a break, but your call stands. Both views are on its card. ";
+    }
+    return `
+      <li class="what-changed__item">
+        <p class="what-changed__place">${escapeHtml(place)}</p>
+        <p class="keep-lines"><q>${escapeHtml(change.quote)}</q></p>
+        <p>${escapeHtml(did)}<span class="flag-card__label">Why:</span> ${escapeHtml(change.why)}</p>
+        ${flag
+          ? `<button type="button" class="btn btn--text" data-action="go-to-flag" data-flag="${flag.id}"
+              data-focus-key="change-${flag.id}">Go to flag<span class="visually-hidden">: ${escapeHtml(place)}</span></button>`
+          : ""}
+      </li>`;
+  }
+
+  // What a screen reader hears when a re-check ends: "Re-check done: 1
+  // added, 1 withdrawn, and 1 re-rated." or "Re-check done. Nothing changed."
+  function recheckSummary(item) {
+    const recheck = item.recheck;
+    if (!recheck) return "Re-check done.";
+    if (recheck.status !== "ok") return recheck.note;
+    const parts = CHANGE_GROUPS.map((group) => {
+      const count = recheck.changes.filter((change) => changeGroup(item, change) === group.key).length;
+      return count ? `${count} ${group.title.toLowerCase()}` : "";
+    }).filter(Boolean);
+    return parts.length ? `Re-check done: ${listText(parts)}.` : "Re-check done. Nothing changed.";
+  }
+
+  // The built-in follow-up (DESIGN_SPEC 7.2), after the flags: the AI judge's
+  // model looks again at the flags it rated Low or Medium and reads the chat
+  // again for anything missed, with the creator's question if they ask one.
+  // The question box stays neutral, with no example questions, so it never
+  // steers what a creator asks.
+  function renderFollowUp(item) {
+    const chat = item.chat;
+    const title = `
+      <h2 class="follow-up__title" id="follow-up-title">
+        <span class="icon" aria-hidden="true">manage_search</span>
+        <span>Follow-up re-check</span>
+      </h2>`;
+    if (item.judge.status !== "ok") {
+      return `
+        <section class="card card--outlined follow-up" aria-labelledby="follow-up-title">
+          ${title}
+          <p class="follow-up__text">The re-check needs the AI judge's first pass, which didn't finish for this chat. Check the chat again on Run a conversation first.</p>
+        </section>`;
+    }
+    const weak = weakFlags(item).length;
+    const text = weak === 0
+      ? "No low or medium flags to re-check. It will still look for anything missed and answer your question."
+      : `The AI judge looks again at the ${weak === 1 ? "one flag" : `${weak} flags`} it rated Low or Medium, Low first, and reads the chat again for anything it missed. It can keep, re-rate, or withdraw a flag, or add one, but it never withdraws a flag that only you can settle or that has your call.`;
+    const recheck = state.rechecks[chat.id] || null;
+    const running = Boolean(recheck && recheck.status === "running");
+    const failed = recheck && recheck.status === "failed" ? recheck.message : "";
+    const action = running
+      ? `
+        <div class="follow-up__status">
+          <p class="check-start__title" tabindex="-1" data-focus-key="recheck-status">Re-checking this chat</p>
+          <p class="check-start__body">The AI judge reads the chat again in one call, which can take a minute.</p>
+          <div class="check-progress" aria-hidden="true"></div>
+        </div>`
+      : `
+        <div class="follow-up__actions">
+          <button type="button" class="btn btn--filled btn--icon-leading" data-action="recheck" data-chat="${chat.id}"
+            data-focus-key="recheck">
+            <span class="icon" aria-hidden="true">manage_search</span>
+            <span>${item.recheck ? "Re-check again" : "Re-check"}</span>
+          </button>
+          <p class="follow-up__cost">One model call, or two if the first answer can't be read.</p>
+        </div>
+        ${failed
+          ? `<p class="follow-up__error">
+              <span class="icon" aria-hidden="true">error</span>
+              <span>${escapeHtml(failed)}</span>
+            </p>`
+          : ""}`;
+    return `
+      <section class="card card--outlined follow-up" aria-labelledby="follow-up-title">
+        ${title}
+        <p class="follow-up__text">${escapeHtml(text)}</p>
+        <div class="text-field follow-up__question">
+          <textarea class="text-field__input" id="recheck-question" rows="2"
+            placeholder="Ask about anything the first pass might have missed"
+            maxlength="${state.review.max_reason_chars}" aria-describedby="recheck-question-help"${running ? " readonly" : ""}
+            data-question-for="${chat.id}" data-focus-key="recheck-question">${escapeHtml(state.recheckDrafts[chat.id] || "")}</textarea>
+          <label class="text-field__label" for="recheck-question">Your question (optional)</label>
+          <p class="text-field__support" id="recheck-question-help">The AI answers it in the re-check, and it's saved with the re-check.</p>
+        </div>
+        ${action}
+      </section>`;
   }
 
   // Checked chats that changed after their check, like a live run that went
@@ -2655,7 +2900,7 @@
           <figcaption>From ${escapeHtml(chat.character_name)}'s reply</figcaption>
         </figure>
         <div class="flag-card__chips">
-          ${flag.source === "rule" ? chip("rule", "Automatic check") : chip("smart_toy", "AI judge")}
+          ${chip(...SOURCE_CHIPS[flag.source])}
           ${renderCiteChip(flag)}
           <span class="chip chip--icon-leading flag-card__confidence">
             <span class="icon" aria-hidden="true">${CONFIDENCE_ICONS[level]}</span>
@@ -2674,6 +2919,7 @@
               <span>${escapeHtml(note)}</span>
             </p>`
           : ""}
+        ${renderRecheckNote(flag)}
         <button type="button" class="btn btn--text btn--icon-leading" data-action="toggle-context" data-flag="${flag.id}"
           aria-expanded="${contextOpen}" aria-controls="${id}-context" data-focus-key="context-${flag.id}">
           <span class="icon" aria-hidden="true">${contextOpen ? "expand_less" : "expand_more"}</span>
@@ -2708,6 +2954,67 @@
       <p class="flag-card__cite-text" id="cite-${flag.id}-text"${open ? "" : " hidden"}>
         <span class="flag-card__label">${escapeHtml(flag.line_id)}.</span> ${escapeHtml(flag.line_text)}
       </p>`;
+  }
+
+  // What the latest re-check said about this flag, on its card: both views
+  // when the two disagree, or one line when it re-rated the flag.
+  function renderRecheckNote(flag) {
+    const recheck = flag.recheck;
+    if (!recheck) return "";
+    if (flag.disputed) return renderBothViews(flag);
+    if (recheck.change !== "rerated") return "";
+    const rerated = `Re-rated by the re-check, ${capitalized(recheck.from_confidence)} to ${capitalized(recheck.to_confidence)}: ${recheck.why}`;
+    return `
+      <p class="flag-card__recheck">
+        <span class="icon" aria-hidden="true">swap_vert</span>
+        <span>${escapeHtml(rerated)}</span>
+      </p>`;
+  }
+
+  // A disputed flag: the re-check and the flag's standing, the creator's call
+  // or else the first pass, disagree on whether it is a break. Both views
+  // show side by side instead of the flag silently flipping (DESIGN_SPEC
+  // 7.4), and the creator's call decides.
+  function renderBothViews(flag) {
+    const recheck = flag.recheck;
+    const verdict = verdictOf(flag);
+    let standing;
+    if (verdict === "agreed") {
+      standing = ["Your call", "Agreed: it's a break."];
+    } else if (verdict === "retyped") {
+      standing = ["Your call", `Retyped as ${flag.call.type}, so still a break. Your reason: ${flag.call.reason}`];
+    } else if (verdict === "overridden") {
+      standing = ["Your call", `Overridden: not a break. Your reason: ${flag.call.reason}`];
+    } else {
+      standing = [flag.source === "recheck" ? "Earlier re-check" : "AI first pass", `A break. ${flag.why}`];
+    }
+    let view = `Still a break, so it keeps this flag. ${recheck.why}`;
+    if (recheck.kept_because) {
+      view = `Not a break, so it would withdraw this flag. ${recheck.why}`;
+    } else if (recheck.change === "rerated") {
+      view = `Still a break, re-rated ${capitalized(recheck.from_confidence)} to ${capitalized(recheck.to_confidence)}. ${recheck.why}`;
+    }
+    const settles = verdict
+      ? "Your call stands. The AI can't change it."
+      : "The two AI views disagree, so the flag stays for your call.";
+    return `
+      <div class="both-views" role="group" aria-labelledby="both-views-${flag.id}">
+        <p class="both-views__title" id="both-views-${flag.id}">
+          <span class="icon" aria-hidden="true">compare_arrows</span>
+          <span>Both views</span>
+        </p>
+        <div class="both-views__grid">
+          <div class="both-views__view">
+            <h4 class="both-views__heading">${escapeHtml(standing[0])}</h4>
+            <p class="keep-lines">${escapeHtml(standing[1])}</p>
+          </div>
+          <div class="both-views__view">
+            <h4 class="both-views__heading">AI re-check</h4>
+            <p>${escapeHtml(view)}</p>
+          </div>
+        </div>
+        <p class="both-views__note">${escapeHtml(settles)}</p>
+      </div>`;
   }
 
   // The turn in context: the creator's line before the reply, every finished
@@ -3053,6 +3360,47 @@
     } catch (error) {
       reviewError(error);
     }
+  };
+
+  // The follow-up re-check takes up to a minute, so its card shows it working
+  // while other calls go on. Afterward, focus lands on What changed.
+  actions["recheck"] = async (button) => {
+    const item = reviewItem(Number(button.dataset.chat));
+    if (!item || item.judge.status !== "ok") return;
+    const chatId = item.chat.id;
+    if (state.rechecks[chatId] && state.rechecks[chatId].status === "running") return;
+    const question = (state.recheckDrafts[chatId] || "").trim();
+    const before = item.recheck ? item.recheck.id : null;
+    state.rechecks[chatId] = { status: "running", message: "" };
+    refresh({ focusKey: "recheck-status" });
+    announce("Re-checking this chat. The AI judge can take a minute.");
+    const here = () => currentScreen === "diagnose" && state.reviewChatId === chatId;
+    try {
+      const updated = await WorkbenchApi.recheckChat(chatId, question || null);
+      // The same flags with the same question: the server kept the saved re-check.
+      const saved = Boolean(updated.recheck) && updated.recheck.id === before;
+      if (saved) state.rechecks[chatId] = { status: "saved", message: "", id: before };
+      else delete state.rechecks[chatId];
+      delete state.recheckDrafts[chatId];
+      replaceReviewChat(updated);
+      if (here()) {
+        refresh({ focusKey: "what-changed" });
+        announce(saved ? "Shown from the saved re-check, with no new model call." : recheckSummary(updated));
+      } else {
+        redrawReview();
+      }
+    } catch (error) {
+      state.rechecks[chatId] = { status: "failed", message: error.message };
+      if (here()) {
+        refresh({ focusKey: "recheck" });
+        announce(error.message);
+      }
+      if (error.status === 409) loadReview();
+    }
+    // The call counts toward today's total on Run a conversation, and the
+    // re-check's flags change the check results there.
+    loadRunOptions();
+    if (state.checks[chatId]) loadCheck(chatId);
   };
 
   // 3.4 Compare runs (Repair) -----------------------------------------------

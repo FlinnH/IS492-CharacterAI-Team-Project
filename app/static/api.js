@@ -173,6 +173,9 @@ window.WorkbenchApi = (() => {
     // type is the right failure type, or null when the flag isn't a break.
     overrideFlag: (flagId, reason, type) => request("POST", `/api/flags/${part(flagId)}/override`, { reason, type }),
     undoCall: (flagId) => request("POST", `/api/flags/${part(flagId)}/undo`),
+    // The follow-up re-check of a chat's saved check, with the creator's
+    // question or null. Returns the chat's review as it now stands.
+    recheckChat: (chatId, question) => request("POST", `/api/chats/${part(chatId)}/recheck`, { question }),
 
     // Import.
     listSamples: () => request("GET", "/api/samples"),

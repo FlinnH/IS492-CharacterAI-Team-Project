@@ -1,6 +1,6 @@
 # Install and run the workbench
 
-Draft for CP3, updated in milestone M4. The app serves the workbench screens from a local server. The Spec editor saves spec versions, Run a conversation streams live chats from a model or imports saved chats, Check this chat flags breaks with automatic checks and an AI judge, and Flag review saves your call on each flag. Later milestones add the demo steps.
+Draft for CP3, updated in milestone M5. The app serves the workbench screens from a local server. The Spec editor saves spec versions, Run a conversation streams live chats from a model or imports saved chats, Check this chat flags breaks with automatic checks and an AI judge, and Flag review saves your call on each flag and re-checks the AI's weakest flags. Later milestones add the demo steps.
 
 ## What you need
 
@@ -31,9 +31,9 @@ The limits live in `app/.env` too:
 
 - `WORKBENCH_CALLS_PER_MINUTE` (15) spaces model calls at least 60/15 = 4 seconds apart, under the free per-minute limit.
 - `WORKBENCH_DAILY_CALL_CAP` (200) stops model calls for the day once that many are made. The count starts over at midnight Pacific time, when Google's free quota resets.
-- `WORKBENCH_JUDGE_TIMEOUT_SECONDS` (120) is how long Check this chat waits for the AI judge's answer.
+- `WORKBENCH_JUDGE_TIMEOUT_SECONDS` (120) is how long Check this chat and the re-check wait for the AI judge's answer.
 
-Model IDs, reasoning effort, token limits, and prices live in the models file that `app/prompts/manifest.toml` names (now `models.v3.toml`), next to the character prompt, the judge prompt, and the judge's output schema. A prompt file in use never changes: the manifest holds each file's hash, and the server refuses to start if one differs. To change a setting there, save the next version (like `models.v4.toml`) and point the manifest at it.
+Model IDs, reasoning effort, token limits, and prices live in the models file that `app/prompts/manifest.toml` names (now `models.v3.toml`), next to the character prompt, the judge and re-check prompts, and their output schemas. A prompt file in use never changes: the manifest holds each file's hash, and the server refuses to start if one differs. To change a setting there, save the next version (like `models.v4.toml`) and point the manifest at it.
 
 ## Model key
 
@@ -92,6 +92,16 @@ Check results on Run a conversation sum up each check, and Review flags opens it
 Every call and every opening of the evidence is saved with its time, so a reload or a restart keeps them. If you agree with every flag in a chat, the screen asks you to check again, since the AI makes mistakes too. A live chat that grows after its check moves to a "Changed since its check" notice. Checking it again makes a new set of flags, and each needs your call. Your calls on the old flags stay in the log.
 
 Compare runs uses the same calls. It lines up the checked chats that ran the same scenario on the same spec version, and flags you overrode don't count as breaks.
+
+## Re-check the weakest calls
+
+Below the last flag on Flag review, Follow-up re-check sends the AI judge's model its first-pass flags, the chat, and the spec in one more call, or two if the first answer can't be read. It looks again at every AI flag rated Low or Medium, Low first, and reads the chat again for anything it missed. If there are no Low or Medium flags, it still does the second part. You can add your own question in the box. It goes with the re-check, and the AI answers it.
+
+1. For each flag it looks at, the re-check keeps it, re-rates it, or withdraws it, and it can add new flags. Each new flag passes the same evidence checks as the judge's. One that fails is hidden, and What changed says how many and why.
+2. It never withdraws a flag that only you can settle, or a flag you already made a call on, because the AI can't change your call. When the re-check and your call disagree, or it would withdraw a flag only you can settle, the flag's card shows both views side by side. Your call still decides.
+3. What changed, above the flags, lists the flags it added, withdrew, and re-rated, each with a one-line reason. It also shows your question and the AI's answer. The answer is the AI's own words: only flags pass the evidence checks. New flags need your call like any other.
+
+Each re-check is saved with your question, its answer, and what it changed, and its call is logged like every other. Pressing Re-check again with the same question, when nothing has changed since, shows the saved re-check with no new call.
 
 ## Preflight
 
