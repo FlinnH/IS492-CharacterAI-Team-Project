@@ -134,6 +134,9 @@ def test_only_config_reads_the_environment_and_the_prompts():
 LAYERS = {
     "schemas": 0,
     "config": 1,
+    # Pure text checks: they import only schemas.
+    "redact": 1,
+    "injection": 1,
     "db": 2,
     "telemetry": 3,
     "limiter": 3,

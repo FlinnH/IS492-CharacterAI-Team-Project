@@ -31,7 +31,7 @@ from workbench.providers import FAKE_FILE, FakeProvider  # noqa: E402
 from workbench.runtime import Runtime  # noqa: E402
 from workbench.schemas import FakeSettings, MessageView, SampleChat, SpecBody  # noqa: E402
 
-# The frozen CP2 prototype. app/static/data.js is a copy that M4 removes.
+# The frozen CP2 prototype's data. Spec v1, the samples, and the scenarios are checked against it.
 PROTOTYPE_DATA = REPO_DIR / "prototype" / "data.js"
 
 # The hidden test set in validation/fixtures/. No test may open these.

@@ -7,7 +7,8 @@ same on every turn whatever spec version is saved later.
 
 Turn.finish() is safe to call more than once. The SSE route calls it when the
 response ends, so a reply cut off by a closed tab is still saved (marked
-stopped) and logged, and the chat isn't left busy.
+stopped) and logged, and the chat isn't left busy. A reply that a model error
+cuts off is saved the same way, and Try again answers its line again.
 """
 
 import asyncio
@@ -53,6 +54,10 @@ class NoKey(Exception):
     """The provider needs a key and none is set."""
 
 
+class SessionLimitReached(Exception):
+    """This browser session has started as many runs as one session may."""
+
+
 NO_KEY_MESSAGE = "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh."
 
 
@@ -81,7 +86,7 @@ class Runtime:
     def models(self) -> list[str]:
         return self.prompts.models.character_models(self.settings.workbench_provider)
 
-    def run_options(self) -> RunOptions:
+    def run_options(self, session: str | None) -> RunOptions:
         character = specs.list_characters(self.database)[0]
         latest = specs.get_spec(self.database, character.slug)
         models = self.prompts.models.models
@@ -95,10 +100,15 @@ class Runtime:
                 for s in self.scenario_file.scenarios
             ],
             models=[ModelOption(id=model_id, label=models[model_id].label) for model_id in self.models()],
+            model_labels={
+                model_id: spec.label for model_id, spec in models.items() if spec.provider == self.settings.workbench_provider
+            },
             default_model=self.models()[0],
             calls_per_minute=self.settings.workbench_calls_per_minute,
             daily_cap=self.settings.workbench_daily_call_cap,
             used_today=self.gateway.used_today(),
+            session_runs=transcripts.session_runs(self.database, session),
+            session_run_limit=self.settings.workbench_session_run_limit,
             max_typed_chars=self.settings.workbench_max_typed_chars,
             max_import_chars=self.settings.workbench_max_import_chars,
         )
@@ -124,6 +134,12 @@ class Runtime:
             raise RunInvalid(f"There is no scenario called {scenario_id}.")
         if model_id not in self.models():
             raise RunInvalid(f"{model_id} isn't in the Model menu for the {self.settings.workbench_provider} provider.")
+        limit = self.settings.workbench_session_run_limit
+        if transcripts.session_runs(self.database, session) >= limit:
+            raise SessionLimitReached(
+                f"This browser session has started {limit} {'run' if limit == 1 else 'runs'}, the most one session may "
+                "start. To allow more, raise WORKBENCH_SESSION_RUN_LIMIT in app/.env and restart app/run.sh."
+            )
         # Checked first, so Start never leaves an empty chat behind.
         self._check_ready(model_id, session)
         spec = specs.get_spec(self.database, character)
@@ -148,8 +164,11 @@ class Runtime:
         if chat_id in self.running:
             raise ChatBusy(f"{chat.character_name} is still answering. Wait for the reply, or press Stop.")
 
-        pending = bool(chat.messages) and chat.messages[-1].speaker == "user"
-        last_turn = chat.messages[-1].turn if chat.messages else None
+        # A line still waits for its reply when nothing answered it, or when a
+        # model error cut the reply off: Try again answers it again.
+        last = chat.messages[-1] if chat.messages else None
+        pending = last is not None and (last.speaker == "user" or last.failed)
+        last_turn = last.turn if last else None
         line: ScenarioLine | None = None
         if typed is None:
             if not pending:
@@ -202,11 +221,14 @@ class Runtime:
         return self._system[chat.id]
 
     def model_messages(self, chat: ChatView) -> list[dict]:
-        """System message first, then the chat. Back-to-back user lines are sent as one."""
+        """System message first, then the chat. Back-to-back user lines are sent as one.
+
+        A reply a model error cut off is left out, since its line is asked again.
+        """
         messages = [{"role": "system", "content": self.system_message(chat)}]
         for message in chat.messages:
             role = "user" if message.speaker == "user" else "assistant"
-            if not message.text:
+            if not message.text or message.failed:
                 continue
             if role == "user" and messages[-1]["role"] == "user":
                 messages[-1] = {"role": "user", "content": f"{messages[-1]['content']}\n\n{message.text}"}
@@ -256,7 +278,7 @@ class Turn:
                 )
                 if self.typed is not None:
                     telemetry.record_event(database, "message_typed", session=self.session, transcript_id=chat_id)
-                yield "user", UserEvent(seq=saved.seq, turn=saved.turn, text=saved.text)
+                yield "user", UserEvent(seq=saved.seq, turn=saved.turn, text=saved.text, injection=saved.injection)
 
             chat = runtime.get_chat(chat_id)
             self.call = runtime.gateway.call(
@@ -272,7 +294,7 @@ class Turn:
             call_events = self.call.events()
             async for event in call_events:
                 if isinstance(event, Wait):
-                    yield "wait", WaitEvent(seconds=round(event.seconds, 1))
+                    yield "wait", self._wait_event(event)
                 elif isinstance(event, Delta):
                     yield "delta", DeltaEvent(text=event.text)
             outcome = self._settle()
@@ -292,8 +314,21 @@ class Turn:
     def _status(self) -> str:
         return self.runtime.get_chat(self.chat.id).status
 
+    def _wait_event(self, wait: Wait) -> WaitEvent:
+        """A pause, in words for the Run screen when it is a retry or the fallback model."""
+        models = self.runtime.prompts.models.models
+        message = ""
+        if wait.reason == "retry":
+            message = f"The model service is busy. Trying again in {wait.seconds:g} s."
+        elif wait.reason == "fallback":
+            message = f"{models[self.chat.model].label} is still busy, so {models[wait.model].label} answers this turn."
+        return WaitEvent(seconds=round(wait.seconds, 1), reason=wait.reason, message=message)
+
     def _settle(self) -> tuple[str, BaseModel] | None:
-        """Saves the reply the call ended with and returns the closing event. Runs once."""
+        """Saves the reply the call ended with and returns the closing event. Runs once.
+
+        Text that came before a model error is saved too, marked as cut off.
+        """
         if self.settled:
             return None
         self.settled = True
@@ -302,23 +337,26 @@ class Turn:
         result = self.call.result if self.call is not None else None
         status = result.status if result is not None else "stopped"
 
-        message = None
-        if result is not None and result.text and status in ("ok", "stopped"):
-            message = transcripts.add_message(
+        saved = False
+        if result is not None and result.text and status in ("ok", "stopped", "error"):
+            transcripts.add_message(
                 database,
                 self.chat.id,
                 turn=self.turn,
                 speaker="character",
                 text=result.text,
                 source="model",
-                stopped=status == "stopped",
+                stopped=status != "ok",
                 model_call_id=result.model_call_id,
             )
+            saved = True
 
         chat = runtime.get_chat(self.chat.id)
+        # Read back, so the reply carries what the log says about it: its model, a fallback, an error.
+        message = chat.messages[-1] if saved else None
         if status not in ("ok", "stopped"):
             telemetry.record_event(database, "error_shown", session=self.session, transcript_id=self.chat.id, reason=status)
-            return "error", ErrorEvent(message=result.message, retry=True, status=chat.status)
+            return "error", ErrorEvent(message=result.message, retry=True, status=chat.status, partial=message)
         if status == "ok" and chat.status == "active" and chat.script_left == 0:
             transcripts.set_status(database, self.chat.id, "script_done")
             chat = runtime.get_chat(self.chat.id)

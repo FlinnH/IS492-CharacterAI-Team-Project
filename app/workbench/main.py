@@ -7,6 +7,7 @@ gets a plain JSON error with the right status.
 """
 
 import re
+import sys
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from workbench import db, providers, specs, transcripts
 from workbench.config import Settings, load_prompts, load_settings
@@ -26,7 +28,7 @@ from workbench.judge import CheckBusy, Judge, NothingToCheck
 from workbench.limiter import Limiter
 from workbench.recheck import NothingToRecheck, QuestionInvalid, Recheck, RecheckBusy
 from workbench.review import CallInvalid, CallRefused, FlagNotFound, FlagOutdated, Review
-from workbench.runtime import ChatBusy, ChatClosed, NoKey, RunInvalid, Runtime, Turn
+from workbench.runtime import ChatBusy, ChatClosed, NoKey, RunInvalid, Runtime, SessionLimitReached, Turn
 from workbench.schemas import (
     Character,
     ChatSummary,
@@ -147,6 +149,7 @@ def create_app(
     app.add_exception_handler(QuestionInvalid, error_response(422))
     app.add_exception_handler(CallInvalid, error_response(422))
     app.add_exception_handler(CapReached, error_response(429))
+    app.add_exception_handler(SessionLimitReached, error_response(429))
     app.add_exception_handler(NoKey, error_response(503))
     app.add_exception_handler(RequestValidationError, invalid_request)
 
@@ -180,8 +183,8 @@ def create_app(
     # is only ever touched on the event loop.
 
     @app.get("/api/run-options", response_model=RunOptions)
-    async def run_options() -> RunOptions:
-        return runtime.run_options()
+    async def run_options(request: Request) -> RunOptions:
+        return runtime.run_options(session_of(request))
 
     @app.get("/api/chats", response_model=list[ChatSummary])
     async def chats() -> list[ChatSummary]:
@@ -296,10 +299,24 @@ def create_app(
     return app
 
 
+def refusal(error: Exception) -> str:
+    """Why the app won't start, as one plain line instead of a traceback."""
+    if isinstance(error, ValidationError):
+        names = sorted({str(item["loc"][0]).upper() for item in error.errors() if item["loc"]})
+        return f"app/.env has a missing or wrong value for {', '.join(names)}. app/.env.example lists every setting."
+    return " ".join(str(error).split())
+
+
 def main() -> None:
-    settings = load_settings()
+    try:
+        settings = load_settings()
+        app = create_app(settings)
+    except (RuntimeError, ValidationError) as error:
+        # The refusals already say what to fix, so the traceback would only bury them.
+        print(f"run.sh: {refusal(error)}", file=sys.stderr)
+        raise SystemExit(1) from None
     # One process and one worker.
-    uvicorn.run(create_app(settings), host=settings.workbench_host, port=settings.workbench_port)
+    uvicorn.run(app, host=settings.workbench_host, port=settings.workbench_port)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,12 @@
-"""Smoke tests: the screens load, health hides the key, run.sh checks Python."""
+"""Smoke tests: the screens load, health hides the key, run.sh checks Python, and a refusal to start is one plain line."""
 
 import os
 import shutil
 import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
+
+import pytest
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 RUN_SH = APP_DIR / "run.sh"
@@ -105,3 +107,33 @@ def test_run_sh_refuses_python_older_than_3_11(tmp_path):
     assert "3.10.14" in result.stderr
     assert "3.11" in result.stderr
     assert not (app_copy / ".venv").exists()
+
+
+def test_a_refusal_to_start_is_one_plain_line(monkeypatch, capsys, tmp_path):
+    from conftest import settings_for
+    from workbench import db
+    from workbench import main as entry
+
+    # A database from a newer workbench: create_app refuses it.
+    settings = settings_for(tmp_path)
+    with db.Database(settings.workbench_db_path).connect() as conn:
+        conn.execute("PRAGMA user_version = 99")
+    monkeypatch.setattr(entry, "load_settings", lambda: settings)
+    with pytest.raises(SystemExit) as stopped:
+        entry.main()
+    assert stopped.value.code == 1
+    err = capsys.readouterr().err
+    assert err.startswith("run.sh: ") and err.count("\n") == 1
+    assert "made by a newer version of the workbench" in err and "Traceback" not in err
+
+
+def test_a_wrong_setting_is_named_in_one_line(monkeypatch, capsys, tmp_path):
+    from conftest import settings_for
+    from workbench import main as entry
+
+    monkeypatch.setattr(entry, "load_settings", lambda: settings_for(tmp_path, workbench_port="not a port"))
+    with pytest.raises(SystemExit):
+        entry.main()
+    assert capsys.readouterr().err == (
+        "run.sh: app/.env has a missing or wrong value for WORKBENCH_PORT. app/.env.example lists every setting.\n"
+    )

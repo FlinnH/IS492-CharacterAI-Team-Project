@@ -287,7 +287,7 @@ def test_seeded_transcript_loads_only_when_picked(make_client, tmp_path, monkeyp
     client = make_client(workbench_seeded_transcript_path=str(seeded))
 
     listed = {sample["id"]: sample for sample in client.get("/api/samples").json()}
-    assert set(listed) == {"cla-f2", "gpt-f2", "seeded"}
+    assert set(listed) == {"cla-f2", "gpt-f2", "planted-line", "seeded"}
     assert (listed["seeded"]["path"], listed["seeded"]["available"], listed["seeded"]["spec_version"]) == (str(seeded), True, 1)
     assert seeded not in reads
 

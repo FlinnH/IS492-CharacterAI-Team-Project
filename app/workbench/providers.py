@@ -21,6 +21,8 @@ from workbench.config import APP_DIR, Settings
 from workbench.schemas import FakeSettings
 
 FAKE_FILE = APP_DIR / "samples" / "fake.v1.json"
+# What the creator reads after a 429, real or forced for the demo.
+RATE_LIMITED = "The model service says its free limit was reached. Wait a minute and try again."
 
 
 @dataclass(frozen=True)
@@ -113,9 +115,7 @@ def provider_error(error: openai.APIError) -> ProviderError:
                 detail,
             )
         if status == 429:
-            return ProviderError(
-                "rate_limited", "The model service says its free limit was reached. Wait a minute and try again.", detail
-            )
+            return ProviderError("rate_limited", RATE_LIMITED, detail)
         if status == 404:
             return ProviderError(
                 "not_found", "The model service doesn't know this model. Check the model IDs in app/prompts/.", detail

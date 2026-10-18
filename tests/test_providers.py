@@ -154,21 +154,60 @@ def test_errors_become_plain_messages(status, body, kind, words):
     assert PROMPT not in error.message and PROMPT not in error.detail
 
 
-def test_a_rate_limit_mid_run_shows_a_card_and_logs_the_error(make_client):
-    limited = httpx2.Response(
+def rate_limited():
+    return httpx2.Response(
         429, json=[{"error": {"code": 429, "message": "Resource has been exhausted (e.g. check quota).", "status": "RESOURCE_EXHAUSTED"}}]
     )
-    provider = mock_provider([limited], [])
+
+
+def test_a_rate_limit_is_tried_again_then_the_fallback_model_then_a_card(make_client):
+    models = load_prompts().models
+    model_id = models.character_models("gemini")[0]
+    fallback = models.fallback_for(model_id)
+    requests = []
+    provider = mock_provider([rate_limited() for _ in range(4)], requests)
     client = make_client(provider=provider, workbench_provider="gemini", gemini_api_key="test-key")
-    model_id = load_prompts().models.character_models("gemini")[0]
     chat = client.post("/api/chats", json={"character": "harry", "scenario": "F2", "model": model_id}).json()
 
     events = sse_events(client.post(f"/api/chats/{chat['id']}/next").text)
     name, error = events[-1]
-    assert (name, error["retry"]) == ("error", True)
+    assert (name, error["retry"], error["partial"]) == ("error", True, None)
     assert "free limit" in error["message"]
-    [row] = query(client, "SELECT status, error FROM model_calls")
-    assert row == {"status": "error", "error": "HTTP 429: Resource has been exhausted (e.g. check quota)."}
+    # Two pauses that double, then the other Flash-Lite model, which has its own free quota.
+    notes = [(data["reason"], data["seconds"], data["message"]) for name, data in events if name == "wait" and data["reason"] != "slot"]
+    assert notes == [
+        ("retry", 2.0, "The model service is busy. Trying again in 2 s."),
+        ("retry", 4.0, "The model service is busy. Trying again in 4 s."),
+        ("fallback", 0, f"{models.models[model_id].label} is still busy, so {models.models[fallback].label} answers this turn."),
+    ]
+    assert [request["body"]["model"] for request in requests] == [model_id, model_id, model_id, fallback]
+    detail = "HTTP 429: Resource has been exhausted (e.g. check quota)."
+    assert query(client, "SELECT attempt, fallback, model_asked, status, error FROM model_calls ORDER BY id") == [
+        {"attempt": 1, "fallback": 0, "model_asked": model_id, "status": "error", "error": detail},
+        {"attempt": 2, "fallback": 0, "model_asked": model_id, "status": "error", "error": detail},
+        {"attempt": 3, "fallback": 0, "model_asked": model_id, "status": "error", "error": detail},
+        {"attempt": 4, "fallback": 1, "model_asked": fallback, "status": "error", "error": detail},
+    ]
+
+
+def test_the_fallback_model_answers_when_the_first_stays_busy(make_client):
+    models = load_prompts().models
+    model_id = models.character_models("gemini")[0]
+    fallback = models.fallback_for(model_id)
+    requests = []
+    provider = mock_provider([*(rate_limited() for _ in range(3)), gemini_reply("Hi, Alex.", fallback)], requests)
+    client = make_client(provider=provider, workbench_provider="gemini", gemini_api_key="test-key")
+    chat = client.post("/api/chats", json={"character": "harry", "scenario": "F2", "model": model_id}).json()
+
+    name, done = sse_events(client.post(f"/api/chats/{chat['id']}/next").text)[-1]
+    assert name == "done"
+    reply = done["message"]
+    assert (reply["text"], reply["model"], reply["fallback"], reply["failed"]) == ("Hi, Alex.", fallback, True, False)
+    # The fallback model gets the same messages, with its own reasoning effort.
+    assert requests[3]["body"]["messages"] == requests[0]["body"]["messages"]
+    assert requests[3]["body"]["reasoning_effort"] == models.models[fallback].reasoning_effort
+    # The chat keeps its own model; only the one reply came from the fallback.
+    assert client.get(f"/api/chats/{chat['id']}").json()["model"] == model_id
 
 
 def test_a_provider_without_a_key_never_sends_a_request():

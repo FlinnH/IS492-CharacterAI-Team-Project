@@ -6,7 +6,7 @@
 # versions stay listed, so the versions in old log rows still mean one text.
 
 [current]
-models = "models.v3.toml"
+models = "models.v4.toml"
 character = "character.v1.md"
 judge = "judge.v1.md"
 judge_schema = "judge.schema.v1.json"
@@ -17,6 +17,7 @@ recheck_schema = "recheck.schema.v1.json"
 "models.v1.toml" = "3fa18267019838d5871469e91b3567811f30ea4bedc4ecb4e150d7098428a9de"
 "models.v2.toml" = "f011f0e7e540757e42e98256c1988559ff731397b0895c0726dcc7894b6d8434"
 "models.v3.toml" = "4bc18563b9085e8c7c656b81afdea5ba7b301c7c5b198bf5c6a6cdcbe356871e"
+"models.v4.toml" = "ce6ced249509a02fe9f00701a3aaa33aeb5471a029fce3d52aa00a4d863a920f"
 "character.v1.md" = "bd030364bddd23a53388ca1596e29c0f2f5f8fc4aade57f234dcaa568c7af436"
 "judge.v1.md" = "9d87d22a0f655fac426d5896d92d99acafa22ed4d23dc8b17cb926039b6c02f4"
 "judge.schema.v1.json" = "59970df70263adb706173263e8d298bfb9963e95c4eb89069e12fe59bf477525"

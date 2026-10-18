@@ -13,10 +13,28 @@ from conftest import FakeTime, default_model, fake_settings, query, scenario_lin
 from spec_edits import edit_payload, set_line
 from workbench import specs
 from workbench.config import load_prompts
-from workbench.providers import FakeProvider, FakeReply, OpenAIProvider, ProviderError
+from workbench.providers import Chunk, FakeProvider, FakeReply, OpenAIProvider, ProviderError, Usage
 from workbench.runtime import ChatBusy
 
 LONG_REPLY = "One two three four five six seven eight nine ten eleven twelve."
+
+
+class BreaksPartway(FakeProvider):
+    """Sends the first words of its first reply, then fails, as a stream that breaks would. Later calls answer in full."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.broken = False
+
+    async def stream(self, model, messages, reasoning_effort, max_tokens):
+        if self.broken:
+            async for chunk in super().stream(model, messages, reasoning_effort, max_tokens):
+                yield chunk
+            return
+        self.broken = True
+        self.requests.append({"model": model, "messages": [dict(message) for message in messages]})
+        yield Chunk(text="Krum caught it, but", model=self.settings.model_reported, usage=Usage(10, 0, 4, 0))
+        raise ProviderError("error", "The model service sent an error partway through the reply. Try again.", "stream error")
 
 
 def start(client, scenario="F2"):
@@ -263,13 +281,42 @@ def test_a_reply_that_never_starts_times_out_with_a_card(make_client):
 
 
 def test_a_provider_error_gives_a_plain_card(make_client):
-    failure = ProviderError("rate_limited", "The model service says its free limit was reached.", "HTTP 429: quota")
+    # A refused key, which no retry or fallback can fix. Busy services are in test_gateway.
+    failure = ProviderError("auth", "The model service didn't accept the key.", "HTTP 401: bad key")
     client = make_client(provider=FakeProvider(fake_settings(), replies=[FakeReply(error=failure)]))
     chat = start(client)
 
     events = next_turn(client, chat["id"])
-    assert events[-1] == ("error", {"message": failure.message, "retry": True, "status": "active"})
-    assert query(client, "SELECT status, error FROM model_calls") == [{"status": "error", "error": "HTTP 429: quota"}]
+    assert events[-1] == ("error", {"message": failure.message, "retry": True, "status": "active", "partial": None})
+    assert query(client, "SELECT status, error FROM model_calls") == [{"status": "error", "error": "HTTP 401: bad key"}]
+
+
+def test_an_error_partway_saves_the_partial_reply_and_try_again_answers_the_same_line(make_client):
+    provider = BreaksPartway(fake_settings())
+    client = make_client(provider=provider)
+    chat = start(client)
+
+    events = next_turn(client, chat["id"])
+    assert [name for name, _ in events] == ["user", "delta", "error"]
+    error = events[-1][1]
+    assert (error["retry"], error["status"]) == (True, "active")
+    partial = error["partial"]
+    assert (partial["text"], partial["stopped"], partial["failed"]) == ("Krum caught it, but", True, True)
+    # Once text has come, the reply isn't started over on its own: the creator saw part of it.
+    assert query(client, "SELECT status, error FROM model_calls") == [{"status": "error", "error": "stream error"}]
+
+    # Try again answers the same line, without sending it twice or showing the model its cut-off words.
+    events = next_turn(client, chat["id"])
+    assert events[0][0] != "user" and events[-1][0] == "done"
+    messages = client.get(f"/api/chats/{chat['id']}").json()["messages"]
+    assert [(m["turn"], m["speaker"], m["stopped"], m["failed"]) for m in messages] == [
+        (2, "user", False, False),
+        (2, "character", True, True),
+        (2, "character", False, False),
+    ]
+    assert [message["role"] for message in provider.requests[-1]["messages"]] == ["system", "user"]
+    # And the run goes on from there.
+    assert next_turn(client, chat["id"])[0][1]["turn"] == scenario_lines("F2")[1].turn
 
 
 def test_a_closed_connection_saves_the_partial_reply_and_the_run_can_go_on(make_runtime, database):

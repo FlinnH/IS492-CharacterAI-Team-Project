@@ -2,7 +2,8 @@
 
 Line IDs, line attributes, and check limits all come from the spec itself
 (v1 is app/samples/spec_v1.json), so this code never names a line. Each call
-opens its own short connection through db.Database.
+opens its own short connection through db.Database. A save redacts the edit
+first, since the spec reaches the character's model on every turn.
 """
 
 import hashlib
@@ -11,10 +12,11 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from workbench import db
+from workbench import db, redact
 from workbench.config import APP_DIR
 from workbench.schemas import (
     Character,
+    Removed,
     SpecBody,
     SpecEdit,
     SpecLine,
@@ -180,6 +182,34 @@ def apply_edit(parent: SpecBody, edit: SpecEdit, used: set[str]) -> tuple[SpecBo
     return body, new_ids
 
 
+def redact_edit(edit: SpecEdit) -> tuple[SpecEdit, Removed]:
+    """The edit with every text the creator typed redacted, and what came out.
+
+    Labels and headings stay as they are: they must match the version edited.
+    """
+    removed = Removed()
+
+    def scrub(text: str) -> str:
+        nonlocal removed
+        text, found = redact.scrub(text)
+        removed += found
+        return text
+
+    redacted = edit.model_copy(
+        update={
+            "note": scrub(edit.note),
+            "preamble": scrub(edit.preamble),
+            "fields": [item.model_copy(update={"text": scrub(item.text)}) for item in edit.fields],
+            "setting": scrub(edit.setting),
+            "sections": [
+                section.model_copy(update={"lines": [line.model_copy(update={"text": scrub(line.text)}) for line in section.lines]})
+                for section in edit.sections
+            ],
+        }
+    )
+    return redacted, removed
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -280,7 +310,11 @@ def get_spec(database: db.Database, slug: str, version: int | None = None) -> Sp
 
 
 def save_edit(database: db.Database, slug: str, edit: SpecEdit) -> SpecView:
-    """Saves the edit as the next version. Only the latest version can be edited."""
+    """Saves the edit as the next version. Only the latest version can be edited.
+
+    The answer says what redaction took out, so the Spec editor can tell the creator.
+    """
+    edit, removed = redact_edit(edit)
     with database.connect() as conn, db.transaction(conn):
         character = _character(conn, slug)
         latest = _latest(conn, character["id"])
@@ -317,4 +351,4 @@ def save_edit(database: db.Database, slug: str, edit: SpecEdit) -> SpecView:
                 "A newer version was saved while you were editing. Copy anything you want to keep, then reload."
             ) from error
 
-    return get_spec(database, slug, version)
+    return get_spec(database, slug, version).model_copy(update={"removed": removed})

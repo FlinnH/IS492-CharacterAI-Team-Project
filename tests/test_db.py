@@ -389,3 +389,19 @@ def test_a_flag_change_says_what_happened(recheck_conn, change, before, after, k
             "INSERT INTO flag_changes (recheck_id, flag_id, change, from_confidence, to_confidence, kept_because, why,"
             f" created_at) VALUES (1, 1, '{change}', '{before}', '{after}', {kept_because}, 'Why.', 'x')"
         )
+
+
+def test_migration_006_marks_forced_calls(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) >= 6
+        forced = {row["name"]: row for row in conn.execute("PRAGMA table_info(model_calls)")}["forced"]
+        assert (forced["notnull"], forced["dflt_value"]) == (1, "0")
+        assert "transcripts_session" in {row["name"] for row in conn.execute("PRAGMA index_list(transcripts)")}
+
+
+def test_a_call_is_forced_or_not(conn):
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        conn.execute(
+            "INSERT INTO model_calls (started_at, quota_day, role, provider, model_asked, prompt_version, settings_version,"
+            " status, forced) VALUES ('x', 'x', 'character', 'fake', 'm', 'p', 's', 'error', 2)"
+        )

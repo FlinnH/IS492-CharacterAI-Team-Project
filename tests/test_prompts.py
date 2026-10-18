@@ -20,9 +20,9 @@ PROMPTS_DIR = APP_DIR / "prompts"
 
 def test_prompts_load_and_match_the_manifest():
     prompts = load_prompts()
-    # models.v2 switched the character to minimal reasoning effort, and models.v3
-    # added the judge; v1 and v2 stay for history.
-    assert (prompts.models_version, prompts.character_version) == ("models.v3", "character.v1")
+    # models.v2 switched the character to minimal reasoning effort, models.v3
+    # added the judge, and models.v4 the fallback models; v1 to v3 stay for history.
+    assert (prompts.models_version, prompts.character_version) == ("models.v4", "character.v1")
     assert (prompts.judge_version, prompts.judge_schema_version) == ("judge.v1", "judge.schema.v1")
     assert (prompts.recheck_version, prompts.recheck_schema_version) == ("recheck.v1", "recheck.schema.v1")
 
@@ -136,3 +136,26 @@ def test_the_judge_has_its_own_effort_low_or_higher():
     models = load_prompts().models
     for provider in ("gemini", "ollama", "fake"):
         assert models.models[models.judge_model(provider)].provider == provider
+
+
+def test_each_fallback_is_another_model_of_its_own_provider():
+    models = load_prompts().models
+    assert models.fallback
+    for model_id, other in models.fallback.items():
+        assert other != model_id and models.models[other].provider == models.models[model_id].provider
+    # Each Gemini Flash-Lite model falls back to the other, since each has its own free quota.
+    first, second = models.character_models("gemini")
+    assert (models.fallback_for(first), models.fallback_for(second)) == (second, first)
+    # One local Ollama model has nothing to fall back to.
+    assert models.fallback_for(models.judge_model("ollama")) is None
+
+
+def test_a_fallback_to_another_provider_is_refused():
+    from pydantic import ValidationError
+
+    from workbench.schemas import ModelSettings
+
+    raw = tomllib.loads((PROMPTS_DIR / "models.v4.toml").read_text(encoding="utf-8"))
+    raw["fallback"][raw["character"]["gemini"][0]] = raw["character"]["ollama"][0]
+    with pytest.raises(ValidationError, match="own provider"):
+        ModelSettings.model_validate(raw)

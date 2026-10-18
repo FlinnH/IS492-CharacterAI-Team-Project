@@ -1843,6 +1843,12 @@ button.chip:active::before {
   color: var(--md-sys-color-error);
 }
 
+/* A line that reads like an instruction to the AI. Tertiary, since nothing
+   broke: it's a note for the creator. */
+.bubble__status--injection {
+  color: var(--md-sys-color-tertiary);
+}
+
 /* "Show in transcript" focuses the reply, so the ring shows for mouse users too */
 .bubble:focus {
   outline: 2px solid var(--md-sys-color-primary);
@@ -2133,6 +2139,30 @@ button.chip:active::before {
 
 .import-preview__note {
   margin-top: 12px;
+}
+
+/* What redaction took out, and lines that read like instructions to the AI */
+.import-preview__note--icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.import-preview__note--icon .icon {
+  flex: none;
+  color: var(--md-sys-color-tertiary);
+  font-size: 20px;
+}
+
+.import__row-injection {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--md-sys-color-tertiary);
+}
+
+.import__row-injection .icon {
+  font-size: 16px;
 }
 
 /* Rows to fix. Error colors, with an icon and words. */
@@ -2820,11 +2850,32 @@ button.chip:active::before {
   font-weight: 500;
 }
 
+/* A line that reads like an instruction to the AI: an icon and the words, in
+   the tertiary color, since it's a note for the creator, not an error */
+.convo-turn__injection {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--md-sys-color-tertiary);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.convo-turn__injection .icon {
+  font-size: 16px;
+}
+
 /* Compare runs ------------------------------------------------------------- */
 
 .compare {
   display: grid;
   gap: 32px;
+}
+
+/* A grid item won't shrink below its content's width unless told to, so on a
+   phone the wide side-by-side table would push the page sideways. */
+.compare > * {
+  min-width: 0;
 }
 
 /* While flags are open: they still count as breaks here */

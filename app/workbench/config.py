@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from dotenv import dotenv_values
-from pydantic import Field, PositiveFloat, PositiveInt, SecretStr
+from pydantic import Field, NonNegativeInt, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from workbench.schemas import JudgeOutput, ModelSettings, RecheckOutput, inline_refs
@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     workbench_daily_call_cap: PositiveInt
     workbench_calls_per_minute: PositiveInt
     workbench_session_run_limit: PositiveInt
+    workbench_session_judge_limit: PositiveInt
+    workbench_retries: NonNegativeInt
+    workbench_retry_backoff_seconds: PositiveFloat
+    workbench_force_model_error: Literal["off", "primary", "all"]
     workbench_first_token_timeout_seconds: PositiveFloat
     workbench_judge_timeout_seconds: PositiveFloat
     workbench_max_typed_chars: PositiveInt
