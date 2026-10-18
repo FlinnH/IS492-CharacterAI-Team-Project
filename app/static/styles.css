@@ -2479,6 +2479,199 @@ button.chip:active::before {
   gap: 16px;
 }
 
+/* "Re-rated by the re-check, Medium to Low", on the flag's card */
+.flag-card__recheck {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.flag-card__recheck .icon {
+  font-size: 20px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Both views on a disputed flag: the creator's call or the first pass, and
+   the re-check. Side by side when the card has room, stacked when it doesn't. */
+.both-views {
+  display: grid;
+  justify-self: stretch;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--md-sys-color-tertiary);
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+.both-views__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--md-sys-color-tertiary);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.both-views__title .icon {
+  font-size: 20px;
+}
+
+.both-views__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 8px;
+}
+
+.both-views__view {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-low);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.both-views__heading {
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.both-views__note {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* What changed in the latest re-check, above the flags */
+.what-changed {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.what-changed__title,
+.follow-up__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.what-changed__title .icon,
+.follow-up__title .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.what-changed__source,
+.what-changed__hint,
+.follow-up__cost {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.what-changed__text,
+.what-changed__notes,
+.what-changed__item,
+.what-changed__qa,
+.follow-up__text {
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+/* The creator's question and the AI's answer */
+.what-changed__qa {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface);
+}
+
+.what-changed__group {
+  display: grid;
+  gap: 8px;
+}
+
+.what-changed__group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--type-title-small);
+  letter-spacing: var(--md-sys-typescale-title-small-tracking);
+}
+
+.what-changed__group-title .icon {
+  font-size: 20px;
+}
+
+.what-changed__list,
+.what-changed__notes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.what-changed__item {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface);
+}
+
+.what-changed__place {
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.what-changed__error,
+.follow-up__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--md-sys-color-error);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+/* The follow-up re-check, after the flags */
+.follow-up {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.follow-up__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.follow-up__status {
+  display: grid;
+  gap: 4px;
+}
+
+/* The question's placeholder shows only once the label has floated above
+   the field, as in M3, so the two never sit on top of each other */
+.follow-up__question .text-field__input::placeholder {
+  color: transparent;
+  opacity: 1;
+}
+
+.follow-up__question .text-field__input:focus::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
 /* Not checked by the AI */
 .not-checked {
   display: grid;

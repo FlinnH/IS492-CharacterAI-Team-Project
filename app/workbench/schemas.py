@@ -1,5 +1,5 @@
 """Shared Pydantic types: spec bodies as stored, edits from the Spec editor,
-model settings, chats, the AI judge's answer, flags, and API responses."""
+model settings, chats, the AI judge's answers, flags, and API responses."""
 
 from typing import Any, Literal
 
@@ -495,6 +495,33 @@ class JudgeOutput(Model):
     not_checked: list[JudgeGap] = Field(description="What the spec and the chat alone can't settle.")
 
 
+# The follow-up re-check's answer. app/prompts/recheck.schema.v1.json is this
+# model's JSON schema written out the same way, and config checks it too.
+
+RecheckAction = Literal["keep", "rerate", "withdraw"]
+
+
+class RecheckReview(Model):
+    flag_id: int = Field(description="The id of a flag marked recheck: true in the request.")
+    action: RecheckAction = Field(
+        description="keep when the reply breaks the spec as flagged, rerate when it breaks the spec at another"
+        " confidence, withdraw when it doesn't break the spec."
+    )
+    confidence: Confidence = Field(
+        description="Your confidence now: high when the spec settles it, medium when it probably breaks, low when"
+        " unsure. For withdraw, how sure you are that it isn't a break."
+    )
+    why: str = Field(description="One plain sentence that says what you decided and why.")
+
+
+class RecheckOutput(Model):
+    reviews: list[RecheckReview] = Field(description="One review for each flag marked recheck: true.")
+    new_flags: list[JudgeFlag] = Field(description="Breaks the first pass missed, with the same fields as its flags.")
+    answer: str = Field(
+        description="Your answer to the creator's question, in plain sentences, or an empty string when there is no question."
+    )
+
+
 def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
     """The schema with each "$ref" replaced by the definition it points to, and no "$defs"."""
     definitions = schema.get("$defs", {})
@@ -513,8 +540,8 @@ def inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 # Flags. A finding is a flag that passed its checks, before it is saved: from a
-# rule check (code alone) or from the judge. Code, not the judge, sets
-# needs_call, and needs_call_reason says which rule did.
+# rule check (code alone), from the judge, or from its re-check. Code, not the
+# judge, sets needs_call, and needs_call_reason says which rule did.
 
 FlagSource = Literal["judge", "rule", "recheck"]
 NeedsCallReason = Literal["persona_exit", "near_guess", "unsure_boundary", "line", "judge"]
@@ -527,7 +554,7 @@ RejectReason = HiddenReason | Literal["duplicate", "repeats_rule"]
 class Finding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    source: Literal["judge", "rule"]
+    source: FlagSource
     turn: int
     # A rule flag's other broken turns, after the first.
     also_turns: tuple[int, ...] = ()
@@ -578,6 +605,7 @@ class NotCheckedTopic(Model):
 
 
 class JudgeRunView(Model):
+    id: int
     status: Literal["ok", "failed"]
     model: str
     model_label: str
@@ -623,6 +651,59 @@ class FlagCall(Model):
     made_at: str
 
 
+# The follow-up re-check. A flag it added, withdrew, re-rated, or kept, with
+# its one-line reason. kept_because is set when it asked to withdraw a flag
+# that stayed: only the creator can settle the flag, or it has their call.
+
+FlagChangeKind = Literal["added", "withdrawn", "rerated", "kept"]
+KeptBecause = Literal["needs_call", "your_call"]
+
+
+class FlagRecheck(Model):
+    """The latest re-check's word on one flag."""
+
+    change: FlagChangeKind
+    from_confidence: Confidence
+    to_confidence: Confidence
+    kept_because: KeptBecause | None
+    why: str
+    made_at: str
+
+
+class FlagChange(FlagRecheck):
+    """One line of What changed. A withdrawn flag isn't in the review anymore, so its evidence comes along."""
+
+    flag_id: int
+    turn: int
+    type: FailureType
+    line_id: str
+    quote: str
+
+
+class RecheckRequest(Model):
+    # The creator's own question, or None.
+    question: str | None = None
+
+
+class RecheckView(Model):
+    """The latest re-check of a chat's check, for the What changed panel."""
+
+    id: int
+    status: Literal["ok", "failed"]
+    # For the creator when the re-check didn't finish. Empty when it worked.
+    note: str
+    model_label: str
+    checked_at: str
+    question: str | None
+    # The AI's answer to the question, in its own words. Empty without a question.
+    answer: str
+    # How many flags it looked at again.
+    picked: int
+    changes: list[FlagChange]
+    # Its new flags that failed the evidence checks.
+    hidden: list[HiddenCount]
+
+
 class ReviewFlag(CheckFlag):
     # The creator has opened the flag's evidence at least once, which unlocks Agree.
     evidence_opened: bool
@@ -630,6 +711,11 @@ class ReviewFlag(CheckFlag):
     call: FlagCall | None
     # True unless the creator overrode the flag without giving another type.
     counts_as_break: bool
+    # The latest re-check's word on this flag, or None.
+    recheck: FlagRecheck | None
+    # The re-check looked again at this flag and disagrees with its standing
+    # on whether it is a break, so the screen shows both views.
+    disputed: bool
 
 
 class ReviewChat(Model):
@@ -639,6 +725,8 @@ class ReviewChat(Model):
     flags: list[ReviewFlag]
     hidden: list[HiddenCount]
     not_checked: list[NotCheckedTopic]
+    # The latest re-check of this check, or None.
+    recheck: RecheckView | None
     # Flags with no call yet.
     open_calls: int
     # The earliest turn with a flag that counts as a break, or None.

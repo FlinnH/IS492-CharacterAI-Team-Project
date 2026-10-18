@@ -50,15 +50,18 @@ def _sha256(value) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
+def failure_reason(failure: str | None, message: str) -> str:
+    """Why a call to the AI judge's model gave no answer, for the creator. The re-check uses it too."""
+    if failure == "schema":
+        return "The AI judge's answer didn't match its format, even after one retry. Try again."
+    if failure == "cut_off":
+        return "The AI judge's answer was cut off before it finished, even after one retry. Try again."
+    return message
+
+
 def _failure_note(failure: str | None, message: str) -> str:
     """What the creator reads when the judge's flags are missing."""
-    if failure == "schema":
-        reason = "The AI judge's answer didn't match its format, even after one retry. Try again."
-    elif failure == "cut_off":
-        reason = "The AI judge's answer was cut off before it finished, even after one retry. Try again."
-    else:
-        reason = message
-    return f"Only the automatic checks ran. {reason}"
+    return f"Only the automatic checks ran. {failure_reason(failure, message)}"
 
 
 class Judge:
@@ -142,7 +145,8 @@ class Judge:
         return view
 
     def _view(self, chat: ChatView, content_key: str, cache_key: str | None, *, cached: bool) -> CheckView | None:
-        """The saved check: the rule flags, plus the ok judge run, or else the latest failed one.
+        """The saved check: the rule flags, plus the ok judge run, or else the latest failed one,
+        with the run's flags that are still active, its re-checks' new ones included.
         With no cache_key, a run with any judge settings counts."""
         if cache_key is not None:
             where, key = "cache_key = ?", cache_key
@@ -162,10 +166,11 @@ class Judge:
                 " ORDER BY turn, CASE source WHEN 'rule' THEN 0 ELSE 1 END, id",
                 (chat.id, content_key, run["id"]),
             ).fetchall()
+            # The first pass's own hidden flags. A re-check counts its own.
             marks = ", ".join("?" for _ in HIDDEN)
             hidden = conn.execute(
-                f"SELECT reason, COUNT(*) AS count FROM rejected_flags WHERE run_id = ? AND reason IN ({marks})"
-                " GROUP BY reason ORDER BY MIN(id)",
+                f"SELECT reason, COUNT(*) AS count FROM rejected_flags WHERE run_id = ? AND recheck_id IS NULL"
+                f" AND reason IN ({marks}) GROUP BY reason ORDER BY MIN(id)",
                 (run["id"], *HIDDEN),
             ).fetchall()
             gaps = conn.execute("SELECT topic, turns, why FROM not_checked WHERE run_id = ? ORDER BY id", (run["id"],)).fetchall()
@@ -177,6 +182,7 @@ class Judge:
             spec_version=chat.spec_version,
             cached=cached,
             judge=JudgeRunView(
+                id=run["id"],
                 status=run["status"],
                 model=run["model"],
                 model_label=model.label if model else run["model"],
@@ -226,7 +232,7 @@ class Judge:
         finally:
             self.running.discard(chat_id)
 
-    def _same_model_turns(self, chat: ChatView, model_id: str) -> set[int]:
+    def same_model_turns(self, chat: ChatView, model_id: str) -> set[int]:
         """Turns whose reply the judge's own model wrote. A live chat's replies come from its model."""
         with self.database.connect() as conn:
             rows = conn.execute(
@@ -252,7 +258,7 @@ class Judge:
 
         judge = self.prompts.models.judge
         model_id = self.model_id()
-        same_turns = self._same_model_turns(chat, model_id)
+        same_turns = self.same_model_turns(chat, model_id)
         run = {
             "status": "failed",
             "failure": None,

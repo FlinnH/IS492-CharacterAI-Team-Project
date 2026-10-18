@@ -19,7 +19,7 @@ from dotenv import dotenv_values
 from pydantic import Field, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from workbench.schemas import JudgeOutput, ModelSettings, inline_refs
+from workbench.schemas import JudgeOutput, ModelSettings, RecheckOutput, inline_refs
 
 APP_DIR = Path(__file__).resolve().parent.parent
 EXAMPLE_FILE = APP_DIR / ".env.example"
@@ -90,6 +90,23 @@ class Prompts:
     # The JSON schema every judge answer must match, sent with each judge call.
     judge_schema: dict[str, Any]
     judge_schema_version: str
+    # The follow-up re-check, which the judge's model answers with its own prompt and schema.
+    recheck_template: str
+    recheck_version: str
+    recheck_schema: dict[str, Any]
+    recheck_schema_version: str
+
+
+def _answer_schema(folder: Path, name: str, output: type) -> dict[str, Any]:
+    """A schema file that must be output's schema written out. Each answer is
+    checked against output, so a schema that differs would fail valid answers."""
+    schema = json.loads((folder / name).read_text(encoding="utf-8"))
+    if schema != inline_refs(output.model_json_schema()):
+        raise RuntimeError(
+            f"app/prompts/{name} doesn't match schemas.{output.__name__}. Save the model's schema "
+            "as the next version and point the manifest at it."
+        )
+    return schema
 
 
 def load_prompts(folder: Path = PROMPTS_DIR) -> Prompts:
@@ -118,14 +135,6 @@ def load_prompts(folder: Path = PROMPTS_DIR) -> Prompts:
     if template.count(SPEC_PLACEHOLDER) != 1:
         raise RuntimeError(f"app/prompts/{current['character']} must hold {SPEC_PLACEHOLDER} exactly once.")
 
-    # The judge's answer is checked against schemas.JudgeOutput, so the schema
-    # the judge is sent must be that model's, or valid answers would fail.
-    judge_schema = json.loads((folder / current["judge_schema"]).read_text(encoding="utf-8"))
-    if judge_schema != inline_refs(JudgeOutput.model_json_schema()):
-        raise RuntimeError(
-            f"app/prompts/{current['judge_schema']} doesn't match schemas.JudgeOutput. Save the model's schema "
-            "as the next version and point the manifest at it."
-        )
     return Prompts(
         models=models,
         models_version=Path(current["models"]).stem,
@@ -133,6 +142,10 @@ def load_prompts(folder: Path = PROMPTS_DIR) -> Prompts:
         character_version=Path(current["character"]).stem,
         judge_template=(folder / current["judge"]).read_text(encoding="utf-8"),
         judge_version=Path(current["judge"]).stem,
-        judge_schema=judge_schema,
+        judge_schema=_answer_schema(folder, current["judge_schema"], JudgeOutput),
         judge_schema_version=Path(current["judge_schema"]).stem,
+        recheck_template=(folder / current["recheck"]).read_text(encoding="utf-8"),
+        recheck_version=Path(current["recheck"]).stem,
+        recheck_schema=_answer_schema(folder, current["recheck_schema"], RecheckOutput),
+        recheck_schema_version=Path(current["recheck_schema"]).stem,
     )

@@ -1,5 +1,5 @@
-"""Evidence checks: every flag from the AI judge is checked against the chat and
-the spec before the creator sees it.
+"""Evidence checks: every flag from the AI judge, and from its re-check, is
+checked against the chat and the spec before the creator sees it.
 
 Pure: the judge's answer, the chat's messages, its spec body, and the rule
 flags in; findings and rejections out, with no AI and no I/O. A flag passes
@@ -18,6 +18,8 @@ from workbench.schemas import (
     Confidence,
     FailureType,
     Finding,
+    FlagSource,
+    JudgeFlag,
     JudgeOutput,
     MessageView,
     NeedsCallReason,
@@ -203,6 +205,23 @@ def check_evidence(turn: int, line_id: str, quote: str, messages: Sequence[Messa
     return "quote_not_found", cited, None
 
 
+def _from_flag(flag: JudgeFlag, cited: str, exact: str, body: SpecBody, source: FlagSource) -> Finding:
+    """A flag that passed its checks, as a finding. Code decides whether it needs the creator's call."""
+    reason = needs_call(flag.type, flag.near_boundary_guess, flag.confidence, flag.needs_your_call, _line(cited, body))
+    return Finding(
+        source=source,
+        turn=flag.turn,
+        type=flag.type,
+        line_id=cited,
+        quote=exact,
+        confidence=flag.confidence,
+        near_boundary_guess=flag.near_boundary_guess,
+        needs_call=reason is not None,
+        needs_call_reason=reason,
+        why=" ".join(flag.why.split()),
+    )
+
+
 def _repeat(finding: Finding, accepted: Sequence[Finding], rule_findings: Sequence[Finding]) -> RejectReason | None:
     """repeats_rule when a rule flag covers the same line and turn; duplicate when an
     earlier flag has the same turn, line, and type and one quote holds the other."""
@@ -257,19 +276,7 @@ def review(
     for flag in output.flags:
 
         def make(cited: str, exact: str, flag=flag) -> Finding:
-            reason = needs_call(flag.type, flag.near_boundary_guess, flag.confidence, flag.needs_your_call, _line(cited, body))
-            return Finding(
-                source="judge",
-                turn=flag.turn,
-                type=flag.type,
-                line_id=cited,
-                quote=exact,
-                confidence=flag.confidence,
-                near_boundary_guess=flag.near_boundary_guess,
-                needs_call=reason is not None,
-                needs_call_reason=reason,
-                why=" ".join(flag.why.split()),
-            )
+            return _from_flag(flag, cited, exact, body, "judge")
 
         consider(flag.model_dump(), flag.turn, flag.line_id, flag.quote, make)
 
@@ -294,4 +301,30 @@ def review(
                 )
 
             consider(claim.model_dump(), claim.turn, provenance.id, claim.quote, make)
+    return accepted, rejected
+
+
+def review_new_flags(
+    flags: Sequence[JudgeFlag],
+    messages: Sequence[MessageView],
+    body: SpecBody,
+    rule_findings: Sequence[Finding],
+    earlier: Sequence[Finding],
+) -> tuple[list[Finding], list[Rejection]]:
+    """The re-check's new flags that pass the same checks as the judge's, and the rest with their reasons.
+
+    earlier holds every flag the check already has, withdrawn ones too, so a
+    new flag that repeats one of them, a rule flag, or another new flag is dropped.
+    """
+    accepted: list[Finding] = []
+    rejected: list[Rejection] = []
+    for flag in flags:
+        reason, cited, exact = check_evidence(flag.turn, flag.line_id, flag.quote, messages, body)
+        if reason is None:
+            finding = _from_flag(flag, cited, exact, body, "recheck")
+            reason = _repeat(finding, [*earlier, *accepted], rule_findings)
+            if reason is None:
+                accepted.append(finding)
+                continue
+        rejected.append(Rejection(reason=reason, turn=flag.turn, line_id=flag.line_id, quote=flag.quote, raw=flag.model_dump()))
     return accepted, rejected

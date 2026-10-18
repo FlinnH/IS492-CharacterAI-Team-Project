@@ -1,7 +1,7 @@
 """HTTP entry point: the API routes, then the screens in app/static/.
 
-Routes only call services, like specs, transcripts, runtime, judge, and review,
-which open their own database connections. A live turn streams as server-sent events.
+Routes only call services, like specs, transcripts, runtime, judge, recheck,
+and review, which open their own database connections. A live turn streams as server-sent events.
 Its checks run in a dependency, before the stream starts, so a refused turn
 gets a plain JSON error with the right status.
 """
@@ -24,6 +24,7 @@ from workbench.config import Settings, load_prompts, load_settings
 from workbench.gateway import CapReached, Gateway
 from workbench.judge import CheckBusy, Judge, NothingToCheck
 from workbench.limiter import Limiter
+from workbench.recheck import NothingToRecheck, QuestionInvalid, Recheck, RecheckBusy
 from workbench.review import CallInvalid, CallRefused, FlagNotFound, FlagOutdated, Review
 from workbench.runtime import ChatBusy, ChatClosed, NoKey, RunInvalid, Runtime, Turn
 from workbench.schemas import (
@@ -35,6 +36,7 @@ from workbench.schemas import (
     ImportPreview,
     ImportRequest,
     OverrideCall,
+    RecheckRequest,
     ReviewChat,
     ReviewState,
     RunOptions,
@@ -111,7 +113,8 @@ def create_app(
     gateway = Gateway(database, settings, prompts, provider, limiter, **timing)
     runtime = Runtime(database, settings, prompts, gateway, transcripts.load_scenarios())
     judge = Judge(database, settings, prompts, gateway, runtime.scenarios, busy=lambda: runtime.running)
-    review = Review(database, settings, judge)
+    recheck = Recheck(database, settings, prompts, gateway, judge)
+    review = Review(database, settings, judge, recheck)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -123,6 +126,7 @@ def create_app(
     app.state.database = database
     app.state.runtime = runtime
     app.state.judge = judge
+    app.state.recheck = recheck
     app.state.review = review
 
     app.add_exception_handler(specs.SpecNotFound, error_response(404))
@@ -132,12 +136,15 @@ def create_app(
     app.add_exception_handler(ChatBusy, error_response(409))
     app.add_exception_handler(ChatClosed, error_response(409))
     app.add_exception_handler(CheckBusy, error_response(409))
+    app.add_exception_handler(RecheckBusy, error_response(409))
     app.add_exception_handler(FlagOutdated, error_response(409))
     app.add_exception_handler(CallRefused, error_response(409))
     app.add_exception_handler(specs.SpecInvalid, error_response(422))
     app.add_exception_handler(RunInvalid, error_response(422))
     app.add_exception_handler(transcripts.ImportInvalid, error_response(422))
     app.add_exception_handler(NothingToCheck, error_response(422))
+    app.add_exception_handler(NothingToRecheck, error_response(422))
+    app.add_exception_handler(QuestionInvalid, error_response(422))
     app.add_exception_handler(CallInvalid, error_response(422))
     app.add_exception_handler(CapReached, error_response(429))
     app.add_exception_handler(NoKey, error_response(503))
@@ -257,6 +264,15 @@ def create_app(
     @app.post("/api/flags/{flag_id}/undo", response_model=ReviewChat)
     async def undo(flag_id: int, request: Request) -> ReviewChat:
         return review.undo(flag_id, session_of(request))
+
+    # The follow-up re-check: the judge's model looks again at the weakest
+    # flags of a chat's saved check, with the creator's question if there is
+    # one. It answers with the chat's review as it now stands, so the screen
+    # redraws What changed from what was saved.
+    @app.post("/api/chats/{chat_id}/recheck", response_model=ReviewChat)
+    async def recheck_chat(chat_id: int, body: RecheckRequest, request: Request) -> ReviewChat:
+        await recheck.run(chat_id, body.question, session_of(request))
+        return review.chat(chat_id)
 
     # Import.
 

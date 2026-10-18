@@ -1,6 +1,6 @@
-"""M2 and M3 prompt tests: the prompt files load and match their recorded
-hashes, the character prompt is the spec alone, and the judge's prompt,
-schema, and reasoning effort are its own."""
+"""M2, M3, and M5 prompt tests: the prompt files load and match their recorded
+hashes, the character prompt is the spec alone, the judge's prompt, schema,
+and reasoning effort are its own, and so are the re-check's prompt and schema."""
 
 import hashlib
 import json
@@ -13,7 +13,7 @@ import pytest
 from conftest import APP_DIR
 from workbench import config
 from workbench.config import SPEC_PLACEHOLDER, load_prompts
-from workbench.schemas import JudgeOutput, inline_refs
+from workbench.schemas import JudgeOutput, RecheckOutput, inline_refs
 
 PROMPTS_DIR = APP_DIR / "prompts"
 
@@ -24,6 +24,7 @@ def test_prompts_load_and_match_the_manifest():
     # added the judge; v1 and v2 stay for history.
     assert (prompts.models_version, prompts.character_version) == ("models.v3", "character.v1")
     assert (prompts.judge_version, prompts.judge_schema_version) == ("judge.v1", "judge.schema.v1")
+    assert (prompts.recheck_version, prompts.recheck_schema_version) == ("recheck.v1", "recheck.schema.v1")
 
     manifest = tomllib.loads((PROMPTS_DIR / "manifest.toml").read_text(encoding="utf-8"))
     for name, expected in manifest["sha256"].items():
@@ -84,31 +85,43 @@ def test_config_is_the_only_reader_of_the_prompts_folder():
     assert config.PROMPTS_DIR == PROMPTS_DIR
 
 
-def test_the_judge_schema_file_is_the_models_schema_written_out():
-    text = (PROMPTS_DIR / "judge.schema.v1.json").read_text(encoding="utf-8")
-    assert json.loads(text) == inline_refs(JudgeOutput.model_json_schema()) == load_prompts().judge_schema
+@pytest.mark.parametrize(
+    ("name", "output", "field"),
+    [("judge.schema.v1.json", JudgeOutput, "judge_schema"), ("recheck.schema.v1.json", RecheckOutput, "recheck_schema")],
+    ids=["judge", "recheck"],
+)
+def test_each_schema_file_is_its_models_schema_written_out(name, output, field):
+    text = (PROMPTS_DIR / name).read_text(encoding="utf-8")
+    assert json.loads(text) == inline_refs(output.model_json_schema()) == getattr(load_prompts(), field)
     # Gemini's structured output doesn't list $defs, so nothing points elsewhere.
     assert "$ref" not in text and "$defs" not in text
     assert text.isascii()
 
 
-def test_a_judge_schema_that_drifts_from_the_model_is_refused(tmp_path):
+@pytest.mark.parametrize(
+    ("name", "field", "output"),
+    [("judge.schema.v1.json", "not_checked", "JudgeOutput"), ("recheck.schema.v1.json", "answer", "RecheckOutput")],
+    ids=["judge", "recheck"],
+)
+def test_a_schema_that_drifts_from_its_model_is_refused(tmp_path, name, field, output):
     folder = copy_prompts(tmp_path)
-    schema = json.loads((folder / "judge.schema.v1.json").read_text(encoding="utf-8"))
-    del schema["properties"]["not_checked"]
+    schema = json.loads((folder / name).read_text(encoding="utf-8"))
+    del schema["properties"][field]
     changed = json.dumps(schema, indent=2) + "\n"
-    (folder / "judge.schema.v1.json").write_text(changed, encoding="utf-8")
+    (folder / name).write_text(changed, encoding="utf-8")
     manifest = (folder / "manifest.toml").read_text(encoding="utf-8")
-    old = tomllib.loads(manifest)["sha256"]["judge.schema.v1.json"]
+    old = tomllib.loads(manifest)["sha256"][name]
     new = hashlib.sha256(changed.encode("utf-8")).hexdigest()
     (folder / "manifest.toml").write_text(manifest.replace(old, new), encoding="utf-8")
-    with pytest.raises(RuntimeError, match="doesn't match schemas.JudgeOutput"):
+    with pytest.raises(RuntimeError, match=f"doesn't match schemas.{output}"):
         load_prompts(folder)
 
 
-def test_the_judge_prompt_names_no_line_and_no_character():
-    # The judge reviews any character's chat against that chat's own spec.
-    text = load_prompts().judge_template
+@pytest.mark.parametrize("field", ["judge_template", "recheck_template"], ids=["judge", "recheck"])
+def test_the_review_prompts_name_no_line_and_no_character(field):
+    # The judge and its re-check review any character's chat against that chat's own spec.
+    text = getattr(load_prompts(), field)
+    assert text.isascii()
     spec = json.loads((APP_DIR / "samples" / "spec_v1.json").read_text(encoding="utf-8"))
     line_ids = [line["id"] for section in spec["body"]["sections"] for line in section["lines"]]
     assert [line_id for line_id in line_ids if re.search(rf"\b{line_id}\b", text)] == []

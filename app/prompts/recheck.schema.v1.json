@@ -1,0 +1,142 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "reviews": {
+      "description": "One review for each flag marked recheck: true.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "flag_id": {
+            "description": "The id of a flag marked recheck: true in the request.",
+            "title": "Flag Id",
+            "type": "integer"
+          },
+          "action": {
+            "description": "keep when the reply breaks the spec as flagged, rerate when it breaks the spec at another confidence, withdraw when it doesn't break the spec.",
+            "enum": [
+              "keep",
+              "rerate",
+              "withdraw"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "confidence": {
+            "description": "Your confidence now: high when the spec settles it, medium when it probably breaks, low when unsure. For withdraw, how sure you are that it isn't a break.",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "why": {
+            "description": "One plain sentence that says what you decided and why.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "flag_id",
+          "action",
+          "confidence",
+          "why"
+        ],
+        "title": "RecheckReview",
+        "type": "object"
+      },
+      "title": "Reviews",
+      "type": "array"
+    },
+    "new_flags": {
+      "description": "Breaks the first pass missed, with the same fields as its flags.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "turn": {
+            "description": "The turn number of the character's reply, exactly as the chat numbers it.",
+            "title": "Turn",
+            "type": "integer"
+          },
+          "type": {
+            "description": "The kind of break.",
+            "enum": [
+              "persona drift",
+              "memory loss",
+              "factual contradiction",
+              "knowledge-boundary violation",
+              "style drift",
+              "situational mismatch",
+              "persona exit",
+              "invented claim about the user"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "line_id": {
+            "description": "The ID of the one spec line the reply breaks, or the label of the spec field it breaks.",
+            "title": "Line Id",
+            "type": "string"
+          },
+          "quote": {
+            "description": "The shortest exact span of the reply that shows the break, copied word for word.",
+            "title": "Quote",
+            "type": "string"
+          },
+          "confidence": {
+            "description": "high when the spec settles it, medium when it probably breaks, low when unsure.",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "near_boundary_guess": {
+            "description": "True when the reply guesses or hints toward something the character can't know, without naming it.",
+            "title": "Near Boundary Guess",
+            "type": "boolean"
+          },
+          "needs_your_call": {
+            "description": "True when only the person who wrote the spec can settle it.",
+            "title": "Needs Your Call",
+            "type": "boolean"
+          },
+          "why": {
+            "description": "One plain sentence that says what breaks and why.",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "turn",
+          "type",
+          "line_id",
+          "quote",
+          "confidence",
+          "near_boundary_guess",
+          "needs_your_call",
+          "why"
+        ],
+        "title": "JudgeFlag",
+        "type": "object"
+      },
+      "title": "New Flags",
+      "type": "array"
+    },
+    "answer": {
+      "description": "Your answer to the creator's question, in plain sentences, or an empty string when there is no question.",
+      "title": "Answer",
+      "type": "string"
+    }
+  },
+  "required": [
+    "reviews",
+    "new_flags",
+    "answer"
+  ],
+  "title": "RecheckOutput",
+  "type": "object"
+}

@@ -336,3 +336,56 @@ def test_decisions_take_the_latest_call_per_flag(check_conn):
     call(check_conn, "recheck", 2)
     rows = [tuple(row) for row in check_conn.execute("SELECT flag_id, kind, reason, flag_type FROM decisions")]
     assert rows == [(1, "override", "a b c", "persona drift")]
+
+
+def test_migration_005_makes_the_recheck_tables(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) >= 5
+        assert {"rechecks", "flag_changes"} <= set(table_names(conn))
+        assert "recheck_id" in {row["name"] for row in conn.execute("PRAGMA table_info(rejected_flags)")}
+
+
+RECHECK = (
+    "INSERT INTO rechecks (id, transcript_id, run_id, content_key, cache_key, prompt_version, schema_version, model,"
+    " attempts, status, failure, created_at) VALUES ({id}, 1, 1, 'content', 'recheck-cache', 'recheck.v1',"
+    " 'recheck.schema.v1', 'test-model', 1, '{status}', {failure}, '2026-10-17T00:00:00Z')"
+)
+
+
+@pytest.fixture
+def recheck_conn(check_conn):
+    """The check above, plus a re-check that re-rated the judge flag."""
+    check_conn.execute(RECHECK.format(id=1, status="ok", failure="NULL"))
+    check_conn.execute(
+        "INSERT INTO flag_changes (id, recheck_id, flag_id, change, from_confidence, to_confidence, why, created_at)"
+        " VALUES (1, 1, 2, 'rerated', 'high', 'medium', 'Why.', '2026-10-17T00:00:00Z')"
+    )
+    return check_conn
+
+
+@pytest.mark.parametrize("table", ["rechecks", "flag_changes"])
+@pytest.mark.parametrize("statement", ["UPDATE {table} SET id = id", "DELETE FROM {table}"], ids=["update", "delete"])
+def test_rechecks_and_their_changes_are_append_only(recheck_conn, table, statement):
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        recheck_conn.execute(statement.format(table=table))
+    assert recheck_conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 1
+
+
+def test_one_ok_recheck_per_cache_key(recheck_conn):
+    # A failed re-check can sit beside the ok one, but a second ok one can't.
+    recheck_conn.execute(RECHECK.format(id=2, status="failed", failure="'schema'"))
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
+        recheck_conn.execute(RECHECK.format(id=3, status="ok", failure="NULL"))
+
+
+@pytest.mark.parametrize(
+    ("change", "before", "after", "kept_because"),
+    [("rerated", "high", "high", "NULL"), ("kept", "high", "low", "NULL"), ("withdrawn", "high", "high", "'needs_call'")],
+    ids=["rerated-to-the-same", "kept-but-changed", "withdrawn-but-kept"],
+)
+def test_a_flag_change_says_what_happened(recheck_conn, change, before, after, kept_because):
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        recheck_conn.execute(
+            "INSERT INTO flag_changes (recheck_id, flag_id, change, from_confidence, to_confidence, kept_because, why,"
+            f" created_at) VALUES (1, 1, '{change}', '{before}', '{after}', {kept_because}, 'Why.', 'x')"
+        )
