@@ -135,9 +135,9 @@ def test_a_usage_only_final_chunk_is_kept():
             400,
             [{"error": {"code": 400, "message": "API key not valid. Please pass a valid API key.", "status": "INVALID_ARGUMENT"}}],
             "auth",
-            "GEMINI_API_KEY",
+            "Paste it again in Settings",
         ),
-        (404, {"error": {"message": "models/nope is not found"}}, "not_found", "model IDs"),
+        (404, {"error": {"message": "models/nope is not found"}}, "not_found", "another model in Settings"),
         (503, {"error": {"message": "The model is overloaded."}}, "server", "had a problem"),
     ],
     ids=["rate-limited", "bad-key", "unknown-model", "server"],
@@ -214,6 +214,6 @@ def test_a_provider_without_a_key_never_sends_a_request():
     requests = []
     provider = mock_provider([], requests, api_key="")
     assert provider.ready is False
-    with pytest.raises(ProviderError, match="GEMINI_API_KEY"):
+    with pytest.raises(ProviderError, match="no Gemini key yet"):
         stream_all(provider)
     assert requests == []

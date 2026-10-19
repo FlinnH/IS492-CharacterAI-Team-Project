@@ -382,5 +382,5 @@ def test_start_checks_the_scenario_the_model_and_the_key(make_client):
     keyless = make_client(provider=no_key, workbench_provider="gemini", gemini_api_key="")
     response = keyless.post("/api/chats", json={"character": "harry", "scenario": "F2", "model": default_model("gemini")})
     assert response.status_code == 503
-    assert "GEMINI_API_KEY" in response.json()["detail"]
+    assert "Open Settings" in response.json()["detail"]
     assert keyless.get("/api/chats").json() == []

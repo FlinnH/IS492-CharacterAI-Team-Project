@@ -260,7 +260,7 @@ class Recheck:
                 "prompt": self.prompts.recheck_version,
                 "schema": self.prompts.recheck_schema_version,
                 "model": model_id,
-                "reasoning_effort": judge.reasoning_effort,
+                "reasoning_effort": self.judge.effort(),
             }
         )
         with self.database.connect() as conn:
@@ -301,7 +301,7 @@ class Recheck:
                 output=RecheckOutput,
                 schema=self.prompts.recheck_schema,
                 schema_version=self.prompts.recheck_schema_version,
-                reasoning_effort=judge.reasoning_effort,
+                reasoning_effort=self.judge.effort(),
                 max_tokens=judge.max_tokens,
                 timeout=self.settings.workbench_judge_timeout_seconds,
                 transcript_id=chat.id,
@@ -362,7 +362,7 @@ class Recheck:
                     self.prompts.recheck_version,
                     self.prompts.recheck_schema_version,
                     run["model"],
-                    self.prompts.models.judge.reasoning_effort,
+                    self.judge.effort(),
                     run["model_call_id"],
                     run["attempts"],
                     run["status"],

@@ -1,6 +1,7 @@
-"""M2, M3, and M5 prompt tests: the prompt files load and match their recorded
-hashes, the character prompt is the spec alone, the judge's prompt, schema,
-and reasoning effort are its own, and so are the re-check's prompt and schema."""
+"""M2, M3, M5, and M6.5 prompt tests: the prompt files load and match their
+recorded hashes, the character prompt is the spec alone, the judge's prompt,
+schema, and reasoning effort are its own, and so are the re-check's prompt and
+schema. Settings' connection test and service presets are versioned the same way."""
 
 import hashlib
 import json
@@ -21,10 +22,12 @@ PROMPTS_DIR = APP_DIR / "prompts"
 def test_prompts_load_and_match_the_manifest():
     prompts = load_prompts()
     # models.v2 switched the character to minimal reasoning effort, models.v3
-    # added the judge, and models.v4 the fallback models; v1 to v3 stay for history.
-    assert (prompts.models_version, prompts.character_version) == ("models.v4", "character.v1")
+    # added the judge, models.v4 the fallback models, and models.v5 the
+    # unlisted models and the limits' maximums for Settings; v1 to v4 stay for history.
+    assert (prompts.models_version, prompts.character_version) == ("models.v5", "character.v1")
     assert (prompts.judge_version, prompts.judge_schema_version) == ("judge.v1", "judge.schema.v1")
     assert (prompts.recheck_version, prompts.recheck_schema_version) == ("recheck.v1", "recheck.schema.v1")
+    assert (prompts.connection_test_version, prompts.presets_version) == ("connection_test.v1", "presets.v1")
 
     manifest = tomllib.loads((PROMPTS_DIR / "manifest.toml").read_text(encoding="utf-8"))
     for name, expected in manifest["sha256"].items():
@@ -155,7 +158,7 @@ def test_a_fallback_to_another_provider_is_refused():
 
     from workbench.schemas import ModelSettings
 
-    raw = tomllib.loads((PROMPTS_DIR / "models.v4.toml").read_text(encoding="utf-8"))
+    raw = tomllib.loads((PROMPTS_DIR / f"{load_prompts().models_version}.toml").read_text(encoding="utf-8"))
     raw["fallback"][raw["character"]["gemini"][0]] = raw["character"]["ollama"][0]
     with pytest.raises(ValidationError, match="own provider"):
         ModelSettings.model_validate(raw)

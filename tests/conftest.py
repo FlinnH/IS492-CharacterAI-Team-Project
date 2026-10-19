@@ -185,21 +185,51 @@ def settings_for(tmp_path, **overrides):
 
 
 
+# A browser tab's session ID, as api.js sends it.
+SESSION = "00000000-0000-4000-8000-000000000001"
+
+
 @pytest.fixture
-def make_client(tmp_path):
+def env_file(tmp_path):
+    """Where Settings writes in tests: a file in this test's own folder, never app/.env."""
+    return tmp_path / "app.env"
+
+
+@pytest.fixture
+def make_client(tmp_path, env_file):
     """Builds a test client from the .env.example values plus any overrides.
 
     It uses the fake model with no delays and a fake clock, unless the test
     passes its own. The database lives in this test's own folder, so tests
     never touch app/data. Clients built in the same test share it, like
-    restarts of one server.
+    restarts of one server. Settings' Save and Test reuse the test's provider,
+    so nothing reaches the network, and Save writes to env_file.
+
+    local=True makes the client a browser tab on this computer, which the
+    settings routes need: client 127.0.0.1, the Host the workbench serves,
+    and a session header.
     """
 
-    def build(*, provider=None, time=None, **overrides):
+    def build(*, provider=None, time=None, local=False, **overrides):
         settings = settings_for(tmp_path, **overrides)
         time = time or FakeTime()
         provider = provider if provider is not None else FakeProvider(fake_settings())
-        return TestClient(create_app(settings, provider=provider, clock=time.clock, sleep=time.sleep))
+        app = create_app(
+            settings,
+            provider=provider,
+            build_provider=lambda _settings: provider,
+            env_file=env_file,
+            clock=time.clock,
+            sleep=time.sleep,
+        )
+        if not local:
+            return TestClient(app)
+        return TestClient(
+            app,
+            base_url=f"http://127.0.0.1:{settings.workbench_port}",
+            client=("127.0.0.1", 50000),
+            headers={"X-Workbench-Session": SESSION},
+        )
 
     return build
 

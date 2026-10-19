@@ -1048,7 +1048,7 @@
 
   // Why Start run can't start now, or "" when it can.
   function startBlockedReason() {
-    if (!runOptions.key_set) return "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh.";
+    if (!runOptions.key_set) return "No AI is connected yet. Connect one in Settings to start a run.";
     if (runOptions.used_today >= runOptions.daily_cap) {
       return `Today's ${runOptions.daily_cap} model calls are used up. The count starts over at midnight Pacific time.`;
     }
@@ -1271,6 +1271,13 @@
     const support = blocked ||
       `Calls start at least ${secondsText(60 / runOptions.calls_per_minute)} apart. ${runOptions.used_today} of ${runOptions.daily_cap} calls used today.`;
     const busy = Boolean(state.live || state.runStarting);
+    // With no AI connected, Connect an AI is the step to take, so it comes first and Start steps back.
+    const connect = runOptions.key_set ? "" : `
+          <button type="button" class="btn btn--filled btn--icon-leading" data-action="open-settings" data-focus-key="connect-ai"
+            aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">link</span>
+            <span>Connect an AI</span>
+          </button>`;
     return `
       <div class="run-setup">
         ${selectField("run-scenario", "Scenario", scenarioOptions, {
@@ -1279,7 +1286,8 @@
         })}
         ${selectField("run-model", "Model", modelOptions, { support })}
         <div class="run-setup__actions">
-          <button type="button" class="btn btn--filled btn--icon-leading" data-action="start-run" data-focus-key="start-run"
+          ${connect}
+          <button type="button" class="btn ${runOptions.key_set ? "btn--filled" : "btn--outlined"} btn--icon-leading" data-action="start-run" data-focus-key="start-run"
             aria-disabled="${Boolean(blocked) || busy}"${blocked ? ' aria-describedby="run-model-help"' : ""}>
             <span class="icon" aria-hidden="true">play_arrow</span>
             <span>Start run</span>
@@ -4060,6 +4068,10 @@
     dialog.showModal();
   }
 
+  // A dialog that asks before it closes, like Settings with changes, closes
+  // through its guard instead.
+  const dialogGuards = new Map();
+
   // M3 dialogs and sheets also close on a click on the scrim around them.
   // The press has to start on the scrim, and the second click of the double
   // click that opened the dialog doesn't count.
@@ -4077,7 +4089,11 @@
       pressedScrim = isOnScrim(event) && Date.now() - dialogOpenedAt > 400;
     });
     dialog.addEventListener("click", (event) => {
-      if (pressedScrim && isOnScrim(event)) dialog.close();
+      if (pressedScrim && isOnScrim(event)) {
+        const guard = dialogGuards.get(dialog);
+        if (guard) guard();
+        else dialog.close();
+      }
       pressedScrim = false;
     });
   });
@@ -4114,6 +4130,685 @@
   actions["show-codes"] = (button) => {
     openDialog(codesDialog, button);
   };
+
+  // Settings (M6.5), from the top app bar ----------------------------------
+  // The creator picks the AI provider, pastes a key, chooses the models, and
+  // sets the limits, with no file edits and no restart. The body is drawn
+  // once each time the dialog opens. After that only the parts a choice
+  // changes are redrawn, so focus and anything typed stay put. A key goes to
+  // the server only with Test or Save, never comes back, and leaves the page
+  // when the dialog closes. Test tries the form as typed and saves nothing.
+  // The key hint runs here alone: matching a key's prefix sends nothing.
+
+  const settingsDialog = document.getElementById("settings-dialog");
+  const settingsBody = settingsDialog.querySelector("[data-settings-body]");
+  const discardSettingsDialog = document.getElementById("discard-settings-dialog");
+  const KEY_PROVIDERS = ["gemini", "openai_compatible"];
+  const PROVIDER_CHOICES = [
+    { id: "gemini", label: "Gemini (Google AI Studio)", line: "Free with a Google key. Needs the internet." },
+    { id: "ollama", label: "Local model (Ollama)", line: "Runs on this computer. No key or internet needed." },
+    { id: "fake", label: "Fake model (no network)", line: "Canned replies for trying the app without a key. Don't use it for the demo." },
+    { id: "openai_compatible", label: "Another OpenAI-compatible service", line: "Any service with an OpenAI-style API, at its own address." },
+  ];
+  // The setting behind each control, so a control the shell sets shows as locked.
+  const SETTING_NAMES = {
+    provider: "WORKBENCH_PROVIDER",
+    base_url: "OPENAI_COMPATIBLE_BASE_URL",
+    character_model: "WORKBENCH_CHARACTER_MODEL",
+    judge_model: "WORKBENCH_JUDGE_MODEL",
+    calls_per_minute: "WORKBENCH_CALLS_PER_MINUTE",
+    daily_call_cap: "WORKBENCH_DAILY_CALL_CAP",
+  };
+  // The control for each field the server can name in an error.
+  const SETTINGS_FIELDS = {
+    base_url: "settings-base-url",
+    api_key: "settings-key",
+    character_model: "settings-character",
+    judge_model: "settings-judge",
+    calls_per_minute: "settings-calls",
+    daily_call_cap: "settings-cap",
+  };
+  const LOCKED_LINE = "Set in the shell that started the server, so Settings can't change it.";
+  // Where CSS can hide the key's characters, the key stays a plain text
+  // field, so no browser or password manager offers to save it.
+  const MASK_KEY = Boolean(window.CSS && CSS.supports && CSS.supports("-webkit-text-security", "disc"));
+
+  // The settings as the server sent them, and the form as it opened.
+  let settingsView = null;
+  let settingsStart = "";
+  let settingsOpening = false;
+  let settingsSaving = false;
+  let settingsTesting = false;
+  // Models Ollama has installed, once the local model helper has looked.
+  let ollamaInstalled = [];
+  let ollamaRequest = 0;
+  // A Test passed with the connection as the form shows it now.
+  let connectionTested = false;
+  // The creator picked the judge, so a new model for the character no longer moves it.
+  let judgePicked = false;
+  let lastKeyHint = "";
+
+  function settingsField(id) {
+    return settingsBody.querySelector(`#${id}`);
+  }
+
+  function chosenProvider() {
+    const picked = settingsBody.querySelector('input[name="settings-provider"]:checked');
+    return picked ? picked.value : settingsView.provider;
+  }
+
+  function providerMenus(provider) {
+    return settingsView.providers.find((menu) => menu.provider === provider);
+  }
+
+  function isLocked(field) {
+    return settingsView.locked.includes(SETTING_NAMES[field]);
+  }
+
+  function presetById(id) {
+    return settingsView.presets.find((preset) => preset.id === id) || null;
+  }
+
+  // A base URL compared the way the server does: the host's case and a trailing slash don't count.
+  function plainUrl(url) {
+    const [scheme, rest = ""] = url.trim().split("://");
+    const slash = rest.indexOf("/");
+    const host = slash === -1 ? rest : rest.slice(0, slash);
+    const path = slash === -1 ? "" : rest.slice(slash);
+    return `${scheme.toLowerCase()}://${host.toLowerCase()}${path}`.replace(/\/+$/, "");
+  }
+
+  function presetForUrl(url) {
+    const wanted = plainUrl(url);
+    return settingsView.presets.find((preset) => plainUrl(preset.base_url) === wanted) || null;
+  }
+
+  // A whole number from a number field, or 0, which the server answers with the allowed range.
+  function wholeNumber(id) {
+    const value = Number(settingsField(id).value);
+    return Number.isInteger(value) ? value : 0;
+  }
+
+  // What Test and Save send: the form as it stands.
+  function settingsDraft() {
+    const provider = chosenProvider();
+    const key = settingsField("settings-key").value.trim();
+    return {
+      provider,
+      base_url: provider === "openai_compatible" ? settingsField("settings-base-url").value.trim() : settingsView.base_url,
+      api_key: KEY_PROVIDERS.includes(provider) && key ? key : null,
+      character_model: settingsField("settings-character").value.trim(),
+      judge_model: settingsField("settings-judge").value.trim(),
+      calls_per_minute: wholeNumber("settings-calls"),
+      daily_call_cap: wholeNumber("settings-cap"),
+      simulate_busy: settingsField("settings-busy").checked,
+    };
+  }
+
+  function settingsChanged() {
+    return Boolean(settingsView) && settingsDialog.open && JSON.stringify(settingsDraft()) !== settingsStart;
+  }
+
+  function settingsNotice(icon, text, modifier = "", action = "") {
+    return `
+      <div class="settings__notice ${modifier}">
+        <span class="icon" aria-hidden="true">${icon}</span>
+        <p class="settings__notice-text">${escapeHtml(text)}</p>
+        ${action}
+      </div>`;
+  }
+
+  // An outlined field whose one plain line says what it's for, or that the shell sets it.
+  function settingsSupport(id, line, locked) {
+    const text = locked ? LOCKED_LINE : line;
+    return `<p class="text-field__support" id="${id}-help" data-line="${escapeHtml(text)}">${escapeHtml(text)}</p>`;
+  }
+
+  function settingsText(id, label, value, line, field, extra = "") {
+    const locked = isLocked(field);
+    return `
+      <div class="text-field">
+        <input class="text-field__input" id="${id}" value="${escapeHtml(value || "")}" placeholder=" " autocomplete="off"
+          autocapitalize="off" spellcheck="false" aria-describedby="${id}-help"${extra}${locked ? " disabled" : ""}>
+        <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
+        ${settingsSupport(id, line, locked)}
+      </div>`;
+  }
+
+  function settingsNumber(id, label, value, most, line, field) {
+    const locked = isLocked(field);
+    return `
+      <div class="text-field">
+        <input class="text-field__input" id="${id}" type="number" inputmode="numeric" min="1" max="${most}" step="1"
+          value="${value}" placeholder=" " aria-describedby="${id}-help"${locked ? " disabled" : ""}>
+        <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
+        ${settingsSupport(id, line, locked)}
+      </div>`;
+  }
+
+  // A model menu: the models file's menu, then the models Ollama has
+  // installed, then the model in force if it's neither.
+  function settingsModelMenu(id, label, listed, installed, chosen, line, field) {
+    const known = listed.map((option) => option.id);
+    const options = [
+      ...listed,
+      ...installed.filter((model) => !known.includes(model)).map((model) => ({ id: model, label: `${model} (installed)` })),
+    ];
+    if (chosen && !options.some((option) => option.id === chosen)) options.push({ id: chosen, label: chosen });
+    const locked = isLocked(field);
+    return `
+      <div class="text-field text-field--select">
+        <select class="text-field__input" id="${id}" aria-describedby="${id}-help"${locked ? " disabled" : ""}>${options
+          .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === chosen ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+          .join("")}</select>
+        <label class="text-field__label" for="${id}">${escapeHtml(label)}</label>
+        ${settingsSupport(id, line, locked)}
+      </div>`;
+  }
+
+  function renderSettingsBody(view) {
+    const providerLocked = isLocked("provider");
+    const choices = PROVIDER_CHOICES.map((choice) => `
+      <label class="settings__choice">
+        <input type="radio" name="settings-provider" value="${choice.id}"${choice.id === view.provider ? " checked" : ""}${providerLocked ? " disabled" : ""}>
+        <span><span>${escapeHtml(choice.label)}</span><span class="settings__line">${escapeHtml(choice.line)}</span></span>
+      </label>`).join("");
+    const presets = view.presets
+      .map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.label)}</option>`)
+      .join("");
+    const busyLine = view.force_mode === "all"
+      ? "Every model fails as if busy, as app/.env sets, so the AI judge and the replies show their error cards. Turning this off lasts until a restart."
+      : "Every call to the first model fails as if busy, so the fallback model answers. A restart turns this off.";
+    settingsBody.innerHTML = `
+      <section class="settings__section" aria-labelledby="settings-connection-title">
+        <h3 class="settings__title" id="settings-connection-title">AI connection</h3>
+        <fieldset class="settings__choices">
+          <legend class="settings__legend">Provider</legend>
+          ${choices}
+          ${providerLocked ? `<p class="settings__line">${LOCKED_LINE}</p>` : ""}
+        </fieldset>
+        <div class="settings__group" data-settings-service hidden>
+          ${selectField("settings-preset", "Service", `${presets}<option value="">Other</option>`, {
+            support: "Fills in the address. You can still change it.",
+          })}
+          ${settingsText("settings-base-url", "Base URL", view.base_url, "Like https://api.example.com/v1.", "base_url", ' inputmode="url"')}
+          <div data-settings-preset-note></div>
+        </div>
+        <div class="settings__group" data-settings-key-area hidden>
+          <div class="text-field settings__key-field">
+            <input class="text-field__input settings__key${MASK_KEY ? " is-masked" : ""}" id="settings-key"
+              type="${MASK_KEY ? "text" : "password"}" placeholder=" " autocomplete="${MASK_KEY ? "off" : "new-password"}"
+              autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"
+              aria-describedby="settings-key-help settings-key-free">
+            <label class="text-field__label" for="settings-key" data-settings-key-label>API key</label>
+            <button type="button" class="btn btn--text btn--icon-leading settings__reveal" data-action="toggle-settings-key"
+              aria-controls="settings-key">
+              <span class="icon" aria-hidden="true">visibility</span>
+              <span>Show key</span>
+            </button>
+            <p class="text-field__support" id="settings-key-help" data-settings-key-state></p>
+            <p class="text-field__support" id="settings-key-free" data-settings-key-free hidden>Free key, no card:
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com<span class="visually-hidden"> (opens in a new tab)</span></a></p>
+          </div>
+          <div data-settings-key-hint></div>
+        </div>
+        <div class="settings__test">
+          <button type="button" class="btn btn--outlined btn--icon-leading" data-action="test-settings">
+            <span class="icon" aria-hidden="true">network_check</span>
+            <span>Test</span>
+          </button>
+          <div class="settings__result-area" data-settings-result role="status"></div>
+        </div>
+      </section>
+      <section class="settings__section" aria-labelledby="settings-models-title">
+        <h3 class="settings__title" id="settings-models-title">Models</h3>
+        <div class="settings__group" data-settings-models></div>
+      </section>
+      <section class="settings__section" data-settings-ollama aria-labelledby="settings-ollama-title" hidden>
+        <h3 class="settings__title" id="settings-ollama-title">Local models</h3>
+        <div data-settings-ollama-body role="status"></div>
+        <button type="button" class="btn btn--text btn--icon-leading settings__check" data-action="check-ollama">
+          <span class="icon" aria-hidden="true">refresh</span>
+          <span>Check again</span>
+        </button>
+      </section>
+      <details class="settings__more">
+        <summary class="settings__summary">
+          <span class="icon settings__chevron" aria-hidden="true">expand_more</span>
+          <span class="settings__summary-title">Limits</span>
+          <span class="settings__summary-note">${view.used_today} of ${view.daily_call_cap} calls used today</span>
+        </summary>
+        <div class="settings__fields">
+          ${settingsNumber("settings-calls", "Calls per minute", view.calls_per_minute, view.max_calls_per_minute,
+            `How fast the app may call the AI. Gemini's free tier allows ${view.max_calls_per_minute}.`, "calls_per_minute")}
+          ${settingsNumber("settings-cap", "Daily cap", view.daily_call_cap, view.max_daily_call_cap,
+            "Stops the app before Google's daily limit.", "daily_call_cap")}
+        </div>
+      </details>
+      <details class="settings__more">
+        <summary class="settings__summary">
+          <span class="icon settings__chevron" aria-hidden="true">expand_more</span>
+          <span class="settings__summary-title">Advanced</span>
+          <span class="settings__summary-note" data-settings-busy-note></span>
+        </summary>
+        <div class="settings__fields">
+          <div class="settings__switch-row">
+            <label class="settings__switch-label" for="settings-busy">Simulate a busy AI service (for demos)</label>
+            <input type="checkbox" role="switch" class="switch" id="settings-busy" aria-describedby="settings-busy-help"${view.simulate_busy ? " checked" : ""}>
+          </div>
+          <p class="settings__line" id="settings-busy-help">${escapeHtml(busyLine)}</p>
+        </div>
+      </details>
+      <p class="settings__saved">${view.saved_at ? `These settings were saved ${escapeHtml(chatTime(view.saved_at))}. ` : ""}Every model call records the settings it used.</p>
+      <p class="settings__error" data-settings-error role="alert" hidden></p>`;
+  }
+
+  // The models for a provider: menus, or typed IDs for another OpenAI-compatible service.
+  function renderSettingsModels(provider, character, judge) {
+    const area = settingsBody.querySelector("[data-settings-models]");
+    const focused = area.contains(document.activeElement) ? document.activeElement.id : null;
+    const name = settingsView.character_name;
+    if (provider === "openai_compatible") {
+      area.innerHTML = `
+        ${settingsText("settings-character", `${name}'s model`, character, `Plays ${name}`, "character_model")}
+        ${settingsText("settings-judge", "The judge's model", judge, "Reviews the chat", "judge_model")}
+        <div data-settings-same></div>`;
+    } else {
+      const menus = providerMenus(provider);
+      const installed = provider === "ollama" ? ollamaInstalled : [];
+      area.innerHTML = `
+        ${settingsModelMenu("settings-character", `${name}'s model`, menus.character_models, installed, character, `Plays ${name}`, "character_model")}
+        ${settingsModelMenu("settings-judge", "The judge's model", menus.judge_models, installed, judge, "Reviews the chat", "judge_model")}
+        <div data-settings-same></div>`;
+    }
+    if (focused && settingsField(focused)) settingsField(focused).focus();
+    showSameModel();
+  }
+
+  // When one model would play the character and judge it, say what that means.
+  function showSameModel() {
+    const box = settingsBody.querySelector("[data-settings-same]");
+    const character = settingsField("settings-character").value.trim();
+    const same = character && character === settingsField("settings-judge").value.trim();
+    const name = settingsView.character_name;
+    box.innerHTML = same
+      ? settingsNotice(
+        "warning",
+        `The same model plays ${name} and reviews the chat, so the judge checks its own replies, and its flags say "Same model reviewed". A different judge gives a more independent check.`,
+        "settings__notice--warning",
+      )
+      : "";
+  }
+
+  // A new model for the character moves the judge off it, until the creator picks the judge.
+  function moveJudgeOff(character) {
+    const judge = settingsField("settings-judge");
+    if (judgePicked || judge.tagName !== "SELECT" || judge.value !== character) return;
+    const menus = providerMenus(chosenProvider());
+    const options = Array.from(judge.options, (option) => option.value);
+    const other = menus.default_judge && menus.default_judge !== character && options.includes(menus.default_judge)
+      ? menus.default_judge
+      : options.find((model) => model !== character);
+    if (other) judge.value = other;
+  }
+
+  function showPresetNote(preset) {
+    settingsBody.querySelector("[data-settings-preset-note]").innerHTML =
+      preset && preset.note ? settingsNotice("info", preset.note) : "";
+  }
+
+  // The Service menu follows the base URL: a known address picks its service, any other picks Other.
+  function syncPresetFromUrl() {
+    const preset = presetForUrl(settingsField("settings-base-url").value);
+    settingsField("settings-preset").value = preset ? preset.id : "";
+    showPresetNote(preset);
+  }
+
+  // Shows the parts of the dialog the provider needs, with its saved models or its defaults.
+  function showProvider(provider) {
+    const view = settingsView;
+    const keyed = KEY_PROVIDERS.includes(provider);
+    settingsBody.querySelector("[data-settings-service]").hidden = provider !== "openai_compatible";
+    settingsBody.querySelector("[data-settings-key-area]").hidden = !keyed;
+    settingsBody.querySelector("[data-settings-ollama]").hidden = provider !== "ollama";
+    if (keyed) {
+      const key = view.keys[provider];
+      let line;
+      if (key.locked) line = LOCKED_LINE;
+      else if (key.saved) line = key.last4 ? `Key saved, ends in ${key.last4}. Paste a new one to replace it.` : "Key saved. Paste a new one to replace it.";
+      else line = provider === "gemini" ? "No key saved yet." : "No key saved yet. A service on this computer may need none.";
+      const help = settingsBody.querySelector("[data-settings-key-state]");
+      help.textContent = line;
+      help.dataset.line = line;
+      settingsBody.querySelector("[data-settings-key-label]").textContent = provider === "gemini" ? "Gemini API key" : "API key";
+      settingsBody.querySelector("[data-settings-key-free]").hidden = provider !== "gemini";
+      settingsField("settings-key").disabled = key.locked;
+    }
+    const menus = providerMenus(provider);
+    const saved = provider === view.provider;
+    judgePicked = false;
+    renderSettingsModels(
+      provider,
+      saved ? view.character_model : menus.default_character || "",
+      saved ? view.judge_model : menus.default_judge || "",
+    );
+    if (provider === "openai_compatible") syncPresetFromUrl();
+    if (provider === "ollama") checkOllama();
+  }
+
+  // The connection changed, so an earlier Test result no longer holds.
+  function connectionChanged() {
+    connectionTested = false;
+    settingsBody.querySelector("[data-settings-result]").innerHTML = "";
+    showKeyHint();
+  }
+
+  // The service a pasted key's prefix points to, with the longest prefix winning, or null.
+  function keyMatch(value) {
+    const key = value.trim();
+    if (!key) return null;
+    const candidates = [
+      ...settingsView.gemini_key_prefixes.map((prefix) => ({ prefix, provider: "gemini", preset: null })),
+      ...settingsView.presets.flatMap((preset) => preset.key_prefixes.map((prefix) => ({ prefix, provider: "openai_compatible", preset }))),
+    ];
+    return candidates.filter((item) => key.startsWith(item.prefix)).sort((a, b) => b.prefix.length - a.prefix.length)[0] || null;
+  }
+
+  // "This looks like a Groq key. Use the Groq preset?" when the key points elsewhere than the form.
+  function showKeyHint() {
+    const box = settingsBody.querySelector("[data-settings-key-hint]");
+    const provider = chosenProvider();
+    const match = KEY_PROVIDERS.includes(provider) ? keyMatch(settingsField("settings-key").value) : null;
+    const here = provider === "openai_compatible" ? presetForUrl(settingsField("settings-base-url").value) : null;
+    const fits = match && match.provider === provider && (!match.preset || (here && here.id === match.preset.id));
+    if (!match || fits || isLocked("provider")) {
+      box.innerHTML = "";
+      lastKeyHint = "";
+      return;
+    }
+    const name = match.preset ? match.preset.label : "Gemini";
+    const article = /^[aeiouxAEIOUX]/.test(name) ? "an" : "a";
+    const text = `This looks like ${article} ${name} key. ${match.preset ? `Use the ${name} preset?` : "Use Gemini?"}`;
+    box.innerHTML = settingsNotice(
+      "lightbulb",
+      text,
+      "",
+      `<button type="button" class="btn btn--text" data-action="use-key-hint" data-provider="${match.provider}"
+        data-preset="${match.preset ? escapeHtml(match.preset.id) : ""}">Use ${escapeHtml(name)}</button>`,
+    );
+    if (text !== lastKeyHint) announce(text);
+    lastKeyHint = text;
+  }
+
+  async function checkOllama() {
+    const ticket = ++ollamaRequest;
+    const box = settingsBody.querySelector("[data-settings-ollama-body]");
+    box.innerHTML = '<p class="settings__line">Looking for Ollama on this computer.</p>';
+    let found;
+    try {
+      found = await WorkbenchApi.ollamaModels();
+    } catch (error) {
+      found = { running: false, models: [], missing: [], message: error.message };
+    }
+    if (ticket !== ollamaRequest || !settingsDialog.open) return;
+    ollamaInstalled = found.models;
+    const list = found.models.length
+      ? `<ul class="settings__list">${found.models.map((model) => `<li>${escapeHtml(model)}</li>`).join("")}</ul>`
+      : "";
+    const missing = found.running
+      ? found.missing.map((model) => `<p class="settings__line">${escapeHtml(model)} isn't installed. Install it with ollama pull ${escapeHtml(model)}.</p>`).join("")
+      : "";
+    box.innerHTML = `
+      <p class="settings__ollama">
+        <span class="icon" aria-hidden="true">${found.running ? "check_circle" : "info"}</span>
+        <span>${escapeHtml(found.message)}</span>
+      </p>
+      ${list}${missing}`;
+    // The menus gain the installed models and keep what was picked.
+    if (chosenProvider() === "ollama") {
+      renderSettingsModels("ollama", settingsField("settings-character").value, settingsField("settings-judge").value);
+    }
+  }
+
+  function showBusyNote() {
+    settingsBody.querySelector("[data-settings-busy-note]").textContent = settingsField("settings-busy").checked ? "On" : "";
+  }
+
+  function settingsResult(ok, message, next) {
+    return `
+      <div class="settings__result ${ok ? "settings__result--ok" : "settings__result--error"}">
+        <span class="icon" aria-hidden="true">${ok ? "check_circle" : "error"}</span>
+        <div>
+          <p class="settings__result-message">${escapeHtml(message)}</p>
+          ${next ? `<p class="settings__result-next">${escapeHtml(next)}</p>` : ""}
+        </div>
+      </div>`;
+  }
+
+  // An error the server tied to one field shows in that field's line, M3 style.
+  function showSettingsFieldError(field, message) {
+    const control = SETTINGS_FIELDS[field] ? settingsField(SETTINGS_FIELDS[field]) : null;
+    if (!control) return null;
+    const wrap = control.closest(".text-field");
+    wrap.classList.add("text-field--error");
+    control.setAttribute("aria-invalid", "true");
+    wrap.querySelector(".text-field__support").textContent = message;
+    const section = control.closest("details");
+    if (section) section.open = true;
+    return control;
+  }
+
+  function clearSettingsFieldError(control) {
+    const wrap = control.closest(".text-field");
+    if (!wrap || !wrap.classList.contains("text-field--error")) return;
+    wrap.classList.remove("text-field--error");
+    control.removeAttribute("aria-invalid");
+    const help = wrap.querySelector(".text-field__support");
+    help.textContent = help.dataset.line || "";
+  }
+
+  function clearSettingsErrors() {
+    settingsBody.querySelectorAll('[aria-invalid="true"]').forEach(clearSettingsFieldError);
+    const box = settingsBody.querySelector("[data-settings-error]");
+    box.hidden = true;
+    box.textContent = "";
+  }
+
+  function showSettingsError(message) {
+    const box = settingsBody.querySelector("[data-settings-error]");
+    box.textContent = message;
+    box.hidden = false;
+  }
+
+  // Typing and picking in the dialog. One listener each for the whole body,
+  // so redraws never stack listeners.
+  settingsBody.addEventListener("input", (event) => {
+    const control = event.target;
+    if (!settingsView) return;
+    clearSettingsFieldError(control);
+    if (control.id === "settings-key") {
+      connectionChanged();
+    } else if (control.id === "settings-base-url") {
+      syncPresetFromUrl();
+      connectionChanged();
+    } else if (control.id === "settings-character") {
+      moveJudgeOff(control.value);
+      showSameModel();
+      connectionChanged();
+    } else if (control.id === "settings-judge") {
+      judgePicked = true;
+      showSameModel();
+    }
+  });
+
+  settingsBody.addEventListener("change", (event) => {
+    const control = event.target;
+    if (!settingsView) return;
+    if (control.name === "settings-provider") {
+      showProvider(control.value);
+      connectionChanged();
+    } else if (control.id === "settings-preset") {
+      const preset = presetById(control.value);
+      if (preset) settingsField("settings-base-url").value = preset.base_url;
+      clearSettingsFieldError(settingsField("settings-base-url"));
+      showPresetNote(preset);
+      connectionChanged();
+    } else if (control.id === "settings-busy") {
+      showBusyNote();
+    }
+  });
+
+  // Closing with changes asks first, from Cancel, Escape, or the scrim.
+  function closeSettings() {
+    if (settingsSaving) return;
+    if (!settingsChanged()) {
+      settingsDialog.close();
+      return;
+    }
+    const back = document.activeElement;
+    openDialog(discardSettingsDialog, null, (choice) => {
+      if (choice === "discard") settingsDialog.close();
+      else if (back && settingsDialog.contains(back)) back.focus();
+    });
+  }
+
+  dialogGuards.set(settingsDialog, closeSettings);
+
+  settingsDialog.addEventListener("cancel", (event) => {
+    if (settingsSaving || settingsChanged()) {
+      event.preventDefault();
+      closeSettings();
+    }
+  });
+
+  actions["open-settings"] = async (button) => {
+    if (settingsOpening || settingsDialog.open) return;
+    settingsOpening = true;
+    try {
+      settingsView = await WorkbenchApi.getSettings();
+    } catch (error) {
+      showSnackbar(`Settings didn't open. ${error.message}`);
+      return;
+    } finally {
+      settingsOpening = false;
+    }
+    connectionTested = false;
+    judgePicked = false;
+    ollamaInstalled = [];
+    lastKeyHint = "";
+    renderSettingsBody(settingsView);
+    showProvider(settingsView.provider);
+    showBusyNote();
+    settingsStart = JSON.stringify(settingsDraft());
+    openDialog(settingsDialog, button, () => {
+      // A typed key leaves the page with the dialog.
+      settingsBody.innerHTML = "";
+      settingsSaving = false;
+      settingsTesting = false;
+      ollamaRequest += 1;
+    });
+    settingsBody.querySelector('input[name="settings-provider"]:checked').focus();
+  };
+
+  actions["cancel-settings"] = () => {
+    if (settingsDialog.open) closeSettings();
+  };
+
+  // Shows or hides what was typed in this dialog. The saved key never comes to the page at all.
+  actions["toggle-settings-key"] = (button) => {
+    const key = settingsField("settings-key");
+    const show = button.dataset.shown !== "true";
+    button.dataset.shown = String(show);
+    if (MASK_KEY) key.classList.toggle("is-masked", !show);
+    else key.type = show ? "text" : "password";
+    button.querySelector(".icon").textContent = show ? "visibility_off" : "visibility";
+    button.querySelector(".icon + span").textContent = show ? "Hide key" : "Show key";
+    announce(show ? "The key you typed shows." : "The key you typed is hidden.");
+  };
+
+  actions["use-key-hint"] = (button) => {
+    const provider = button.dataset.provider;
+    const radio = settingsBody.querySelector(`input[name="settings-provider"][value="${provider}"]`);
+    if (!radio || radio.disabled) return;
+    radio.checked = true;
+    showProvider(provider);
+    const preset = presetById(button.dataset.preset);
+    if (preset) {
+      settingsField("settings-preset").value = preset.id;
+      settingsField("settings-base-url").value = preset.base_url;
+      showPresetNote(preset);
+    }
+    connectionChanged();
+    settingsField("settings-key").focus();
+    announce(`Switched to ${preset ? preset.label : "Gemini"}.`);
+  };
+
+  actions["check-ollama"] = () => {
+    if (settingsView && settingsDialog.open) checkOllama();
+  };
+
+  actions["test-settings"] = async (button) => {
+    if (!settingsView || !settingsDialog.open || settingsTesting || settingsSaving) return;
+    const area = settingsBody.querySelector("[data-settings-result]");
+    clearSettingsErrors();
+    settingsTesting = true;
+    button.setAttribute("aria-disabled", "true");
+    area.innerHTML = '<p class="settings__line">Testing with one tiny call. This takes a few seconds.</p>';
+    try {
+      const result = await WorkbenchApi.testSettings(settingsDraft());
+      if (!settingsDialog.open) return;
+      area.innerHTML = settingsResult(result.ok, result.message, result.next);
+      connectionTested = result.ok;
+    } catch (error) {
+      if (!settingsDialog.open) return;
+      area.innerHTML = settingsResult(false, error.message, "");
+      if (error.field) showSettingsFieldError(error.field, error.message);
+    } finally {
+      settingsTesting = false;
+      button.setAttribute("aria-disabled", "false");
+    }
+  };
+
+  actions["save-settings"] = async (button) => {
+    if (!settingsView || !settingsDialog.open || settingsSaving || settingsTesting) return;
+    const draft = settingsDraft();
+    const newConnection = Boolean(draft.api_key) || draft.provider !== settingsView.provider ||
+      (draft.provider === "openai_compatible" && draft.base_url !== settingsView.base_url);
+    const untested = newConnection && !connectionTested;
+    clearSettingsErrors();
+    settingsSaving = true;
+    button.setAttribute("aria-disabled", "true");
+    try {
+      const saved = await WorkbenchApi.saveSettings(draft);
+      settingsView = saved;
+      settingsSaving = false;
+      settingsDialog.close();
+      const key = saved.keys[saved.provider];
+      const parts = ["Settings saved."];
+      if (draft.api_key && key && key.saved) parts.push(key.last4 ? `Key saved, ends in ${key.last4}.` : "Key saved.");
+      if (untested) parts.push("Press Test to check the connection.");
+      showSnackbar(parts.join(" "));
+      await settingsApplied();
+    } catch (error) {
+      settingsSaving = false;
+      if (!settingsDialog.open) return;
+      const control = error.field ? showSettingsFieldError(error.field, error.message) : null;
+      if (control) control.focus();
+      else showSettingsError(error.message);
+    } finally {
+      button.setAttribute("aria-disabled", "false");
+    }
+  };
+
+  // The screens pick up what was saved: the Run screen's menu and limits, and
+  // the open chat's check, which a new judge may not cover yet.
+  async function settingsApplied() {
+    const landOnStart = Boolean(document.activeElement && document.activeElement.dataset.focusKey === "connect-ai");
+    await loadRunOptions();
+    if (runOptions) state.runSetup.modelId = runOptions.default_model;
+    refreshRun(landOnStart ? { focusKey: "start-run" } : undefined);
+    if (state.chatId) loadCheck(state.chatId);
+  }
 
   // Plain tooltips (M3) for every element with data-tooltip: the spec line
   // chips and the Scenario dropdown. A tooltip shows after a short hover, or

@@ -181,5 +181,14 @@ window.WorkbenchApi = (() => {
     listSamples: () => request("GET", "/api/samples"),
     previewImport: (body) => request("POST", "/api/imports/preview", body),
     importChat: (body) => request("POST", "/api/imports", body),
+
+    // Settings (M6.5). The server answers these only on this computer. A key
+    // goes in with saveSettings or testSettings and never comes back.
+    getSettings: () => request("GET", "/api/settings"),
+    saveSettings: (draft) => request("POST", "/api/settings", draft),
+    // One tiny model call with the settings as typed. Saves nothing.
+    testSettings: (draft) => request("POST", "/api/settings/test", draft),
+    // What Ollama has installed. Lists models and makes no model call.
+    ollamaModels: () => request("GET", "/api/settings/ollama"),
   };
 })();

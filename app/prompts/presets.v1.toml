@@ -1,0 +1,112 @@
+# Services for "Another OpenAI-compatible service" in Settings, version 1
+# (M6.5, Oct 18, 2026).
+#
+# Picking a service fills in its base URL. The creator can still edit the URL,
+# and types the model IDs. When the saved URL matches a service here, its
+# token_field and stream_usage apply to every call to it:
+#   token_field: the request field that caps a reply's length.
+#   stream_usage: whether a streamed reply asks for token counts with
+#     stream_options, which not every service takes.
+# A URL that matches no service gets max_tokens, with token counts asked for,
+# as Gemini and Ollama do.
+#
+# key_prefixes let the Settings screen suggest a service from a pasted key, in
+# the browser alone. Only prefixes no other service here uses are listed: a
+# bare "sk-" could be OpenAI or DeepSeek, and Mistral keys have no prefix.
+#
+# Each URL was checked against the service's own docs on Oct 18, 2026.
+# A file in use never changes. To fix one, save presets.v2.toml, point
+# [current] in manifest.toml at it, and add its sha256.
+
+# Keys from Google AI Studio start with this, so a pasted one suggests Gemini.
+gemini_key_prefixes = ["AIza"]
+
+# The base URL is the default of OpenAI's own Python library (openai 3.24.0),
+# since platform.openai.com refuses automated reads. OpenAI's o-series and
+# GPT-5 models refuse max_tokens and take max_completion_tokens.
+[[presets]]
+id = "openai"
+label = "OpenAI"
+base_url = "https://api.openai.com/v1"
+key_prefixes = ["sk-proj-", "sk-svcacct-"]
+token_field = "max_completion_tokens"
+stream_usage = true
+note = ""
+
+# platform.claude.com/docs/en/api/openai-sdk: the base URL, and response_format
+# is ignored, so the judge's answer isn't held to its schema.
+[[presets]]
+id = "anthropic"
+label = "Anthropic Claude"
+base_url = "https://api.anthropic.com/v1/"
+key_prefixes = ["sk-ant-"]
+token_field = "max_tokens"
+stream_usage = true
+note = "Anthropic's OpenAI compatibility ignores response_format, so the AI judge may fall back to the automatic checks."
+
+# docs.x.ai REST API reference: chat completions is still served (xAI suggests
+# its Responses API for new work), and max_tokens is deprecated in favor of
+# max_completion_tokens.
+[[presets]]
+id = "xai"
+label = "xAI Grok"
+base_url = "https://api.x.ai/v1"
+key_prefixes = ["xai-"]
+token_field = "max_completion_tokens"
+stream_usage = true
+note = ""
+
+# console.groq.com/docs/openai and console.groq.com/docs/api-reference:
+# max_tokens is deprecated in favor of max_completion_tokens.
+[[presets]]
+id = "groq"
+label = "Groq"
+base_url = "https://api.groq.com/openai/v1"
+key_prefixes = ["gsk_"]
+token_field = "max_completion_tokens"
+stream_usage = true
+note = ""
+
+# openrouter.ai/docs/quickstart.
+[[presets]]
+id = "openrouter"
+label = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+key_prefixes = ["sk-or-"]
+token_field = "max_tokens"
+stream_usage = true
+note = ""
+
+# docs.mistral.ai/api: chat completions takes max_tokens, and stream_options
+# isn't one of its fields.
+[[presets]]
+id = "mistral"
+label = "Mistral"
+base_url = "https://api.mistral.ai/v1"
+key_prefixes = []
+token_field = "max_tokens"
+stream_usage = false
+note = ""
+
+# api-docs.deepseek.com and its chat completion reference: response_format must
+# be text or json_object, so a JSON schema is refused.
+[[presets]]
+id = "deepseek"
+label = "DeepSeek"
+base_url = "https://api.deepseek.com"
+key_prefixes = []
+token_field = "max_tokens"
+stream_usage = true
+note = "DeepSeek takes plain JSON mode only, not a JSON schema, so it can play the character, but as the judge its checks fall back to the automatic checks."
+
+# lmstudio.ai/docs/app/api/endpoints/openai (its examples use port 1234),
+# lmstudio.ai/docs/developer/core/server, and
+# lmstudio.ai/docs/developer/core/authentication (no key by default).
+[[presets]]
+id = "lmstudio"
+label = "LM Studio on this computer"
+base_url = "http://localhost:1234/v1"
+key_prefixes = []
+token_field = "max_tokens"
+stream_usage = true
+note = "Start LM Studio's server first: in the Developer tab turn on Start server, or run lms server start. It needs no key unless you turn on authentication."

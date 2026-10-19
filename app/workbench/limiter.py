@@ -19,6 +19,12 @@ class Limiter:
         # The clock reading when the next call may start, or None before the first call.
         self.next_free: float | None = None
 
+    def update(self, calls_per_minute: int, daily_cap: int) -> None:
+        """New limits from Settings, in force at once. A slot already booked stays booked."""
+        self.calls_per_minute = calls_per_minute
+        self.daily_cap = daily_cap
+        self.interval = 60.0 / calls_per_minute
+
     def quota_day(self, when: datetime) -> str:
         """The quota day that a moment falls on, like 2026-10-11."""
         return when.astimezone(self.zone).date().isoformat()
@@ -37,7 +43,7 @@ class Limiter:
         return (
             f"Today's {self.daily_cap} model calls are used up. Google's free quota resets at "
             f"midnight Pacific time, in about {hours} {'hour' if hours == 1 else 'hours'}. "
-            "To allow more, raise WORKBENCH_DAILY_CALL_CAP in app/.env."
+            "To allow more, raise the daily cap in Settings."
         )
 
     def reserve(self, now: float) -> float:

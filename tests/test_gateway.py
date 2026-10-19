@@ -150,7 +150,8 @@ def test_at_the_cap_no_provider_call_is_made(tmp_path, database):
     with pytest.raises(CapReached, match="Today's 2 model calls are used up") as caught:
         run_call(gateway, default_model())
     assert "midnight Pacific time" in str(caught.value)
-    assert "WORKBENCH_DAILY_CALL_CAP" in str(caught.value)
+    # The creator raises it in Settings (M6.5), not in app/.env.
+    assert "raise the daily cap in Settings" in str(caught.value)
     assert len(provider.requests) == 2
     assert [row["status"] for row in query(database, "SELECT status FROM model_calls ORDER BY id")] == ["ok", "ok", "capped"]
     # A refused call never reached the provider, so it doesn't count.

@@ -1,0 +1,121 @@
+# Model settings, version 5. Every model call logs this version ("models.v5").
+#
+# Changed from models.v4 on Oct 18, 2026: adds the [unlisted] and [limits]
+# tables (M6.5, the Settings dialog). [unlisted] gives settings to a model this
+# file doesn't list: one Ollama has installed, or a model ID typed for another
+# OpenAI-compatible service. [limits] holds the most Settings lets a creator
+# raise the machine limits to. Everything else is the same as in models.v4.
+#
+# A file in use never changes. To change a setting, save a copy as the next
+# version, point [current] in manifest.toml at it, and add its sha256.
+# The per-minute limit, the daily cap, the retries, and the judge's timeout are
+# machine settings in app/.env. Settings in the app changes the first two.
+#
+# Free tier: 15 calls a minute and 500 a day for both Gemini models, from
+# Flynn's AI Studio rate-limit page, checked Oct 9, 2026.
+# Paid prices are Google's Standard tier per 1M tokens, checked Oct 11, 2026.
+# The free tier costs nothing, so est_cost_usd shows what the calls would cost
+# on the paid tier. Thinking tokens bill as output.
+
+# Gemini's free quotas reset at midnight Pacific time, so the daily count
+# follows Pacific days.
+quota_timezone = "America/Los_Angeles"
+
+# The Model menu on Run a conversation, per provider. The first is the default.
+# Default chats come from 3.1 Flash-Lite, because 3.5 Flash-Lite judges them.
+[character]
+gemini = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]
+ollama = ["gpt-oss:20b"]
+fake = ["fake-reply-v1"]
+
+# The AI judge: one call reviews a whole chat. With Ollama, one local model
+# writes and judges, so its flags say "Same model reviewed". Google's OpenAI
+# compatibility page (Sept 2, 2026) maps medium to thinking level medium on
+# 3.1 Flash-Lite.
+[judge]
+reasoning_effort = "medium"
+max_tokens = 16384
+gemini = "gemini-3.5-flash-lite"
+ollama = "gpt-oss:20b"
+fake = "fake-judge-v1"
+
+# The model to ask once when a call to the model on the left still fails with
+# 429 or a 5xx after its retries. A judge call keeps the judge's own reasoning
+# effort and token limit on the fallback model. Ollama runs one local model,
+# so it has no fallback. The fake models fall back to each other, so the
+# tests can show a fallback with no network.
+[fallback]
+"gemini-3.1-flash-lite" = "gemini-3.5-flash-lite"
+"gemini-3.5-flash-lite" = "gemini-3.1-flash-lite"
+"fake-reply-v1" = "fake-judge-v1"
+"fake-judge-v1" = "fake-reply-v1"
+
+# app/scripts/preflight.py runs the first turns of this scenario on this spec
+# version, once per model and reasoning effort, and compares time to first token.
+[preflight]
+reasoning_efforts = ["minimal", "low"]
+scenario = "F2"
+turns = 3
+spec_version = 1
+
+# A model the [models] tables below don't list: one Ollama has installed, or
+# one typed in Settings for another OpenAI-compatible service. Each gets these
+# settings. No reasoning effort is sent, since not every service or model takes
+# one, and its price isn't known, so its calls show no estimated cost.
+[unlisted]
+providers = ["ollama", "openai_compatible"]
+max_tokens = 4096
+
+# The most Settings lets a creator raise the machine limits in app/.env to:
+# Google's free tier for each Gemini Flash-Lite model, from Flynn's AI Studio
+# rate-limit page, checked Oct 9, 2026. The least is 1 call.
+[limits]
+calls_per_minute = 15
+daily_call_cap = 500
+
+[models."gemini-3.1-flash-lite"]
+provider = "gemini"
+label = "Gemini 3.1 Flash-Lite"
+reasoning_effort = "minimal"
+max_tokens = 4096
+input_price = 0.25
+cached_input_price = 0.025
+output_price = 1.50
+
+[models."gemini-3.5-flash-lite"]
+provider = "gemini"
+label = "Gemini 3.5 Flash-Lite"
+reasoning_effort = "minimal"
+max_tokens = 4096
+input_price = 0.30
+cached_input_price = 0.03
+output_price = 2.50
+
+# Local, so it costs nothing. Start Ollama with OLLAMA_CONTEXT_LENGTH set (see INSTALL.md).
+[models."gpt-oss:20b"]
+provider = "ollama"
+label = "gpt-oss 20B (Ollama)"
+reasoning_effort = "low"
+max_tokens = 4096
+input_price = 0
+cached_input_price = 0
+output_price = 0
+
+# No network. Streams the reply in app/samples/fake.v1.json.
+[models."fake-reply-v1"]
+provider = "fake"
+label = "Fake model (no network)"
+max_tokens = 4096
+input_price = 0
+cached_input_price = 0
+output_price = 0
+
+# No network. Answers every judge call with no flags, the smallest answer the
+# judge schema allows, so the automatic checks still run without a key.
+[models."fake-judge-v1"]
+provider = "fake"
+label = "Fake judge (no network)"
+max_tokens = 16384
+input_price = 0
+cached_input_price = 0
+output_price = 0

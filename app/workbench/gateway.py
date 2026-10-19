@@ -15,6 +15,10 @@ For the demo, WORKBENCH_FORCE_MODEL_ERROR makes attempts fail with a 429
 without calling the service: "primary" fails the first model only, so the
 fallback model answers, and "all" fails every attempt. A forced attempt takes
 no call slot and doesn't count toward the daily cap.
+
+Each row also names the app_settings row the call ran with (M6.5). Settings
+changes the gateway's settings, provider, and limits in place, never while a
+call runs, and its Test runs on a trial gateway that shares the call spacing.
 """
 
 import asyncio
@@ -69,6 +73,8 @@ class CallResult:
     model_call_id: int | None = None
     # For the creator when status is error, timeout, or empty.
     message: str = ""
+    # The provider's kind of error when status is error, like auth or rate_limited.
+    kind: str | None = None
     # False when no request was sent, as when Stop came during the wait.
     sent: bool = False
     detail: str | None = None
@@ -82,7 +88,7 @@ class CallResult:
     def start(self, model_id: str, fallback: bool, attempt: int) -> None:
         """Clears what the last attempt left, before the next one."""
         self.status, self.text, self.usage, self.model_reported = "stopped", "", None, None
-        self.message, self.detail, self.ttft_ms, self.latency_ms = "", None, None, None
+        self.message, self.kind, self.detail, self.ttft_ms, self.latency_ms = "", None, None, None, None
         self.model_used, self.fallback, self.attempts = model_id, fallback, attempt
 
 
@@ -119,8 +125,9 @@ _FENCED = re.compile(r"^```(?:json)?\s*\n(.*)\n```$", re.DOTALL)
 
 
 def estimated_cost(spec: ModelSpec, usage: Usage | None) -> float | None:
-    """What the call would cost on the paid tier, in US dollars. Thinking bills as output."""
-    if usage is None:
+    """What the call would cost on the paid tier, in US dollars. Thinking bills as output.
+    None when a price isn't known, as for a model the models file doesn't list."""
+    if usage is None or None in (spec.input_price, spec.cached_input_price, spec.output_price):
         return None
     return round(
         (
@@ -232,6 +239,17 @@ class Gateway:
         self.wall = wall
         # Calls sent but not yet logged, so two chats can't both take the last call of the day.
         self.in_flight = 0
+        # The app_settings row in force, named in every row this gateway logs.
+        self.app_settings_id: int | None = None
+
+    def trial(self, settings: Settings, provider: Provider, app_settings_id: int) -> "Gateway":
+        """A gateway for Settings' Test of settings that aren't saved yet. It shares
+        the call spacing, the clock, and the log, so a test waits and counts like any call."""
+        trial = Gateway(
+            self.database, settings, self.prompts, provider, self.limiter, clock=self.clock, sleep=self.sleep, wall=self.wall
+        )
+        trial.app_settings_id = app_settings_id
+        return trial
 
     def used_today(self) -> int:
         day = self.limiter.quota_day(self.wall())
@@ -269,20 +287,27 @@ class Gateway:
                 reasoning_effort=None,
                 status="capped",
                 error="daily cap reached",
+                app_settings_id=self.app_settings_id,
             ),
         )
         raise CapReached(message)
 
+    def spec(self, model_id: str) -> ModelSpec:
+        """The model's settings from the models file, or the [unlisted] ones."""
+        return self.prompts.models.spec(model_id, self.settings.workbench_provider)
+
     # Retries and the fallback model.
 
-    def plan(self, model_id: str, allow_fallback: bool = True) -> list[tuple[str, bool, int]]:
+    def plan(self, model_id: str, allow_fallback: bool = True, retries: int | None = None) -> list[tuple[str, bool, int]]:
         """The attempts a call may make, in order, as (model, fallback, retry).
 
-        The first model gets one attempt plus WORKBENCH_RETRIES retries, then
-        the fallback model, if the models file names one, gets one attempt.
-        retry counts the earlier attempts on the same model.
+        The first model gets one attempt plus WORKBENCH_RETRIES retries (or
+        retries, when given), then the fallback model, if the models file
+        names one, gets one attempt. retry counts the earlier attempts on the
+        same model.
         """
-        steps = [(model_id, False, retry) for retry in range(self.settings.workbench_retries + 1)]
+        retries = self.settings.workbench_retries if retries is None else retries
+        steps = [(model_id, False, retry) for retry in range(retries + 1)]
         fallback = self.prompts.models.fallback_for(model_id) if allow_fallback else None
         if fallback is not None:
             steps.append((fallback, True, 0))
@@ -312,14 +337,27 @@ class Gateway:
         turn: int | None = None,
         reasoning_effort: str | None = None,
         allow_fallback: bool = True,
+        retries: int | None = None,
     ) -> "Call":
         """A call to make. Iterate Call.events(); Call.result says how it ended.
 
         reasoning_effort overrides each model's own. allow_fallback=False keeps
         every attempt on model_id, as preflight needs to time each model.
+        retries overrides WORKBENCH_RETRIES, so Settings' Test makes one attempt.
         """
         return Call(
-            self, role, model_id, _redacted(messages), prompt_version, session, stop, transcript_id, turn, reasoning_effort, allow_fallback
+            self,
+            role,
+            model_id,
+            _redacted(messages),
+            prompt_version,
+            session,
+            stop,
+            transcript_id,
+            turn,
+            reasoning_effort,
+            allow_fallback,
+            retries,
         )
 
     async def complete_json(
@@ -362,7 +400,7 @@ class Gateway:
         while True:
             result.attempts += 1
             result.model_used, result.fallback = asked, fallback
-            spec = self.prompts.models.models[asked]
+            spec = self.spec(asked)
             forced = self.forced_error(fallback)
             if forced is None:
                 try:
@@ -423,6 +461,7 @@ class Gateway:
                             output_tokens=completion.usage.output_tokens if completion and completion.usage else None,
                             reasoning_tokens=completion.usage.reasoning_tokens if completion and completion.usage else None,
                             est_cost_usd=estimated_cost(spec, completion.usage if completion else None),
+                            app_settings_id=self.app_settings_id,
                         ),
                     )
                 finally:
@@ -463,13 +502,16 @@ class Call:
     # None uses each model's own.
     reasoning_effort: str | None
     allow_fallback: bool = True
+    # None uses WORKBENCH_RETRIES.
+    retries: int | None = None
     result: CallResult = field(default_factory=CallResult)
 
     async def events(self) -> AsyncIterator[Wait | Delta]:
         """Runs the attempts in turn until one ends for good. Each attempt logs its own row."""
         gateway = self.gateway
         result = self.result
-        for attempt, (model_id, fallback, retry) in enumerate(gateway.plan(self.model_id, self.allow_fallback), start=1):
+        steps = gateway.plan(self.model_id, self.allow_fallback, self.retries)
+        for attempt, (model_id, fallback, retry) in enumerate(steps, start=1):
             if fallback:
                 yield Wait(0, "fallback", model_id)
             elif retry:
@@ -479,7 +521,7 @@ class Call:
                     result.status, result.message, result.detail = "stopped", "", None
                     return
 
-            spec = gateway.prompts.models.models[model_id]
+            spec = gateway.spec(model_id)
             effort = self.reasoning_effort if self.reasoning_effort is not None else spec.reasoning_effort
             result.start(model_id, fallback, attempt)
             forced = gateway.forced_error(fallback)
@@ -549,6 +591,7 @@ class Call:
                 ended = gateway.clock()
                 result.status = "error"
                 result.message = error.message
+                result.kind = error.kind
                 result.detail = error.detail
                 # Only before the first word: a reply the creator already saw part of isn't started over.
                 retry_next = error.kind in RETRYABLE and not result.text
@@ -622,5 +665,6 @@ class Call:
                 output_tokens=usage.output_tokens if usage else None,
                 reasoning_tokens=usage.reasoning_tokens if usage else None,
                 est_cost_usd=cost,
+                app_settings_id=gateway.app_settings_id,
             ),
         )

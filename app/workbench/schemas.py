@@ -1,7 +1,8 @@
 """Shared Pydantic types: spec bodies as stored, edits from the Spec editor,
 model settings, chats, the AI judge's answers, flags, and API responses."""
 
-from typing import Any, Literal
+import re
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -135,7 +136,17 @@ class SpecView(Model):
 
 # Model settings: the models file in app/prompts/ (models.v1.toml).
 
-ProviderName = Literal["gemini", "ollama", "fake"]
+ProviderName = Literal["gemini", "ollama", "fake", "openai_compatible"]
+PROVIDERS: tuple[str, ...] = get_args(ProviderName)
+
+# What Settings accepts (M6.5). A base URL is http or https with no user,
+# password, query, or fragment, so no key can hide in it. A model ID and a key
+# hold no spaces, quotes, or line breaks, so app/.env can hold them as they are.
+BASE_URL = re.compile(r"https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%/-]*)?")
+MODEL_ID = re.compile(r"[A-Za-z0-9@][A-Za-z0-9._:/@+-]{0,199}")
+API_KEY = re.compile(r"[A-Za-z0-9._~+/=-]{8,512}")
+
+Price = Annotated[float, Field(ge=0)]
 
 
 class ModelSpec(Model):
@@ -145,10 +156,12 @@ class ModelSpec(Model):
     reasoning_effort: str | None = None
     # Room for the reply and any thinking tokens.
     max_tokens: int = Field(ge=1)
-    # Paid prices in US dollars per 1M tokens, for the estimated cost. The free tier costs nothing.
-    input_price: float = Field(ge=0)
-    cached_input_price: float = Field(ge=0)
-    output_price: float = Field(ge=0)
+    # Paid prices in US dollars per 1M tokens, for the estimated cost. The free
+    # tier costs nothing. None for a model the models file doesn't list, whose
+    # price isn't known, so its calls show no estimated cost.
+    input_price: Price | None
+    cached_input_price: Price | None
+    output_price: Price | None
 
 
 class CharacterModels(Model):
@@ -182,6 +195,22 @@ class PreflightSettings(Model):
     spec_version: int = Field(ge=1)
 
 
+class UnlistedModels(Model):
+    """Settings for a model the models file doesn't list (M6.5): one Ollama has
+    installed, or one typed for another OpenAI-compatible service."""
+
+    # The providers whose models needn't be listed.
+    providers: list[ProviderName]
+    max_tokens: int = Field(ge=1)
+
+
+class LimitBounds(Model):
+    """The most Settings lets a creator raise the machine limits to (M6.5). The least is 1."""
+
+    calls_per_minute: int = Field(ge=1)
+    daily_call_cap: int = Field(ge=1)
+
+
 class ModelSettings(Model):
     # The quota day ends at midnight in this time zone.
     quota_timezone: str
@@ -192,6 +221,8 @@ class ModelSettings(Model):
     # The model to ask instead when a call to the model on the left still gets
     # 429 or a 5xx after its retries (M6). A model with no entry has no fallback.
     fallback: dict[str, str] = Field(default_factory=dict)
+    unlisted: UnlistedModels
+    limits: LimitBounds
 
     @model_validator(mode="after")
     def menus_name_known_models(self) -> "ModelSettings":
@@ -213,13 +244,88 @@ class ModelSettings(Model):
         return self
 
     def character_models(self, provider: str) -> list[str]:
-        return list(getattr(self.character, provider))
+        """The provider's Model menu. Empty for another OpenAI-compatible service, whose models are typed."""
+        return list(getattr(self.character, provider, []))
 
-    def judge_model(self, provider: str) -> str:
-        return getattr(self.judge, provider)
+    def judge_model(self, provider: str) -> str | None:
+        """The provider's judge, or None for another OpenAI-compatible service."""
+        return getattr(self.judge, provider, None)
+
+    def judge_menu(self, provider: str) -> list[str]:
+        """Every model of the provider that the file lists, its judge first."""
+        default = self.judge_model(provider)
+        others = [model_id for model_id, spec in self.models.items() if spec.provider == provider and model_id != default]
+        return ([default] if default else []) + others
+
+    def judge_effort(self, model_id: str) -> str | None:
+        """The judge's reasoning effort, or None for a model the file doesn't list, since not every service takes one."""
+        return self.judge.reasoning_effort if model_id in self.models else None
+
+    def spec(self, model_id: str, provider: str) -> ModelSpec:
+        """The model's settings: its entry under models, or, for a model the file
+        doesn't list, the [unlisted] ones, with its ID as its label."""
+        listed = self.models.get(model_id)
+        if listed is not None:
+            return listed
+        return ModelSpec(
+            provider=provider,
+            label=model_id,
+            max_tokens=self.unlisted.max_tokens,
+            input_price=None,
+            cached_input_price=None,
+            output_price=None,
+        )
+
+    def offers(self, provider: str, model_id: str) -> bool:
+        """Whether the provider can answer with this model: one of its own, or any
+        model the file doesn't list, for a provider whose models needn't be listed."""
+        listed = self.models.get(model_id)
+        if listed is not None:
+            return listed.provider == provider
+        return provider in self.unlisted.providers
 
     def fallback_for(self, model_id: str) -> str | None:
         return self.fallback.get(model_id)
+
+
+# Services for "Another OpenAI-compatible service" in Settings (app/prompts/presets.v1.toml).
+
+
+class Preset(Model):
+    id: str = Field(pattern=r"^[a-z0-9]+$")
+    label: str
+    base_url: str
+    # Key prefixes only this service uses, so the Settings screen can suggest it from a pasted key.
+    key_prefixes: list[str]
+    # The request field that caps a reply's length.
+    token_field: Literal["max_tokens", "max_completion_tokens"]
+    # Whether a streamed call asks for token counts with stream_options.
+    stream_usage: bool
+    # Shown under the base URL when this service is picked. Empty for none.
+    note: str
+
+    @model_validator(mode="after")
+    def base_url_is_one_settings_accepts(self) -> "Preset":
+        if not BASE_URL.fullmatch(self.base_url):
+            raise ValueError(f"the base URL of {self.id} isn't one Settings accepts")
+        return self
+
+
+class Presets(Model):
+    # Keys from Google AI Studio start with one of these, so a pasted one suggests Gemini.
+    gemini_key_prefixes: list[str]
+    presets: list[Preset] = Field(min_length=1)
+
+    def match(self, base_url: str) -> Preset | None:
+        """The service whose base URL this is, ignoring a trailing slash and the case of the host."""
+        wanted = _plain_url(base_url)
+        return next((preset for preset in self.presets if _plain_url(preset.base_url) == wanted), None)
+
+
+def _plain_url(url: str) -> str:
+    scheme, _, rest = url.strip().partition("://")
+    host, slash, path = rest.partition("/")
+    return f"{scheme.lower()}://{host.lower()}{slash}{path}".rstrip("/")
 
 
 # Scenarios: the fixed test scripts (app/samples/scenarios.v1.json).
@@ -822,3 +928,89 @@ class OverrideCall(Model):
     reason: str
     # The right type, when the flag's own type is wrong. None means it isn't a break.
     type: FailureType | None = None
+
+
+# Settings (M6.5): the dialog opened from the top bar. A key goes in only, in
+# SettingsDraft.api_key, and never comes back in any response.
+
+
+class KeyState(Model):
+    # Whether app/.env, or the shell, holds a key for the provider.
+    saved: bool
+    # The key's last 4 characters, for a key of 16 or more. Never more of it.
+    last4: str | None
+    # An environment variable sets it, so Settings can't change it.
+    locked: bool
+
+
+class ProviderMenus(Model):
+    """One provider's model menus in Settings, and the models a fresh choice starts from."""
+
+    provider: ProviderName
+    character_models: list[ModelOption]
+    judge_models: list[ModelOption]
+    # None for another OpenAI-compatible service, whose models are typed.
+    default_character: str | None
+    # A different model than default_character when the provider has one.
+    default_judge: str | None
+
+
+class SettingsView(Model):
+    # The character's first name, for "Harry's model".
+    character_name: str
+    provider: ProviderName
+    providers: list[ProviderMenus]
+    # Another OpenAI-compatible service's address, or "".
+    base_url: str
+    presets: list[Preset]
+    gemini_key_prefixes: list[str]
+    # By provider: gemini and openai_compatible, the two that take a key.
+    keys: dict[str, KeyState]
+    character_model: str
+    judge_model: str
+    calls_per_minute: int
+    daily_call_cap: int
+    max_calls_per_minute: int
+    max_daily_call_cap: int
+    used_today: int
+    # M6's forced errors. all can only come from app/.env.
+    simulate_busy: bool
+    force_mode: Literal["off", "primary", "all"]
+    # Setting names an environment variable sets, which Settings can't change.
+    locked: list[str]
+    # The app_settings row in force, and when it was saved.
+    settings_id: int
+    saved_at: str
+
+
+class SettingsDraft(Model):
+    provider: ProviderName
+    base_url: str = Field(default="", max_length=300)
+    # A newly pasted key, or None to keep the saved one.
+    api_key: str | None = Field(default=None, max_length=600)
+    character_model: str = Field(max_length=300)
+    judge_model: str = Field(max_length=300)
+    calls_per_minute: int
+    daily_call_cap: int
+    simulate_busy: bool = False
+
+
+class ConnectionCheck(Model):
+    """What Test found, in plain words: what happened, then what to do next."""
+
+    ok: bool
+    message: str
+    next: str
+    model: str
+    model_label: str
+    # How long the call took, or None when no call was made.
+    seconds: float | None
+
+
+class OllamaModels(Model):
+    running: bool
+    # The models Ollama has installed.
+    models: list[str]
+    # Ollama models the models file lists that Ollama hasn't installed.
+    missing: list[str]
+    message: str
