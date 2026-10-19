@@ -18,8 +18,9 @@ import anyio
 from pydantic import BaseModel
 
 from workbench import db, specs, telemetry, transcripts
-from workbench.config import SPEC_PLACEHOLDER, Prompts, Settings
+from workbench.config import SPEC_PLACEHOLDER, Prompts, Settings, character_model, run_menu
 from workbench.gateway import CapReached, Delta, Gateway, Wait
+from workbench.providers import NO_KEY
 from workbench.schemas import (
     ChatSummary,
     ChatView,
@@ -58,7 +59,7 @@ class SessionLimitReached(Exception):
     """This browser session has started as many runs as one session may."""
 
 
-NO_KEY_MESSAGE = "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh."
+NO_KEY_MESSAGE = NO_KEY
 
 
 class Runtime:
@@ -84,26 +85,28 @@ class Runtime:
         return transcripts.list_chats(self.database, scenarios=self.scenarios, busy=set(self.running))
 
     def models(self) -> list[str]:
-        return self.prompts.models.character_models(self.settings.workbench_provider)
+        """The Model menu: the provider's menu, plus the model Settings picked if the models file doesn't list it."""
+        return run_menu(self.settings, self.prompts.models)
 
     def run_options(self, session: str | None) -> RunOptions:
         character = specs.list_characters(self.database)[0]
         latest = specs.get_spec(self.database, character.slug)
-        models = self.prompts.models.models
+        provider = self.settings.workbench_provider
+        models = self.prompts.models
+        menu = self.models()
+        labels = {model_id: spec.label for model_id, spec in models.models.items() if spec.provider == provider}
         return RunOptions(
             character=character,
             latest_spec_version=latest.version,
-            provider=self.settings.workbench_provider,
+            provider=provider,
             key_set=self.gateway.provider.ready,
             scenarios=[
                 ScenarioOption(id=s.id, name=s.name, turns=len(s.lines), last_turn=s.lines[-1].turn)
                 for s in self.scenario_file.scenarios
             ],
-            models=[ModelOption(id=model_id, label=models[model_id].label) for model_id in self.models()],
-            model_labels={
-                model_id: spec.label for model_id, spec in models.items() if spec.provider == self.settings.workbench_provider
-            },
-            default_model=self.models()[0],
+            models=[ModelOption(id=model_id, label=models.spec(model_id, provider).label) for model_id in menu],
+            model_labels={**labels, **{model_id: models.spec(model_id, provider).label for model_id in menu}},
+            default_model=character_model(self.settings, models),
             calls_per_minute=self.settings.workbench_calls_per_minute,
             daily_cap=self.settings.workbench_daily_call_cap,
             used_today=self.gateway.used_today(),
@@ -163,6 +166,14 @@ class Runtime:
             raise ChatClosed("Imported chats can't continue. Start a run to chat live.")
         if chat_id in self.running:
             raise ChatBusy(f"{chat.character_name} is still answering. Wait for the reply, or press Stop.")
+        provider = self.settings.workbench_provider
+        if not self.prompts.models.offers(provider, chat.model):
+            # A chat keeps its model, and the provider changed in Settings since it started.
+            label = self.prompts.models.spec(chat.model, provider).label
+            raise ChatClosed(
+                f"This chat runs on {label}, which the provider now picked in Settings doesn't offer. "
+                "Switch back in Settings to go on with it, or start a new run."
+            )
 
         # A line still waits for its reply when nothing answered it, or when a
         # model error cut the reply off: Try again answers it again.
@@ -316,12 +327,12 @@ class Turn:
 
     def _wait_event(self, wait: Wait) -> WaitEvent:
         """A pause, in words for the Run screen when it is a retry or the fallback model."""
-        models = self.runtime.prompts.models.models
+        spec = self.runtime.gateway.spec
         message = ""
         if wait.reason == "retry":
             message = f"The model service is busy. Trying again in {wait.seconds:g} s."
         elif wait.reason == "fallback":
-            message = f"{models[self.chat.model].label} is still busy, so {models[wait.model].label} answers this turn."
+            message = f"{spec(self.chat.model).label} is still busy, so {spec(wait.model).label} answers this turn."
         return WaitEvent(seconds=round(wait.seconds, 1), reason=wait.reason, message=message)
 
     def _settle(self) -> tuple[str, BaseModel] | None:

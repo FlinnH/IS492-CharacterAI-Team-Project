@@ -51,6 +51,8 @@ class CallRecord:
     output_tokens: int | None = None
     reasoning_tokens: int | None = None
     est_cost_usd: float | None = None
+    # The app_settings row the call ran with (M6.5).
+    app_settings_id: int | None = None
 
 
 def record_call(database: db.Database, record: CallRecord) -> int:

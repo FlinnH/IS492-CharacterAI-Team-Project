@@ -405,3 +405,45 @@ def test_a_call_is_forced_or_not(conn):
             "INSERT INTO model_calls (started_at, quota_day, role, provider, model_asked, prompt_version, settings_version,"
             " status, forced) VALUES ('x', 'x', 'character', 'fake', 'm', 'p', 's', 'error', 2)"
         )
+
+
+def settings_row(conn, row_id=1, source="startup"):
+    conn.execute(
+        "INSERT INTO app_settings (id, saved_at, session, source, changed, provider, base_url, character_model,"
+        " judge_model, calls_per_minute, daily_call_cap, force_model_error, key_set, models_version)"
+        f" VALUES ({row_id}, 'x', NULL, '{source}', '', 'fake', '', 'a', 'b', 15, 200, 'off', 0, 'models.v5')"
+    )
+
+
+def test_migration_007_saves_settings_as_data(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) >= 7
+        assert "app_settings" in table_names(conn)
+        column = {row["name"]: row for row in conn.execute("PRAGMA table_info(model_calls)")}["app_settings_id"]
+        # Calls from before M6.5 keep NULL.
+        assert (column["notnull"], column["dflt_value"]) == (0, None)
+        # No column could hold a key: a row says only whether there was one.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(app_settings)")}
+        assert "key_set" in columns and not {name for name in columns if "key" in name} - {"key_set"}
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE app_settings SET provider = 'gemini'",
+        "DELETE FROM app_settings",
+        "INSERT OR REPLACE INTO app_settings (id, saved_at, source, changed, provider, base_url, character_model,"
+        " judge_model, calls_per_minute, daily_call_cap, force_model_error, key_set, models_version)"
+        " VALUES (1, 'y', 'settings', '', 'gemini', '', 'a', 'b', 15, 200, 'off', 1, 'models.v5')",
+    ],
+    ids=["update", "delete", "replace"],
+)
+def test_settings_rows_are_append_only(conn, statement):
+    settings_row(conn)
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        conn.execute(statement)
+
+
+def test_a_settings_row_says_where_it_came_from(conn):
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        settings_row(conn, source="somewhere")

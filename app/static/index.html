@@ -27,6 +27,10 @@
             <span class="icon" aria-hidden="true">help</span>
             <span>What do the codes mean?</span>
           </button>
+          <button type="button" class="btn btn--text btn--icon-leading" data-action="open-settings" aria-haspopup="dialog">
+            <span class="icon" aria-hidden="true">settings</span>
+            <span>Settings</span>
+          </button>
           <div class="segmented" role="group" aria-label="Theme">
             <button type="button" class="segmented__button" data-action="set-theme" data-theme-choice="light"
               data-icon="light_mode" aria-pressed="true">
@@ -104,7 +108,7 @@
   </main>
 
   <footer class="app-footer">
-    <p>Workbench for IS 492 CP3. Live chats, Check this chat, and Re-check make model calls. Your calls on Flag review are saved with each check.</p>
+    <p>Workbench for IS 492 CP3. Live chats, Check this chat, Re-check, and Test in Settings make model calls. Your calls on Flag review are saved with each check.</p>
   </footer>
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -157,6 +161,29 @@
       <button type="button" class="btn btn--text" data-action="preview-import">Preview</button>
       <button type="button" class="btn btn--filled" data-action="confirm-import">Import</button>
     </div>
+  </dialog>
+
+  <!-- Settings (M6.5). app.js draws the body each time the dialog opens. No
+       form wraps the fields, so no browser treats the key as a password to
+       save. Cancel asks first when something changed; Save waits for the server. -->
+  <dialog class="dialog dialog--settings" id="settings-dialog" aria-labelledby="settings-title">
+    <h2 class="dialog__headline" id="settings-title">Settings</h2>
+    <div class="dialog__content settings" data-settings-body></div>
+    <div class="dialog__actions">
+      <button type="button" class="btn btn--text" data-action="cancel-settings">Cancel</button>
+      <button type="button" class="btn btn--filled" data-action="save-settings">Save</button>
+    </div>
+  </dialog>
+
+  <dialog class="dialog" id="discard-settings-dialog" aria-labelledby="discard-settings-title" aria-describedby="discard-settings-text">
+    <form method="dialog">
+      <h2 class="dialog__headline" id="discard-settings-title">Discard your changes?</h2>
+      <p class="dialog__content" id="discard-settings-text">Your changes to Settings will be lost. The saved settings stay as they are.</p>
+      <div class="dialog__actions">
+        <button type="submit" class="btn btn--text" value="keep" autofocus>Keep editing</button>
+        <button type="submit" class="btn btn--text" value="discard">Discard</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog class="side-sheet" id="citing-flags-sheet" aria-labelledby="citing-flags-title">

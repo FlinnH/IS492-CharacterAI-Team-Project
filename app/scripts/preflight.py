@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from workbench import db, specs, transcripts  # noqa: E402
+from workbench import app_settings, db, specs, transcripts  # noqa: E402
 from workbench.config import SPEC_PLACEHOLDER, load_prompts, load_settings  # noqa: E402
 from workbench.gateway import CapReached, Gateway, Wait  # noqa: E402
 from workbench.limiter import Limiter  # noqa: E402
@@ -88,10 +88,10 @@ async def main() -> int:
         print("WORKBENCH_FORCE_MODEL_ERROR is on in app/.env. Set it to off first: preflight times real calls.")
         return 1
 
-    provider = build(settings)
+    provider = build(settings, prompts.presets)
     print(f"Provider: {provider_name}. Key set: {'yes' if provider.ready else 'no'}.")
     if not provider.ready:
-        print("Add GEMINI_API_KEY to app/.env first.")
+        print("There's no Gemini key yet. Add one in Settings in the workbench first.")
         return 1
 
     database = db.Database(settings.workbench_db_path)
@@ -100,6 +100,8 @@ async def main() -> int:
     specs.seed(database)
     limiter = Limiter(settings.workbench_calls_per_minute, settings.workbench_daily_call_cap, prompts.models.quota_timezone)
     gateway = Gateway(database, settings, prompts, provider, limiter)
+    # Its calls name the settings they ran with, like the server's.
+    gateway.app_settings_id = app_settings.ensure_row(database, settings, prompts, "preflight")
 
     check = prompts.models.preflight
     scenarios = transcripts.load_scenarios()

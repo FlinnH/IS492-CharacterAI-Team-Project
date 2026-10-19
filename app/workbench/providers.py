@@ -1,10 +1,11 @@
 """Model services. This module is the only one that imports openai or httpx2.
 
-OpenAIProvider talks to an OpenAI-compatible endpoint: Gemini's, or a local
-Ollama. FakeProvider streams a canned reply with no network, for the tests and
-for running the app without a key. Both stream Chunk objects the same way,
-both answer a JSON call with one Completion, and both raise ProviderError with
-a message the creator can read as it is.
+OpenAIProvider talks to an OpenAI-compatible endpoint: Gemini's, a local
+Ollama, or another service the creator picks in Settings. FakeProvider streams
+a canned reply with no network, for the tests and for running the app without
+a key. Both stream Chunk objects the same way, both answer a JSON call with one
+Completion, and both raise ProviderError with a message the creator can read
+as it is.
 """
 
 import asyncio
@@ -18,11 +19,12 @@ import httpx2
 import openai
 
 from workbench.config import APP_DIR, Settings
-from workbench.schemas import FakeSettings
+from workbench.schemas import FakeSettings, Presets
 
 FAKE_FILE = APP_DIR / "samples" / "fake.v1.json"
 # What the creator reads after a 429, real or forced for the demo.
 RATE_LIMITED = "The model service says its free limit was reached. Wait a minute and try again."
+NO_KEY = "There's no Gemini key yet. Open Settings in the top bar, paste one, and press Test."
 
 
 @dataclass(frozen=True)
@@ -109,17 +111,16 @@ def provider_error(error: openai.APIError) -> ProviderError:
         detail = _error_detail(error)
         status = error.status_code
         if status in (401, 403) or "API key not valid" in detail or "API_KEY_INVALID" in detail:
+            # Only the status is logged: a service may quote part of the key it refused.
             return ProviderError(
                 "auth",
-                "The model service didn't accept the key. Check GEMINI_API_KEY in app/.env, then restart app/run.sh.",
-                detail,
+                "The model service didn't accept the key. Paste it again in Settings and press Test.",
+                f"HTTP {status}: key refused",
             )
         if status == 429:
             return ProviderError("rate_limited", RATE_LIMITED, detail)
         if status == 404:
-            return ProviderError(
-                "not_found", "The model service doesn't know this model. Check the model IDs in app/prompts/.", detail
-            )
+            return ProviderError("not_found", "The model service doesn't know this model. Pick another model in Settings.", detail)
         if status >= 500:
             return ProviderError("server", "The model service had a problem. Try again in a minute.", detail)
         return ProviderError("bad_request", f"The model service refused the request (HTTP {status}).", detail)
@@ -127,7 +128,12 @@ def provider_error(error: openai.APIError) -> ProviderError:
 
 
 class OpenAIProvider:
-    """Any OpenAI-compatible endpoint, through the openai library with no automatic retries."""
+    """Any OpenAI-compatible endpoint, through the openai library with no automatic retries.
+
+    token_field is the request field that caps a reply's length, and
+    stream_usage says whether a streamed reply asks for token counts with
+    stream_options. Both come from a preset in Settings, since services differ.
+    """
 
     def __init__(
         self,
@@ -137,6 +143,8 @@ class OpenAIProvider:
         api_key: str,
         timeout: float,
         http_client: httpx2.AsyncClient | None = None,
+        token_field: str = "max_tokens",
+        stream_usage: bool = True,
     ) -> None:
         self.name = name
         self.ready = bool(api_key)
@@ -144,12 +152,14 @@ class OpenAIProvider:
         self._api_key = api_key
         self._timeout = timeout
         self._http_client = http_client
+        self._token_field = token_field
+        self._stream_usage = stream_usage
         self._client: openai.AsyncOpenAI | None = None
 
     def _openai(self) -> openai.AsyncOpenAI:
         # Built on first use, so the app starts without a key and says what's missing instead.
         if not self.ready:
-            raise ProviderError("auth", "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh.", "no key")
+            raise ProviderError("auth", NO_KEY, "no key")
         if self._client is None:
             self._client = openai.AsyncOpenAI(
                 api_key=self._api_key,
@@ -165,13 +175,14 @@ class OpenAIProvider:
     ) -> AsyncIterator[Chunk]:
         """Streams one reply. Temperature is never sent: newer Gemini models ignore it."""
         options = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
+        if self._stream_usage:
+            options["stream_options"] = {"include_usage": True}
+        options[self._token_field] = max_tokens
         try:
             stream = await self._openai().chat.completions.create(
                 model=model,
                 messages=[dict(message) for message in messages],
                 stream=True,
-                stream_options={"include_usage": True},
-                max_tokens=max_tokens,
                 **options,
             )
         except openai.APIError as error:
@@ -208,11 +219,11 @@ class OpenAIProvider:
         streaming. timeout covers the whole call, thinking included.
         """
         options = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
+        options[self._token_field] = max_tokens
         try:
             response = await self._openai().chat.completions.create(
                 model=model,
                 messages=[dict(message) for message in messages],
-                max_tokens=max_tokens,
                 response_format=response_format,
                 timeout=timeout,
                 **options,
@@ -356,14 +367,30 @@ def smallest_instance(schema: dict):
 Provider = OpenAIProvider | FakeProvider
 
 
-def build(settings: Settings) -> Provider:
-    """The provider WORKBENCH_PROVIDER names."""
+def build(settings: Settings, presets: Presets | None = None) -> Provider:
+    """The provider WORKBENCH_PROVIDER names.
+
+    For another OpenAI-compatible service, the preset whose base URL matches,
+    if any, says which token-limit field to send and whether to ask for token
+    counts. Any other address gets max_tokens, with token counts asked for.
+    """
     timeout = settings.workbench_first_token_timeout_seconds
     if settings.workbench_provider == "fake":
         return FakeProvider.from_file()
     if settings.workbench_provider == "ollama":
         # Ollama needs some key but ignores it.
         return OpenAIProvider(name="ollama", base_url=settings.ollama_base_url, api_key="ollama", timeout=timeout)
+    if settings.workbench_provider == "openai_compatible":
+        preset = presets.match(settings.openai_compatible_base_url) if presets is not None else None
+        options = {"token_field": preset.token_field, "stream_usage": preset.stream_usage} if preset is not None else {}
+        return OpenAIProvider(
+            name="openai_compatible",
+            base_url=settings.openai_compatible_base_url,
+            # A service on this computer may take no key, but the openai library needs some string.
+            api_key=settings.openai_compatible_api_key.get_secret_value() or "none",
+            timeout=timeout,
+            **options,
+        )
     return OpenAIProvider(
         name="gemini",
         base_url=settings.gemini_base_url,

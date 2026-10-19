@@ -143,6 +143,8 @@ LAYERS = {
     "providers": 3,
     "gateway": 4,
     "specs": 5,
+    # Settings (M6.5): the dialog's service, which Test runs through the gateway.
+    "app_settings": 5,
     # Pure checks: they import only schemas.
     "rules": 5,
     "evidence": 5,
@@ -181,6 +183,30 @@ def test_no_model_id_in_code():
         for path in files
         for model_id in models
         if f'"{model_id}"' in path.read_text(encoding="utf-8") or f"'{model_id}'" in path.read_text(encoding="utf-8")
+    ]
+    assert found == []
+
+
+def test_no_preset_address_or_key_prefix_in_code():
+    # The services Settings offers live in app/prompts/presets.vN.toml, so fixing
+    # an address is a new presets version, not a code edit. The screens get the
+    # key prefixes from the server, too. redact.py keeps its own M6 key patterns.
+    import tomllib
+
+    urls, prefixes = set(), set()
+    for path in (APP_DIR / "prompts").glob("presets.v*.toml"):
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        urls |= {preset["base_url"].rstrip("/") for preset in data["presets"]}
+        prefixes |= {prefix for preset in data["presets"] for prefix in preset["key_prefixes"]}
+        prefixes |= set(data["gemini_key_prefixes"])
+    code = [*python_files(), STATIC_DIR / "api.js", STATIC_DIR / "app.js", STATIC_DIR / "index.html"]
+    found = [f"{path.relative_to(APP_DIR)}: {url}" for path in code for url in urls if url in path.read_text(encoding="utf-8")]
+    screens = [STATIC_DIR / "api.js", STATIC_DIR / "app.js", STATIC_DIR / "index.html"]
+    found += [
+        f"{path.relative_to(APP_DIR)}: {prefix}"
+        for path in screens
+        for prefix in prefixes
+        if re.search(rf"[\"'`]{re.escape(prefix)}", path.read_text(encoding="utf-8"))
     ]
     assert found == []
 

@@ -3,7 +3,8 @@
 Routes only call services, like specs, transcripts, runtime, judge, recheck,
 and review, which open their own database connections. A live turn streams as server-sent events.
 Its checks run in a dependency, before the stream starts, so a refused turn
-gets a plain JSON error with the right status.
+gets a plain JSON error with the right status. The settings routes (M6.5)
+answer only this computer, since they hold the key.
 """
 
 import re
@@ -14,15 +15,15 @@ from pathlib import Path
 from typing import Annotated
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from workbench import db, providers, specs, transcripts
-from workbench.config import Settings, load_prompts, load_settings
+from workbench import app_settings, db, providers, specs, transcripts
+from workbench.config import ENV_FILE, Settings, load_prompts, load_settings
 from workbench.gateway import CapReached, Gateway
 from workbench.judge import CheckBusy, Judge, NothingToCheck
 from workbench.limiter import Limiter
@@ -35,14 +36,18 @@ from workbench.schemas import (
     ChatView,
     CheckState,
     CheckView,
+    ConnectionCheck,
     ImportPreview,
     ImportRequest,
+    OllamaModels,
     OverrideCall,
     RecheckRequest,
     ReviewChat,
     ReviewState,
     RunOptions,
     SampleInfo,
+    SettingsDraft,
+    SettingsView,
     SpecEdit,
     SpecView,
     StartChat,
@@ -52,6 +57,9 @@ from workbench.schemas import (
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 SESSION_HEADER = "x-workbench-session"
 SESSION_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# The settings routes answer only a browser on this computer, at one of these names.
+LOCAL_ADDRESS = "127.0.0.1"
+LOCAL_NAMES = ("127.0.0.1", "localhost")
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -68,8 +76,8 @@ def error_response(status: int):
 
     async def handle(request: Request, error: Exception) -> JSONResponse:
         content = {"detail": str(error)}
-        if isinstance(error, specs.SpecInvalid):
-            # The draft field to fix, so the Spec editor can move focus to it.
+        if isinstance(error, (specs.SpecInvalid, app_settings.SettingsInvalid)):
+            # The field to fix, so the Spec editor or Settings can move focus to it.
             content["field"] = error.field
         if isinstance(error, transcripts.ImportInvalid):
             # The rows to fix, so the Import dialog can list them.
@@ -94,13 +102,44 @@ def session_of(request: Request) -> str | None:
     return value if SESSION_ID.fullmatch(value) else None
 
 
+def local_only(request: Request) -> None:
+    """Lets only the workbench's own page, on this computer, read or change Settings.
+
+    The client must be 127.0.0.1. The Host header must name this computer, so a
+    web page whose domain points at 127.0.0.1 can't read the answers. A page
+    from another site is refused by its Origin header. A change also needs the
+    session header, which a page from another site can't send without a check
+    the server never approves.
+    """
+    port = request.app.state.settings.workbench_port
+    host = request.headers.get("host", "")
+    name = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+    origin = request.headers.get("origin")
+    allowed = {f"http://{local}:{port}" for local in LOCAL_NAMES}
+    if (
+        request.client is None
+        or request.client.host != LOCAL_ADDRESS
+        or name not in LOCAL_NAMES
+        or (origin is not None and origin not in allowed)
+        or (request.method != "GET" and session_of(request) is None)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Settings work only in the workbench on the computer running it, at http://{LOCAL_ADDRESS}:{port}.",
+        )
+
+
 def create_app(
     settings: Settings,
     *,
     provider: providers.Provider | None = None,
+    build_provider: Callable[[Settings], providers.Provider] | None = None,
+    env_file: Path = ENV_FILE,
     clock: Callable[[], float] | None = None,
     sleep: Callable[[float], Awaitable[None]] | None = None,
 ) -> FastAPI:
+    """The app. build_provider makes the provider for new settings (Settings'
+    Save and Test), and env_file is where Settings writes them."""
     # Startup work runs here, not in a lifespan handler, because TestClient
     # only runs lifespan inside a with block.
     prompts = load_prompts()
@@ -109,7 +148,12 @@ def create_app(
         db.migrate(conn)
     specs.seed(database)
 
-    provider = provider if provider is not None else providers.build(settings)
+    if build_provider is None:
+
+        def build_provider(chosen: Settings) -> providers.Provider:
+            return providers.build(chosen, prompts.presets)
+
+    provider = provider if provider is not None else build_provider(settings)
     limiter = Limiter(settings.workbench_calls_per_minute, settings.workbench_daily_call_cap, prompts.models.quota_timezone)
     timing = {name: value for name, value in (("clock", clock), ("sleep", sleep)) if value is not None}
     gateway = Gateway(database, settings, prompts, provider, limiter, **timing)
@@ -121,7 +165,8 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
-        await provider.aclose()
+        # The provider in force, which Settings may have replaced.
+        await gateway.provider.aclose()
 
     app = FastAPI(title="Character Consistency Workbench", lifespan=lifespan)
     app.state.settings = settings
@@ -130,6 +175,28 @@ def create_app(
     app.state.judge = judge
     app.state.recheck = recheck
     app.state.review = review
+
+    def apply(chosen: Settings, chosen_provider: providers.Provider) -> None:
+        """Puts saved settings in force at once: each service reads them on its next call."""
+        for service in (gateway, runtime, judge, recheck, review):
+            service.settings = chosen
+        gateway.provider = chosen_provider
+        limiter.update(chosen.workbench_calls_per_minute, chosen.workbench_daily_call_cap)
+        app.state.settings = chosen
+
+    settings_service = app_settings.SettingsService(
+        database,
+        prompts,
+        gateway,
+        settings,
+        env_file=env_file,
+        build_provider=build_provider,
+        apply=apply,
+        busy=lambda: bool(runtime.running or judge.running or recheck.running),
+        character_name=runtime.scenario_file.character_name,
+    )
+    settings_service.start()
+    app.state.settings_service = settings_service
 
     app.add_exception_handler(specs.SpecNotFound, error_response(404))
     app.add_exception_handler(transcripts.ChatNotFound, error_response(404))
@@ -148,6 +215,9 @@ def create_app(
     app.add_exception_handler(NothingToRecheck, error_response(422))
     app.add_exception_handler(QuestionInvalid, error_response(422))
     app.add_exception_handler(CallInvalid, error_response(422))
+    app.add_exception_handler(app_settings.SettingsInvalid, error_response(422))
+    app.add_exception_handler(app_settings.SettingsBusy, error_response(409))
+    app.add_exception_handler(app_settings.SettingsLocked, error_response(409))
     app.add_exception_handler(CapReached, error_response(429))
     app.add_exception_handler(SessionLimitReached, error_response(429))
     app.add_exception_handler(NoKey, error_response(503))
@@ -155,12 +225,32 @@ def create_app(
 
     @app.get("/api/health")
     def health() -> dict:
-        # Says whether a key is set, never the key itself.
+        # Says whether a key is set, never the key itself. Settings may have changed both.
+        current = app.state.settings
         return {
             "status": "ok",
-            "provider": settings.workbench_provider,
-            "key_set": bool(settings.gemini_api_key.get_secret_value()),
+            "provider": current.workbench_provider,
+            "key_set": bool(current.gemini_api_key.get_secret_value()),
         }
+
+    # Settings (M6.5). Only this computer may use these routes. Save and Test
+    # take the dialog as typed, and a key goes in only, never out.
+
+    @app.get("/api/settings", response_model=SettingsView, dependencies=[Depends(local_only)])
+    async def settings_view() -> SettingsView:
+        return settings_service.view()
+
+    @app.post("/api/settings", response_model=SettingsView, dependencies=[Depends(local_only)])
+    async def save_settings(draft: SettingsDraft, request: Request) -> SettingsView:
+        return await settings_service.save(draft, session_of(request))
+
+    @app.post("/api/settings/test", response_model=ConnectionCheck, dependencies=[Depends(local_only)])
+    async def test_settings(draft: SettingsDraft, request: Request) -> ConnectionCheck:
+        return await settings_service.test(draft, session_of(request))
+
+    @app.get("/api/settings/ollama", response_model=OllamaModels, dependencies=[Depends(local_only)])
+    async def ollama_models() -> OllamaModels:
+        return await settings_service.ollama_models()
 
     @app.get("/api/characters", response_model=list[Character])
     def characters() -> list[Character]:

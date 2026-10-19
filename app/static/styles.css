@@ -876,6 +876,54 @@ button.chip:active::before {
   font-size: 18px;
 }
 
+/* Switch (M3) -------------------------------------------------------------- */
+/* A native checkbox with role="switch", so the keyboard and screen readers
+   work as usual. When it's on, the handle grows and moves to the end, so the
+   state shows in size and place, not color alone. Only transform animates.
+     <input type="checkbox" role="switch" class="switch" id="x"> */
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  margin: 0;
+  border: 2px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-highest);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--md-sys-color-outline);
+  transform: scale(0.667);
+  transition: transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.switch:checked {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary);
+}
+
+.switch:checked::before {
+  background: var(--md-sys-color-on-primary);
+  transform: translateX(20px);
+}
+
+.switch:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
 /* Outlined text field ------------------------------------------------------ */
 /* Markup: the label comes after the field, and the field needs placeholder=" "
    so the label can tell when the field is empty.
@@ -2185,6 +2233,269 @@ button.chip:active::before {
   gap: 8px;
   font: var(--type-label-large);
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+/* Settings (dialog, M6.5) -------------------------------------------------- */
+/* The body scrolls between the headline and the actions, so Save and Cancel
+   stay in view. A little padding keeps focus rings from being clipped. */
+
+.dialog--settings {
+  width: min(40rem, calc(100vw - 32px));
+}
+
+.dialog--settings[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog--settings .settings {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-right: -4px;
+  margin-left: -4px;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.settings {
+  display: grid;
+  align-content: start;
+  gap: 24px;
+}
+
+.settings__section,
+.settings__group {
+  display: grid;
+  gap: 16px;
+}
+
+.settings__title {
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.settings__choices {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings__legend {
+  margin-bottom: 4px;
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+.settings__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+}
+
+.settings__choice input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--md-sys-color-primary);
+}
+
+.settings__choice input:disabled + span {
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: default;
+}
+
+.settings__choice > span {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The one plain line under a control */
+.settings__line {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* The key field: its characters are hidden with CSS, so no browser takes it
+   for a password to save. Show key sits inside the field, at its end. */
+.settings__key {
+  padding-right: 136px;
+}
+
+.settings__key.is-masked {
+  -webkit-text-security: disc;
+}
+
+.settings__reveal {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.settings__key-field .text-field__support a {
+  color: var(--md-sys-color-primary);
+}
+
+.settings__test {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+
+.settings__result-area {
+  width: 100%;
+}
+
+/* What Test found: an icon and words, the next step on its own line */
+.settings__result {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+}
+
+.settings__result--ok .icon {
+  color: var(--md-sys-color-primary);
+}
+
+.settings__result--error {
+  border-color: var(--md-sys-color-error);
+}
+
+.settings__result--error .icon {
+  color: var(--md-sys-color-error);
+}
+
+.settings__result-message {
+  color: var(--md-sys-color-on-surface);
+}
+
+.settings__result-next {
+  margin-top: 4px;
+}
+
+/* A note with an icon and words: a key hint, or a service's own note */
+.settings__notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+
+.settings__notice-text {
+  flex: 1 1 16rem;
+}
+
+/* One model in both roles asks for the creator's judgment, so it uses
+   tertiary, like the Spec editor's warnings */
+.settings__notice--warning {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.settings__ollama {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--md-sys-color-on-surface);
+}
+
+.settings__list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--md-sys-color-on-surface);
+}
+
+.settings__check {
+  justify-self: start;
+}
+
+/* Limits and Advanced: native disclosure sections that start closed */
+.settings__more {
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.settings__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 48px;
+  padding: 4px;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings__summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings__summary-title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.settings__summary-note {
+  margin-left: auto;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.settings__chevron {
+  transition: transform var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+
+.settings__more[open] .settings__chevron {
+  transform: rotate(180deg);
+}
+
+.settings__fields {
+  display: grid;
+  gap: 16px;
+  padding: 8px 0 16px;
+}
+
+.settings__switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings__switch-label {
+  color: var(--md-sys-color-on-surface);
+  font: var(--type-body-large);
+  letter-spacing: var(--md-sys-typescale-body-large-tracking);
+  cursor: pointer;
+}
+
+.settings__saved {
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+/* A save the server refused for a reason no one field holds */
+.settings__error {
+  padding: 12px 16px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
 }
 
 /* Flag review -------------------------------------------------------------- */

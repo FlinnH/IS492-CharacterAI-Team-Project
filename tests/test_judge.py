@@ -273,9 +273,10 @@ def test_without_a_key_no_call_is_made(make_client):
     client = make_client(provider=mock_gemini([], requests, api_key=""), workbench_provider="gemini")
     view = check(client, import_sample(client))
     assert requests == [] and judge_calls(client) == []
+    # Since M6.5 the key goes in through Settings, with no restart.
     assert view["judge"]["note"] == (
         "The AI review is unavailable, so only the automatic checks ran. "
-        "Add your Gemini key to app/.env as GEMINI_API_KEY, then restart app/run.sh."
+        "There's no Gemini key yet. Open Settings in the top bar, paste one, and press Test."
     )
     assert summary(view) == [("rule", 2, "B4")]
 
