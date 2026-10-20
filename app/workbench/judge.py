@@ -292,7 +292,7 @@ class Judge:
             return None
         return (
             f"This browser session has used its {limit} AI judge {'call' if limit == 1 else 'calls'}, the most one "
-            "session may make. To allow more, raise WORKBENCH_SESSION_JUDGE_LIMIT in app/.env and restart app/run.sh."
+            "session may make. To allow more, raise the session judge limit in Settings."
         )
 
     async def _check(self, chat: ChatView, session: str | None) -> CheckView:

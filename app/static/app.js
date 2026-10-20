@@ -1054,7 +1054,7 @@
     }
     const limit = runOptions.session_run_limit;
     if (runOptions.session_runs >= limit) {
-      return `This browser session has started ${limit} ${limit === 1 ? "run" : "runs"}, the most one session may start. To allow more, raise WORKBENCH_SESSION_RUN_LIMIT in app/.env and restart app/run.sh.`;
+      return `This browser session has started ${limit} ${limit === 1 ? "run" : "runs"}, the most one session may start. To allow more, raise the session run limit in Settings.`;
     }
     return "";
   }
@@ -4148,7 +4148,7 @@
     { id: "gemini", label: "Gemini (Google AI Studio)", line: "Free with a Google key. Needs the internet." },
     { id: "ollama", label: "Local model (Ollama)", line: "Runs on this computer. No key or internet needed." },
     { id: "fake", label: "Fake model (no network)", line: "Canned replies for trying the app without a key. Don't use it for the demo." },
-    { id: "openai_compatible", label: "Another OpenAI-compatible service", line: "Any service with an OpenAI-style API, at its own address." },
+    { id: "openai_compatible", label: "Another service (OpenAI, Claude, Grok, Groq, OpenRouter, and more)", line: "Any service with an OpenAI-style API, at its own address." },
   ];
   // The setting behind each control, so a control the shell sets shows as locked.
   const SETTING_NAMES = {
@@ -4158,6 +4158,8 @@
     judge_model: "WORKBENCH_JUDGE_MODEL",
     calls_per_minute: "WORKBENCH_CALLS_PER_MINUTE",
     daily_call_cap: "WORKBENCH_DAILY_CALL_CAP",
+    session_run_limit: "WORKBENCH_SESSION_RUN_LIMIT",
+    session_judge_limit: "WORKBENCH_SESSION_JUDGE_LIMIT",
   };
   // The control for each field the server can name in an error.
   const SETTINGS_FIELDS = {
@@ -4167,6 +4169,8 @@
     judge_model: "settings-judge",
     calls_per_minute: "settings-calls",
     daily_call_cap: "settings-cap",
+    session_run_limit: "settings-session-runs",
+    session_judge_limit: "settings-session-judge",
   };
   const LOCKED_LINE = "Set in the shell that started the server, so Settings can't change it.";
   // Where CSS can hide the key's characters, the key stays a plain text
@@ -4241,6 +4245,8 @@
       judge_model: settingsField("settings-judge").value.trim(),
       calls_per_minute: wholeNumber("settings-calls"),
       daily_call_cap: wholeNumber("settings-cap"),
+      session_run_limit: wholeNumber("settings-session-runs"),
+      session_judge_limit: wholeNumber("settings-session-judge"),
       simulate_busy: settingsField("settings-busy").checked,
     };
   }
@@ -4383,6 +4389,10 @@
             `How fast the app may call the AI. Gemini's free tier allows ${view.max_calls_per_minute}.`, "calls_per_minute")}
           ${settingsNumber("settings-cap", "Daily cap", view.daily_call_cap, view.max_daily_call_cap,
             "Stops the app before Google's daily limit.", "daily_call_cap")}
+          ${settingsNumber("settings-session-runs", "Session run limit", view.session_run_limit, view.max_daily_call_cap,
+            "Runs one browser tab may start.", "session_run_limit")}
+          ${settingsNumber("settings-session-judge", "Session judge limit", view.session_judge_limit, view.max_daily_call_cap,
+            "AI checks and re-checks one browser tab may ask for.", "session_judge_limit")}
         </div>
       </details>
       <details class="settings__more">

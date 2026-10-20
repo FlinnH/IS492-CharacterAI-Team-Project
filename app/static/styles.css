@@ -302,6 +302,19 @@ p {
   margin: 0;
 }
 
+/* Headings break into lines of even length, and paragraphs avoid ending on
+   a lone word */
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
 button,
 input,
 textarea,
@@ -316,9 +329,12 @@ img {
 }
 
 /* Reply text from the chat logs keeps its line breaks. Only put this on an
-   element that holds nothing but that text, or template newlines show too. */
+   element that holds nothing but that text, or template newlines show too.
+   It wraps the plain way: a reply streams in a word at a time, and pretty
+   wrapping would move words between lines as they arrive. */
 .keep-lines {
   white-space: pre-line;
+  text-wrap-style: auto;
 }
 
 /* Search matches and quoted evidence */
@@ -326,6 +342,13 @@ mark {
   border-radius: 2px;
   background: var(--md-sys-color-tertiary-container);
   color: var(--md-sys-color-on-tertiary-container);
+}
+
+/* Selected text: a mid purple that stands out on every surface in both
+   themes, Alex's and Harry's lines included */
+::selection {
+  background: var(--md-sys-color-inverse-primary);
+  color: var(--md-sys-color-on-primary-container);
 }
 
 [hidden] {
@@ -482,13 +505,23 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
+  gap: 8px 12px;
   min-height: 64px;
   padding: 8px 0;
 }
 
+/* The app's mark: its icon on a small primary-container tile. Like every
+   icon, it stays hidden until the icon font loads. */
 .top-app-bar__icon {
-  color: var(--md-sys-color-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-size: 20px;
 }
 
 .top-app-bar__title {
@@ -499,12 +532,19 @@ mark {
   color: var(--md-sys-color-on-surface);
 }
 
+/* Rows keep 8px between them when the actions wrap on a phone */
 .top-app-bar__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 8px 4px;
   margin-left: auto;
+}
+
+/* A little less padding on the bar's static label, so the bar needs less
+   width to fit on one row */
+.top-app-bar__actions .chip {
+  padding-right: 12px;
 }
 
 /* Primary tabs ------------------------------------------------------------- */
@@ -588,6 +628,7 @@ mark {
   color: var(--md-sys-color-on-error);
   font: var(--type-label-small);
   letter-spacing: var(--md-sys-typescale-label-small-tracking);
+  font-variant-numeric: tabular-nums;
 }
 
 .tab[aria-selected="true"]::after {
@@ -732,10 +773,12 @@ mark {
 }
 
 /* Chips -------------------------------------------------------------------- */
-/* <span class="chip"> is a static label. <button class="chip chip--assist">
-   is an action. <button class="chip chip--filter" aria-pressed="..."> is a
-   toggle; when selected it should also show a check icon, so the state is
-   never shown by color alone. Add chip--icon-leading when it starts with an icon. */
+/* <span class="chip"> is a static label, tonal with no outline.
+   <button class="chip chip--assist"> is an action. <button class="chip
+   chip--filter" aria-pressed="..."> is a toggle; when selected it should also
+   show a check icon, so the state is never shown by color alone. Only button
+   chips have an outline, so an outline always means the chip does something.
+   Add chip--icon-leading when it starts with an icon. */
 
 .chip {
   position: relative;
@@ -758,6 +801,12 @@ mark {
 .chip .icon {
   font-size: 18px;
   color: var(--md-sys-color-primary);
+}
+
+.chip:not(button) {
+  border-color: transparent;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 .chip--icon-leading {
@@ -1665,6 +1714,7 @@ button.chip:active::before {
   min-width: 6.5rem;
   font: var(--type-label-large);
   letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  font-variant-numeric: tabular-nums;
 }
 
 .run-progress .linear-progress {
@@ -1733,8 +1783,8 @@ button.chip:active::before {
 .bubble--user {
   align-self: flex-end;
   border-top-right-radius: var(--md-sys-shape-corner-extra-small);
-  background: var(--md-sys-color-primary-container);
-  color: var(--md-sys-color-on-primary-container);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
 }
 
 .bubble--character {
@@ -1827,6 +1877,7 @@ button.chip:active::before {
   color: var(--md-sys-color-on-surface-variant);
   font: var(--type-body-small);
   letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  font-variant-numeric: tabular-nums;
 }
 
 /* A turn that failed: what happened, and Try again when it can */
@@ -2455,6 +2506,7 @@ button.chip:active::before {
   color: var(--md-sys-color-on-surface-variant);
   font: var(--type-body-medium);
   letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+  font-variant-numeric: tabular-nums;
 }
 
 .settings__chevron {
@@ -2539,6 +2591,7 @@ button.chip:active::before {
 .chat-switcher__count {
   font: var(--type-body-small);
   letter-spacing: var(--md-sys-typescale-body-small-tracking);
+  font-variant-numeric: tabular-nums;
   color: var(--md-sys-color-on-surface-variant);
 }
 
@@ -2723,12 +2776,6 @@ button.chip:active::before {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-/* The confidence chip is a label, not a control, so it has no outline */
-.flag-card__confidence {
-  border-color: transparent;
-  background: var(--md-sys-color-surface-container-high);
 }
 
 .flag-card__label {
@@ -3251,8 +3298,10 @@ button.chip:active::before {
   list-style: none;
 }
 
-/* Clean: outlined. Break: filled, with a flag icon. Overridden: dashed.
-   The turn number shows on every square. */
+/* Clean: outlined. Break: tinted red, with a red border and a flag icon;
+   the dark theme gives it the same soft tint as a broken reply
+   (.compare-reply--break). Overridden: dashed. The turn number shows on
+   every square. */
 .drift__turn {
   display: inline-flex;
   flex-direction: column;
@@ -3265,6 +3314,7 @@ button.chip:active::before {
   color: var(--md-sys-color-on-surface-variant);
   font: var(--type-label-medium);
   letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+  font-variant-numeric: tabular-nums;
 }
 
 .drift__turn .icon {
@@ -3273,8 +3323,8 @@ button.chip:active::before {
 
 .drift__turn--break {
   border-color: var(--md-sys-color-error);
-  background: var(--md-sys-color-error);
-  color: var(--md-sys-color-on-error);
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
 }
 
 .drift__turn--overridden {
@@ -3335,6 +3385,7 @@ button.chip:active::before {
   min-width: 40rem;
   border-collapse: collapse;
   table-layout: fixed;
+  font-variant-numeric: tabular-nums;
 }
 
 .compare-table th,
@@ -3384,14 +3435,17 @@ button.chip:active::before {
 }
 
 /* Dark theme: a solid dark red behind long replies is hard on the eyes, so
-   broken replies get a soft red tint instead. The flag label and the
-   underlined evidence still mark them. */
-:root[data-theme="dark"] .compare-reply--break {
+   broken replies, and the turn squares above them, get a soft red tint
+   instead. The flag icons, the labels, and the underlined evidence still
+   mark them. */
+:root[data-theme="dark"] .compare-reply--break,
+:root[data-theme="dark"] .drift__turn--break {
   background: color-mix(in srgb, var(--md-sys-color-error) 20%, var(--md-sys-color-surface-container-lowest));
   color: var(--md-sys-color-on-surface);
 }
 
-:root[data-theme="dark"] .compare-reply--break .compare-reply__label {
+:root[data-theme="dark"] .compare-reply--break .compare-reply__label,
+:root[data-theme="dark"] .drift__turn--break .icon {
   color: var(--md-sys-color-error);
 }
 
@@ -3416,8 +3470,11 @@ button.chip:active::before {
 .compare-reply mark {
   background: none;
   color: inherit;
-  text-decoration: underline wavy var(--md-sys-color-error);
+  text-decoration-line: underline;
+  text-decoration-color: var(--md-sys-color-error);
+  text-decoration-thickness: 2px;
   text-underline-offset: 3px;
+  text-decoration-skip-ink: auto;
 }
 
 /* Next step: a spec line that broke in both runs */

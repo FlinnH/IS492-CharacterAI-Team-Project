@@ -447,3 +447,23 @@ def test_settings_rows_are_append_only(conn, statement):
 def test_a_settings_row_says_where_it_came_from(conn):
     with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
         settings_row(conn, source="somewhere")
+
+
+def test_migration_008_records_the_session_limits(tmp_path):
+    with db.Database(tmp_path / "workbench.db").connect() as conn:
+        assert db.migrate(conn) >= 8
+        columns = {row["name"]: row for row in conn.execute("PRAGMA table_info(app_settings)")}
+        # Rows from before the session limits joined Settings keep NULL.
+        assert [(columns[name]["notnull"], columns[name]["dflt_value"]) for name in ("session_run_limit", "session_judge_limit")] == [
+            (0, None),
+            (0, None),
+        ]
+
+
+def test_a_session_limit_in_a_settings_row_is_at_least_1(conn):
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
+        conn.execute(
+            "INSERT INTO app_settings (saved_at, source, changed, provider, base_url, character_model, judge_model,"
+            " calls_per_minute, daily_call_cap, force_model_error, key_set, models_version, session_run_limit)"
+            " VALUES ('x', 'settings', '', 'fake', '', 'a', 'b', 15, 200, 'off', 0, 'models.v5', 0)"
+        )
