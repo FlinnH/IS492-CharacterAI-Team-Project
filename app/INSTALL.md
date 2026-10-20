@@ -1,13 +1,15 @@
 # Install and run the workbench
 
-Draft for CP3, updated in milestone M5. The app serves the workbench screens from a local server. The Spec editor saves spec versions, Run a conversation streams live chats from a model or imports saved chats, Check this chat flags breaks with automatic checks and an AI judge, and Flag review saves your call on each flag and re-checks the AI's weakest flags. Later milestones add the demo steps.
+Final steps for CP3. The workbench runs on your own computer: `app/run.sh` starts a local server, and you use it in your browser. To connect an AI, use Settings in the app, with no file edits. Editing `app/.env` by hand still works as a fallback.
+
+For what each screen does, see [docs/use-cases.md](../docs/use-cases.md). For how it fits together, see [docs/architecture.md](../docs/architecture.md).
 
 ## What you need
 
-- macOS or Linux with bash.
-- Python 3.11 or newer, run as `python3`. Check with `python3 --version`. run.sh uses the first python3 on your PATH and stops if it is older than 3.11. It never installs another Python.
+- macOS or Linux, with bash.
+- Python 3.11 or newer, run as `python3`. Check with `python3 --version`. run.sh uses the first `python3` on your PATH and stops if it is older than 3.11. It never installs another Python.
 - An internet connection the first time, to install the packages, and for live chats with Gemini.
-- For live chats, a free Google AI Studio key (see "Model key" below). Without one, the app still runs, and you can use the fake model or import chats.
+- For live chats, a free Gemini key (see below), Ollama on this computer, or a key for another OpenAI-compatible service. Without any of them, the app still runs: you can edit the spec, import chats, and try the screens with the fake model.
 
 ## Run it
 
@@ -17,101 +19,97 @@ From the repo root:
 app/run.sh
 ```
 
-The first run makes `app/.venv`, installs the pinned packages in `app/requirements.txt`, and starts the server. Later runs start right away and reinstall only when `requirements.txt` changes.
+The first run makes `app/.venv`, installs the pinned packages in `app/requirements.txt`, and starts the server. Later runs start right away, and reinstall only when `requirements.txt` changes.
 
 Then open http://127.0.0.1:8492. To stop the server, press Ctrl+C in the terminal where it runs.
 
-## Settings
+## Connect an AI in Settings
 
-`app/.env.example` lists every setting with its default value and a short note. To change one, copy that line into `app/.env` and edit it there. Git ignores `app/.env`. Values in `app/.env` win over `app/.env.example`, and environment variables win over both. A misspelled setting name in `app/.env` stops the server with an error that names it.
+1. Start the app and open http://127.0.0.1:8492.
+2. On Run a conversation, press Connect an AI. It shows while no AI is connected. Settings in the top bar opens the same dialog any time.
+3. Under Provider, pick "Gemini (Google AI Studio)".
+4. Paste your free key in Gemini API key (see the next section). Show key shows what you pasted.
+5. Press Test. It sends one tiny message to Harry's model with the settings as you typed them, before anything is saved. If it works, it says "Connected." with the model's name and how long it took to answer. If not, it says what went wrong and what to do next.
+6. Press Save. The settings take effect right away, with no restart.
 
-Never put a real key in `app/.env.example`. The server refuses to start if the example file holds one.
+Save writes the key to `app/.env`, readable only by your user account, and to nowhere else. The key never comes back to the page: Settings shows only that a key is saved and, for a long key, its last 4 characters. Every Test and Save is logged with its time, without the key, and every model call records the settings it used.
 
-The limits live in `app/.env` too:
+The dialog also has:
 
-- `WORKBENCH_CALLS_PER_MINUTE` (15) spaces model calls at least 60/15 = 4 seconds apart, under the free per-minute limit.
-- `WORKBENCH_DAILY_CALL_CAP` (200) stops model calls for the day once that many are made. The count starts over at midnight Pacific time, when Google's free quota resets.
-- `WORKBENCH_JUDGE_TIMEOUT_SECONDS` (120) is how long Check this chat and the re-check wait for the AI judge's answer.
+- **Models.** Harry's model (Gemini 3.1 Flash-Lite by default) and the judge's model (Gemini 3.5 Flash-Lite by default). If one model would do both, a note says the judge would be checking its own replies.
+- **Limits.** Calls per minute, the daily cap, and the two session limits, with today's use in the header.
+- **Advanced.** "Simulate a busy AI service (for demos)". It makes every call to the first model fail as if busy, so the fallback model answers, until the server restarts. It doesn't change `app/.env`.
 
-Model IDs, reasoning effort, token limits, and prices live in the models file that `app/prompts/manifest.toml` names (now `models.v3.toml`), next to the character prompt, the judge and re-check prompts, and their output schemas. A prompt file in use never changes: the manifest holds each file's hash, and the server refuses to start if one differs. To change a setting there, save the next version (like `models.v4.toml`) and point the manifest at it.
+If a setting is also set in the shell that started the server, the shell wins, and Settings shows it as locked.
 
-## Model key
+### Get a free Gemini key, no card
 
-Live chats call Gemini Flash-Lite on Google's free tier.
+1. Open https://aistudio.google.com/apikey and sign in with a Google account.
+2. Create an API key there. The free tier needs no credit card.
+3. Copy the key and paste it into Settings, as above.
 
-1. Make a key at https://aistudio.google.com/apikey.
-2. Put it in `app/.env` as `GEMINI_API_KEY=your-key`. Keep it out of every other file, and out of chat.
-3. Restart `app/run.sh`.
+Keep the key out of every file except `app/.env`, and out of chats, commits, and screenshots. On the free tier, Google may read prompts and use them to improve its products, so never type real personal details into a chat. The free tier allows 15 calls a minute and 500 a day for each Gemini Flash-Lite model, and the count resets at midnight Pacific time.
 
-On the free tier, Google may read prompts and use them to improve its products, so never type personal details into a chat.
+### Other providers
 
-## Model services
+- **Local model (Ollama).** No key, and no internet once the model is downloaded. Install Ollama, run `ollama pull gpt-oss:20b`, and start it with a longer context than its default of 4,096 tokens:
 
-`WORKBENCH_PROVIDER` in `app/.env` picks the service:
+  ```bash
+  OLLAMA_CONTEXT_LENGTH=32768 ollama serve
+  ```
 
-- `gemini` (the default): needs the key above. The Model menu offers Gemini 3.1 Flash-Lite (the default) and Gemini 3.5 Flash-Lite. The AI judge is Gemini 3.5 Flash-Lite at medium reasoning effort.
-- `ollama`: a local model, `gpt-oss:20b`, with no key and no network. Install Ollama, run `ollama pull gpt-oss:20b`, and start it with a longer context than its default, for example `OLLAMA_CONTEXT_LENGTH=32768 ollama serve`. The workbench sends the whole spec on every turn, so a short context cuts the chat off. The same model is the judge, so its flags say "Same model reviewed."
-- `fake`: no model and no network. Every reply is "This is a fake reply. No model was called." The fake judge finds no breaks, so only the automatic checks flag anything. Use it to try the screens without a key.
+  The workbench sends the whole spec on every turn, so a short context cuts the chat off. In Settings, pick "Local model (Ollama)". The Local models section lists what Ollama has installed. If Ollama isn't running, it says so, and Check again looks again. One local model both plays Harry and judges, so its flags say "Same model reviewed". Ollama has no fallback model.
+- **Another service.** Pick "Another service (OpenAI, Claude, Grok, Groq, OpenRouter, and more)". The Service menu fills in the base URL for OpenAI, Anthropic Claude, xAI Grok, Groq, OpenRouter, Mistral, DeepSeek, or LM Studio on this computer, or choose Other and type one. Paste the service's key, type the model IDs for Harry's model and the judge's model, then Test and Save. Two of these services can play Harry but may fail as the judge: Anthropic's compatibility ignores the judge's JSON schema, and DeepSeek takes only plain JSON. When the judge's answer can't be read, a check falls back to the automatic checks. [app/prompts/README.md](prompts/README.md) lists the presets.
 
-## Run a conversation
+## Try it with no key: the fake model
 
-1. Pick a scenario (T1, E1, E2, F1, or F2) and a model, then press Start run.
-2. Each reply streams in as the model writes it. Calls start at least 4 seconds apart, so the screen sometimes says it's waiting.
-3. Stop ends the reply and the script. The part already written is saved and marked Stopped.
-4. After the script ends, or after Stop, type your own next line in the message box.
+To click through the screens with no key and no network, pick "Fake model (no network)" in Settings and press Save. Or set `WORKBENCH_PROVIDER=fake` in `app/.env` and restart.
 
-Every chat keeps the spec version it started with, even after you save a newer one. If the page reloads mid-run, the reply that was streaming is saved as stopped, and Continue run picks up the script.
+Every reply is then "This is a fake reply. No model was called." The fake judge never flags anything, so only the automatic checks flag breaks. That makes it useful for trying the screens, and useless as evidence. **Never use it for the demo.** Settings says so too: "Don't use it for the demo."
 
-## Import a chat
+## Settings in app/.env (the fallback)
 
-Import a chat on Run a conversation adds a saved chat to the Chat menu:
+Every setting is listed in `app/.env.example`, with its default and a short note. To change one by hand, copy its line into `app/.env` and edit it there, then restart `app/run.sh`. Values load from `app/.env.example`, then `app/.env`, then environment variables, and the last one wins. Git ignores `app/.env`.
 
-- **Paste or choose a file.** One message per line ("Alex: Hi."), a receipt log from `validation/transcripts/`, a markdown table with a speaker column, or a workbench chat in JSON. Preview shows how it was read before you import it. A row that can't be read is named by its number.
-- **The samples.** CLA-F2 and GPT-F2, the CP2 chats from Claude and ChatGPT.
-- **The seeded transcript.** It loads from the path in `WORKBENCH_SEEDED_TRANSCRIPT_PATH`, and only when you pick it.
+The server refuses to start, with one plain line, if a setting is missing, misspelled, or wrong. It also refuses if `app/.env.example` holds a key. Never put a real key in the example file.
 
-## Check a chat
+| Setting | Default | What it does | In Settings |
+| --- | --- | --- | --- |
+| `WORKBENCH_HOST` | 127.0.0.1 | The address the server listens on. Keep it at 127.0.0.1, so only this computer can reach the app. | No |
+| `WORKBENCH_PORT` | 8492 | The port. Change it if 8492 is taken. | No |
+| `WORKBENCH_DB_PATH` | data/workbench.db | The SQLite database, relative to `app/`. Git ignores `app/data/`. | No |
+| `WORKBENCH_PROVIDER` | gemini | The model service: gemini, ollama, fake, or openai_compatible. | Yes |
+| `GEMINI_API_KEY` | (empty) | Your Google AI Studio key. Set it here or in Settings, never in the example file. | Yes |
+| `GEMINI_BASE_URL` | https://generativelanguage.googleapis.com/v1beta/openai/ | Google's OpenAI-compatible endpoint for Gemini. | No |
+| `OLLAMA_BASE_URL` | http://127.0.0.1:11434/v1 | The local Ollama server. | No |
+| `OPENAI_COMPATIBLE_BASE_URL` | (empty) | Another service's base URL, like https://api.example.com/v1. Needed when the provider is openai_compatible. | Yes |
+| `OPENAI_COMPATIBLE_API_KEY` | (empty) | That service's key. A service on this computer may need none. | Yes |
+| `WORKBENCH_CHARACTER_MODEL` | (empty) | The model that plays Harry. Empty uses the first model in the provider's menu in the models file. Needed when the provider is openai_compatible. | Yes |
+| `WORKBENCH_JUDGE_MODEL` | (empty) | The AI judge's model. Empty uses the models file's judge. Needed when the provider is openai_compatible. | Yes |
+| `WORKBENCH_DAILY_CALL_CAP` | 200 | Model calls per Pacific day before the app stops calling. At most 500 in Settings. | Yes |
+| `WORKBENCH_CALLS_PER_MINUTE` | 15 | Calls start at least 60/N seconds apart (4 seconds at 15). At most 15 in Settings. | Yes |
+| `WORKBENCH_SESSION_RUN_LIMIT` | 10 | Runs one browser session (one tab) may start. Up to the daily cap. | Yes |
+| `WORKBENCH_SESSION_JUDGE_LIMIT` | 20 | AI judge calls one session may make, checks and re-checks together. A saved check shown again doesn't count. Up to the daily cap. | Yes |
+| `WORKBENCH_RETRIES` | 2 | How many more times a call that gets 429 or a 5xx is tried on the same model, before the fallback model gets one try. | No |
+| `WORKBENCH_RETRY_BACKOFF_SECONDS` | 2 | Seconds before the first retry. Each retry waits twice as long as the one before. | No |
+| `WORKBENCH_FORCE_MODEL_ERROR` | off | Forces a 429 for the demo, without calling the service. `primary` fails the first model, so the fallback answers. `all` fails every model, so the error cards and the rules-only check show. | Busy switch (primary, until restart) |
+| `WORKBENCH_FIRST_TOKEN_TIMEOUT_SECONDS` | 30 | Seconds to wait for a reply's first words before an error card. | No |
+| `WORKBENCH_JUDGE_TIMEOUT_SECONDS` | 120 | Seconds to wait for the whole answer from the AI judge or the re-check. | No |
+| `WORKBENCH_MAX_TYPED_CHARS` | 2000 | The longest typed line, override reason, or re-check question. | No |
+| `WORKBENCH_MAX_IMPORT_CHARS` | 300000 | The longest chat Import accepts, in characters. | No |
+| `WORKBENCH_SEEDED_TRANSCRIPT_PATH` | ../validation/fixtures/SEEDED_TRANSCRIPT.md | The seeded transcript, relative to `app/`. The server reads it only when you pick it in Import. | No |
 
-Under any chat with a finished reply, Check this chat looks for breaks:
+Model IDs, reasoning effort, token limits, prices, and fallback models live in the models file that `app/prompts/manifest.toml` names, now `models.v5.toml`, next to the prompts. A file there that was used never changes. To change one, save the next version and point the manifest at it. [app/prompts/README.md](prompts/README.md) explains how.
 
-1. Automatic checks run first, with no AI: the sentence limit and the banned words in the chat's spec version, on every reply. Each rule gives one flag per chat, at the first break, and lists the other turns that broke it. A reply to a request for a story may run long.
-2. Then the AI judge reads the whole chat in one model call. Each flag has a turn, a type, the spec line it breaks, an exact quote, a confidence, and why. The judge also lists claims about the user, and any the user never made become flags, along with what the judge couldn't check.
-3. Code checks every judge flag before you see it: the line must be in the chat's spec version, and the quote must appear word for word in that reply. A flag that fails is hidden, and the results say how many and why.
+## Preflight before a demo
 
-On Flag review, persona exits, guesses near what the character can't know, and lines the spec marks carry a note that says why only you can settle them. The judge's answer must match `app/prompts/judge.schema.v1.json`. If it doesn't, the judge gets one more try. If that fails too, or the service fails, only the automatic checks show, with a note. Every check is saved, so coming back to the chat shows it with no new call, until the chat changes.
-
-## Review flags
-
-Check results on Run a conversation sum up each check, and Review flags opens its flags on Flag review. Flag review lists every checked chat. The badge on its tab counts the flags that still need your call, across every chat, and each chat in the switcher shows its own count.
-
-1. Each flag shows the quote, the spec line it cites in the spec's own words, a confidence, and why.
-2. Agree stays off until you press Show in context, which shows the turn with the quote marked. The server also refuses an Agree for a flag whose evidence was never opened.
-3. Override asks why the AI is wrong, in at least 3 words, and a count under the field shows how many you have. If the turn does break the spec but in another way, pick the right type: the flag then still counts as a break, with your type.
-4. Undo takes a call back, and the flag needs your call again.
-
-Every call and every opening of the evidence is saved with its time, so a reload or a restart keeps them. If you agree with every flag in a chat, the screen asks you to check again, since the AI makes mistakes too. A live chat that grows after its check moves to a "Changed since its check" notice. Checking it again makes a new set of flags, and each needs your call. Your calls on the old flags stay in the log.
-
-Compare runs uses the same calls. It lines up the checked chats that ran the same scenario on the same spec version, and flags you overrode don't count as breaks.
-
-## Re-check the weakest calls
-
-Below the last flag on Flag review, Follow-up re-check sends the AI judge's model its first-pass flags, the chat, and the spec in one more call, or two if the first answer can't be read. It looks again at every AI flag rated Low or Medium, Low first, and reads the chat again for anything it missed. If there are no Low or Medium flags, it still does the second part. You can add your own question in the box. It goes with the re-check, and the AI answers it.
-
-1. For each flag it looks at, the re-check keeps it, re-rates it, or withdraws it, and it can add new flags. Each new flag passes the same evidence checks as the judge's. One that fails is hidden, and What changed says how many and why.
-2. It never withdraws a flag that only you can settle, or a flag you already made a call on, because the AI can't change your call. When the re-check and your call disagree, or it would withdraw a flag only you can settle, the flag's card shows both views side by side. Your call still decides.
-3. What changed, above the flags, lists the flags it added, withdrew, and re-rated, each with a one-line reason. It also shows your question and the AI's answer. The answer is the AI's own words: only flags pass the evidence checks. New flags need your call like any other.
-
-Each re-check is saved with your question, its answer, and what it changed, and its call is logged like every other. Pressing Re-check again with the same question, when nothing has changed since, shows the saved re-check with no new call.
-
-## Preflight
-
-Before a demo or a live test, check the model setup with real calls. Stop the server first, since call spacing is per process:
+Check the model setup with real calls. Stop the server first, since call spacing is per process:
 
 ```bash
 app/.venv/bin/python app/scripts/preflight.py
 ```
 
-It checks that the key is set and that each model in the Model menu is listed. Then, for each model and each reasoning effort it compares, it runs the first 3 turns of F2. That is about 12 free-tier calls and takes about a minute. It prints time to first token and token counts, never chat text. Its calls are logged and count toward the daily cap.
+It checks that a key is set and that the service lists each model in the Model menu. Then, for each model and each reasoning effort it compares, it runs the first 3 turns of F2. That's about 12 free-tier calls, and it takes about a minute. It prints time to first token and token counts, never chat text. Its calls are logged and count toward the daily cap. It won't run while `WORKBENCH_FORCE_MODEL_ERROR` is on, or with the fake model.
 
 ## Run the tests
 
@@ -121,14 +119,35 @@ From the repo root, after the first run:
 app/.venv/bin/pytest
 ```
 
-The tests use the fake model, so they need no key and no network, and they never read `app/.env`.
+The tests use the fake model and a database in a temporary folder, so they need no key and no network, and they never read `app/.env` or touch `app/data/`.
 
-One live test, skipped unless you ask for it, runs 3 turns of F2 against the provider in `app/.env` and prints the logged call rows. It is the only test that reads `app/.env`, and it uses about 3 free-tier calls:
+One live test, skipped unless you ask for it, runs 3 turns of F2 against the provider in `app/.env` and prints the logged call rows. It's the only test that reads `app/.env`, and it uses about 3 free-tier calls:
 
 ```bash
 app/.venv/bin/pytest tests/test_live.py --live -s
 ```
 
-## Coming in later milestones
+## When something goes wrong
 
-- **Demo reset (M8).** A script that resets the database to a known state before a demo.
+- **`run.sh: python3 is 3.10.x, and the workbench needs 3.11 or newer.`** Install Python 3.11 or newer so that `python3` runs it, then run `app/run.sh` again.
+- **`run.sh: app/.env has a missing or wrong value for ...`** The line names the setting. Fix it in `app/.env`, or delete that line to use the default.
+- **`run.sh: app/.env.example has a value for GEMINI_API_KEY.`** Move the key to `app/.env` and leave the example empty.
+- **A prompt file "changed after manifest.toml recorded it".** Undo the edit to that file in `app/prompts/`, or save it as the next version.
+- **The database "was made by a newer version of the workbench".** Switch to the branch that made it, or delete the database file to start fresh, which deletes every saved chat and check.
+- **"address already in use".** Another program has port 8492. Stop it, or set `WORKBENCH_PORT` in `app/.env`.
+- **"No AI is connected yet."** Press Connect an AI and follow the steps above.
+- **"The model service didn't accept the key."** Paste the key again in Settings and press Test.
+- **"Today's 200 model calls are used up."** Wait for midnight Pacific time, or raise the daily cap under Limits in Settings, up to 500.
+- **Old screens after an update.** Reload the page. The server tells the browser to check every file again.
+
+## More docs
+
+- [docs/use-cases.md](../docs/use-cases.md): each flow and edge case, with the tests that cover it.
+- [docs/architecture.md](../docs/architecture.md): the parts and how a request moves through them.
+- [docs/observability.md](../docs/observability.md): what the database logs, and queries for debugging.
+- [docs/safety_privacy.md](../docs/safety_privacy.md): personal data, keys, limits, and what the app doesn't handle.
+- [app/prompts/README.md](prompts/README.md): each prompt, schema, and model setting.
+
+## Coming in M8
+
+A script that resets the database to a known state before a demo. It isn't built yet.
