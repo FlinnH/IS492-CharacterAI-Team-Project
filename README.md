@@ -6,7 +6,50 @@
 **Institution:** University of Illinois Urbana-Champaign <br>
 **Instructor:** Dr. Yun Huang
 
-**Stack:** Python 3.11 or newer, FastAPI, Uvicorn, and SQLite, with Gemini Flash-Lite through the OpenAI Python library and the prototype's plain HTML, CSS, and JavaScript. To run the app, see [app/INSTALL.md](app/INSTALL.md).
+**Stack:** Python 3.11 or newer, FastAPI, Uvicorn, and SQLite. The app calls Gemini 3.1 and 3.5 Flash-Lite through the OpenAI Python library, and its screens are the CP2 prototype's plain HTML, CSS, and JavaScript. To run it, see [How to run the app](#how-to-run-the-app).
+
+---
+
+## How to run the app
+
+From the repo root, on macOS or Linux with Python 3.11 or newer:
+
+```bash
+app/run.sh
+```
+
+The first run makes `app/.venv` and installs the pinned packages. Then:
+
+1. Open http://127.0.0.1:8492.
+2. Press Connect an AI, paste a free Gemini key from https://aistudio.google.com/apikey (no card needed), and press Test, then Save.
+
+To run the tests (no key and no network):
+
+```bash
+app/.venv/bin/pytest
+```
+
+[app/INSTALL.md](app/INSTALL.md) has the full steps: other providers, the fake model for trying the screens without a key, every setting, preflight, and fixes for common problems.
+
+**The stack, in detail:**
+
+- **Server.** Python 3.11 or newer, with FastAPI 0.143 and its built-in server-sent events, Uvicorn 0.54 with one worker, and Pydantic 2.14.
+- **Database.** SQLite, through Python's own `sqlite3`, in one local file (`app/data/workbench.db`).
+- **Models.** The openai 3.24 library on httpx2 calls Google's OpenAI-compatible endpoint:
+  - Gemini 3.1 Flash-Lite plays the character.
+  - Gemini 3.5 Flash-Lite is the AI judge and the re-check.
+  - Both run on the free tier.
+  - Settings can switch to `gpt-oss:20b` on the creator's own computer through Ollama, or to another OpenAI-compatible service.
+- **Screens.** Plain HTML, CSS, and JavaScript in `app/static/`, copied from the CP2 prototype, with Google's Material 3 design.
+- **Tests.** pytest 9.1, with a fake model in place of the real ones.
+
+**The CP3 docs:**
+
+- [docs/architecture.md](docs/architecture.md): the architecture diagram and the parts.
+- [docs/use-cases.md](docs/use-cases.md): each flow and edge case, with its tests.
+- [docs/observability.md](docs/observability.md): the telemetry plan, what we log, and debugging queries.
+- [docs/safety_privacy.md](docs/safety_privacy.md): safety and privacy.
+- [app/prompts/README.md](app/prompts/README.md): the prompts and model settings.
 
 ---
 
@@ -190,11 +233,23 @@ technology and the object of evaluation.
 
 ```
 README.md         This page
-/literature/      Papers + unified bibliography
+DESIGN_SPEC.md    CP2 design spec: personas, journeys, screens, and collaboration mechanics
+LICENSE           MIT License
+/proposal/        PROPOSAL.md, the formal proposal (500 to 800 words)
+/literature/      Papers and the unified bibliography
 /reflections/     Individual reading reflections (one file per student)
-/proposal/        PROPOSAL.md - formal 500-800 word proposal
 /slides/          Checkpoint presentation decks
-/docs/            Architecture and notes (grows from CP3 onward)
+/validation/      CP2 prompting study, interviews, gap analysis, theory lens, and the chat receipts
+/prototype/       CP2 clickable prototype (frozen)
+/app/             CP3 app: run.sh, INSTALL.md, .env.example, requirements.txt
+  workbench/      The Python server: routes, services, model gateway, providers, and migrations
+  static/         The screens: index.html, styles.css, api.js, app.js
+  prompts/        The rubric's /prompts/: system prompts, output schemas, and model settings
+  samples/        Spec v1, the test scripts, the CP2 sample chats, and the fake model's reply
+  scripts/        preflight.py, which checks the model setup with real calls
+  data/           The SQLite database, made on the first run (git ignores it)
+/docs/            Architecture, use cases, observability, safety and privacy, and the CP2 storyboard and wireframes
+/tests/           The app's tests (pytest, with a fake model, no key, and no network)
 ```
 
 ---
@@ -213,9 +268,17 @@ tools, models, and prompts used in this project are disclosed here.
 | Anthropic | CP2: planning the workflow + starter files | Flynn |
 | Claude Code | CP2: building the clickable prototype in prototype/ from Flynn's prompts | Flynn |
 | Anthropic | CP3: planning the stack, the free model setup, and the step-by-step build prompts | Flynn |
-| Claude Code | CP3: planning and building the working app in app/ from Flynn's prompts | Flynn |
+| Claude Code | CP3: planning and building the working app in app/, its tests in tests/, and the CP3 docs (milestones M0 to M7), from Flynn's prompts | Flynn |
 
 Claude (Sonnet 5.5), ChatGPT, and Gemini (Flash-Lite) were also the subjects of the CP2 prompting study. Their outputs are logged in [validation/transcripts/](validation/transcripts/).
+
+The CP3 app calls AI models itself. By default it uses Google's free tier:
+
+- Gemini 3.1 Flash-Lite plays the character.
+- Gemini 3.5 Flash-Lite is the AI judge and the follow-up re-check.
+- In Settings, a creator can switch to gpt-oss:20b on their own computer through Ollama, or to another OpenAI-compatible service.
+
+Its prompts, output schemas, and model settings are in [app/prompts/](app/prompts/README.md).
 
 ---
 
