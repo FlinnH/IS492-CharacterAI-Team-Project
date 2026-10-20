@@ -12,9 +12,11 @@
 
 ## How to run the app
 
-From the repo root, on macOS or Linux with Python 3.11 or newer:
+On macOS or Linux with git and Python 3.11 or newer, get the code and start the app from the repo root:
 
 ```bash
+git clone https://github.com/FlinnH/IS492-CharacterAI-Team-Project.git
+cd IS492-CharacterAI-Team-Project
 app/run.sh
 ```
 
