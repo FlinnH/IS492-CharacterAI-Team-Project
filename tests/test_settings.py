@@ -6,13 +6,14 @@ restart, logged as a dated row. All with the fake model and no network."""
 import asyncio
 import json
 import logging
+import re
 import sqlite3
 
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import SESSION, FakeTime, default_model, fake_settings, query, settings_for, sse_events
+from conftest import APP_DIR, SESSION, FakeTime, default_model, fake_settings, query, settings_for, sse_events
 from workbench.config import Settings, load_prompts, save_env
 from workbench.main import create_app
 from workbench.providers import FakeProvider, FakeReply, OpenAIProvider, ProviderError, build
@@ -55,6 +56,8 @@ def draft_from(view, **changes):
         "judge_model": view["judge_model"],
         "calls_per_minute": view["calls_per_minute"],
         "daily_call_cap": view["daily_call_cap"],
+        "session_run_limit": view["session_run_limit"],
+        "session_judge_limit": view["session_judge_limit"],
         "simulate_busy": view["simulate_busy"],
     }
     return {**values, **changes}
@@ -75,8 +78,8 @@ def start_run(client, model=None):
     return response.json()
 
 
-def import_sample(client):
-    response = client.post("/api/imports", json={"source": "sample", "character": "harry", "sample": "cla-f2"})
+def import_sample(client, name="cla-f2"):
+    response = client.post("/api/imports", json={"source": "sample", "character": "harry", "sample": name})
     assert response.status_code in (200, 201), response.text
     return response.json()["id"]
 
@@ -98,7 +101,14 @@ def test_settings_answer_only_this_computer(make_client, env_file, address, host
     app = make_client(local=True).app
     client = TestClient(app, base_url=f"http://{host}", client=(address, 50000))
     headers = {**({"Origin": origin} if origin else {}), **({"X-Workbench-Session": session} if session else {})}
-    view_draft = {**compatible(), "api_key": KEY, "calls_per_minute": 5, "daily_call_cap": 50}
+    view_draft = {
+        **compatible(),
+        "api_key": KEY,
+        "calls_per_minute": 5,
+        "daily_call_cap": 50,
+        "session_run_limit": 5,
+        "session_judge_limit": 5,
+    }
 
     changes = [
         client.post("/api/settings", json=view_draft, headers=headers),
@@ -457,7 +467,89 @@ def test_saving_waits_until_a_reply_or_check_ends(make_client, env_file):
     assert not env_file.exists()
 
 
+# The session limits, which Settings changes too.
+
+
+def test_raising_the_session_run_limit_takes_effect_at_once(make_client, env_file):
+    client = make_client(local=True, workbench_session_run_limit=1)
+    start_run(client)
+    refused = client.post("/api/chats", json={"character": "harry", "scenario": "F2", "model": default_model()})
+    assert refused.status_code == 429
+    assert refused.json()["detail"] == (
+        "This browser session has started 1 run, the most one session may start. "
+        "To allow more, raise the session run limit in Settings."
+    )
+
+    saved = client.post("/api/settings", json=draft_from(current(client), session_run_limit=2)).json()
+    assert saved["session_run_limit"] == 2
+    # No restart: the same session starts again, and the Run screen knows the new limit.
+    start_run(client)
+    assert client.get("/api/run-options").json()["session_run_limit"] == 2
+    assert query(client, "SELECT changed, session_run_limit FROM app_settings WHERE source = 'settings'") == [
+        {"changed": "session_run_limit", "session_run_limit": 2}
+    ]
+    assert "WORKBENCH_SESSION_RUN_LIMIT=2\n" in env_file.read_text(encoding="utf-8")
+
+
+def test_raising_the_session_judge_limit_takes_effect_at_once(make_client):
+    client = make_client(local=True, workbench_session_judge_limit=1)
+    first = client.post(f"/api/chats/{import_sample(client)}/check").json()
+    assert first["judge"]["status"] == "ok"
+    second = import_sample(client, "gpt-f2")
+    limited = client.post(f"/api/chats/{second}/check").json()
+    assert limited["judge"]["status"] == "failed"
+    assert limited["judge"]["note"].endswith("To allow more, raise the session judge limit in Settings.")
+
+    assert client.post("/api/settings", json=draft_from(current(client), session_judge_limit=3)).status_code == 200
+    again = client.post(f"/api/chats/{second}/check").json()
+    assert again["judge"]["status"] == "ok"
+    assert len(query(client, "SELECT id FROM model_calls WHERE role = 'judge'")) == 2
+
+
+@pytest.mark.parametrize(
+    ("changes", "field", "most"),
+    [
+        ({"session_run_limit": 0}, "session_run_limit", 200),
+        ({"session_judge_limit": 201}, "session_judge_limit", 200),
+        # The same save's daily cap bounds them: a lower cap needs lower session limits.
+        ({"daily_call_cap": 5}, "session_run_limit", 5),
+        ({"daily_call_cap": 15, "session_run_limit": 10}, "session_judge_limit", 15),
+    ],
+    ids=["run-limit-zero", "judge-limit-above-the-cap", "a-lower-daily-cap", "a-lower-daily-cap-for-the-judge"],
+)
+def test_session_limits_stay_within_the_daily_cap(make_client, env_file, changes, field, most):
+    client = make_client(local=True)
+    view = current(client)
+    assert (view["daily_call_cap"], view["session_run_limit"], view["session_judge_limit"]) == (200, 10, 20)
+    response = client.post("/api/settings", json=draft_from(view, **changes))
+    name = "The session run limit" if field == "session_run_limit" else "The session judge limit"
+    assert response.status_code == 422
+    assert response.json() == {"detail": f"{name} can be 1 to {most}, the daily cap.", "field": field}
+    assert not env_file.exists()
+
+
+def test_a_session_limit_the_shell_sets_is_locked(make_client, env_file, monkeypatch):
+    client = make_client(local=True)
+    monkeypatch.setenv("WORKBENCH_SESSION_JUDGE_LIMIT", "20")
+    view = current(client)
+    assert view["locked"] == ["WORKBENCH_SESSION_JUDGE_LIMIT"]
+    response = client.post("/api/settings", json=draft_from(view, session_judge_limit=5))
+    assert response.status_code == 409
+    assert response.json()["detail"].startswith("WORKBENCH_SESSION_JUDGE_LIMIT is set in the shell that started the server")
+    assert not env_file.exists()
+
+
 # Presets and the local model helper.
+
+
+def test_the_provider_label_names_only_services_with_presets():
+    # The label shows the presets before the choice is picked, so each name it lists has one.
+    app_js = (APP_DIR / "static" / "app.js").read_text(encoding="utf-8")
+    label = re.search(r'id: "openai_compatible", label: "([^"]+)"', app_js)[1]
+    named = re.fullmatch(r"Another service \((.+), and more\)", label)[1].split(", ")
+    assert named == ["OpenAI", "Claude", "Grok", "Groq", "OpenRouter"]
+    words = [preset.label.split() for preset in PRESETS.presets]
+    assert [name for name in named if not any(name in label_words for label_words in words)] == []
 
 
 def test_each_preset_fills_in_an_address_settings_accepts():

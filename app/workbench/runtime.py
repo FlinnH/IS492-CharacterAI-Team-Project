@@ -141,7 +141,7 @@ class Runtime:
         if transcripts.session_runs(self.database, session) >= limit:
             raise SessionLimitReached(
                 f"This browser session has started {limit} {'run' if limit == 1 else 'runs'}, the most one session may "
-                "start. To allow more, raise WORKBENCH_SESSION_RUN_LIMIT in app/.env and restart app/run.sh."
+                "start. To allow more, raise the session run limit in Settings."
             )
         # Checked first, so Start never leaves an empty chat behind.
         self._check_ready(model_id, session)

@@ -201,7 +201,7 @@ def test_a_session_has_a_limit_on_runs(make_client):
     assert refused.status_code == 429
     assert refused.json()["detail"] == (
         "This browser session has started 2 runs, the most one session may start. "
-        "To allow more, raise WORKBENCH_SESSION_RUN_LIMIT in app/.env and restart app/run.sh."
+        "To allow more, raise the session run limit in Settings."
     )
     options = client.get("/api/run-options", headers=SESSION).json()
     assert (options["session_runs"], options["session_run_limit"]) == (2, 2)
@@ -221,7 +221,7 @@ def test_a_session_has_a_limit_on_judge_calls(make_client):
     view = post_check(client, import_sample(client, "gpt-f2"))
     note = (
         "This browser session has used its 1 AI judge call, the most one session may make. "
-        "To allow more, raise WORKBENCH_SESSION_JUDGE_LIMIT in app/.env and restart app/run.sh."
+        "To allow more, raise the session judge limit in Settings."
     )
     assert (view["judge"]["status"], view["judge"]["note"]) == (
         "failed",

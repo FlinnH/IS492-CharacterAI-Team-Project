@@ -53,6 +53,8 @@ SNAPSHOT = (
     "force_model_error",
     "key_set",
     "models_version",
+    "session_run_limit",
+    "session_judge_limit",
 )
 # The setting that holds each provider's key. Ollama and the fake model take none.
 KEY_FIELDS = {"gemini": "gemini_api_key", "openai_compatible": "openai_compatible_api_key"}
@@ -64,6 +66,8 @@ MANAGED = (
     "workbench_judge_model",
     "workbench_calls_per_minute",
     "workbench_daily_call_cap",
+    "workbench_session_run_limit",
+    "workbench_session_judge_limit",
 )
 # A key shows its last 4 characters only when it is at least this long.
 LONG_KEY = 16
@@ -119,6 +123,8 @@ def snapshot(settings: Settings, prompts: Prompts) -> dict[str, Any]:
         "force_model_error": settings.workbench_force_model_error,
         "key_set": int(has_key(settings)),
         "models_version": prompts.models_version,
+        "session_run_limit": settings.workbench_session_run_limit,
+        "session_judge_limit": settings.workbench_session_judge_limit,
     }
 
 
@@ -249,6 +255,8 @@ class SettingsService:
             daily_call_cap=settings.workbench_daily_call_cap,
             max_calls_per_minute=models.limits.calls_per_minute,
             max_daily_call_cap=models.limits.daily_call_cap,
+            session_run_limit=settings.workbench_session_run_limit,
+            session_judge_limit=settings.workbench_session_judge_limit,
             used_today=self.gateway.used_today(),
             simulate_busy=settings.workbench_force_model_error != "off",
             force_mode=settings.workbench_force_model_error,
@@ -307,6 +315,15 @@ class SettingsService:
             )
         changes["workbench_calls_per_minute"] = draft.calls_per_minute
         changes["workbench_daily_call_cap"] = draft.daily_call_cap
+
+        # A browser session can't use more calls than the day allows, so the daily cap bounds both.
+        for field, value, name in (
+            ("session_run_limit", draft.session_run_limit, "The session run limit"),
+            ("session_judge_limit", draft.session_judge_limit, "The session judge limit"),
+        ):
+            if not 1 <= value <= draft.daily_call_cap:
+                raise SettingsInvalid(f"{name} can be 1 to {draft.daily_call_cap}, the daily cap.", field)
+            changes[f"workbench_{field}"] = value
         return changes
 
     def _to_write(self, changes: dict[str, Any]) -> dict[str, Any]:

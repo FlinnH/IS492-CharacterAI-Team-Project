@@ -972,6 +972,9 @@ class SettingsView(Model):
     daily_call_cap: int
     max_calls_per_minute: int
     max_daily_call_cap: int
+    # Runs, and AI judge calls, one browser session may make. Each may be 1 up to the daily cap.
+    session_run_limit: int
+    session_judge_limit: int
     used_today: int
     # M6's forced errors. all can only come from app/.env.
     simulate_busy: bool
@@ -992,6 +995,8 @@ class SettingsDraft(Model):
     judge_model: str = Field(max_length=300)
     calls_per_minute: int
     daily_call_cap: int
+    session_run_limit: int
+    session_judge_limit: int
     simulate_busy: bool = False
 
 
