@@ -145,7 +145,11 @@ In Settings, the creator can pick another service from `app/prompts/presets.v1.t
 `app/scripts/preflight.py` checks the model setup with real calls before a demo.
 
 - **In:** the provider in `app/.env`.
-- **Out:** a printed table of time to first token and token counts for each model and reasoning effort, with no chat text. Its calls are logged with the role `preflight` and count toward the daily cap.
+- **Out:** a printed table of time to first token and token counts for each model and reasoning effort, with no chat text. Its calls are logged with the role `preflight` and count toward the daily cap. It exits with an error when a model looks retired (the service no longer lists it) or rerouted (a reply names another model).
+
+### Demo reset and judge snapshot
+
+`app/scripts/reset_demo.py` copies the database to `app/data/backups/`, then swaps in a fresh one with spec v1 and the CLA-F2 and GPT-F2 samples. It refuses while the server runs. Each sample gets its check from `app/samples/judge_snapshot.json`, real judge answers that `app/scripts/judge_snapshot.py` saved earlier. `Judge.replay` puts each answer through the same evidence checks as a live one and saves it as a judge run with 0 attempts and no model call, under today's cache key, so Check this chat finds it. An answer made with another judge model, reasoning effort, prompt, or schema, or on an edited sample, is skipped with a warning.
 
 ## One live turn, step by step
 

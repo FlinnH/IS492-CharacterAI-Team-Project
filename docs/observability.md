@@ -146,7 +146,7 @@ One row per AI judge review of a chat.
 | prompt_version, schema_version | judge.v1 and judge.schema.v1. |
 | model, reasoning_effort | The model that answered (the fallback model, after a fallback) and its effort. |
 | model_call_id | The last attempt's `model_calls` row. |
-| attempts | How many attempts the run made. 0 when no call was made, as with no key. |
+| attempts | How many attempts the run made. 0 when no call was made, as with no key, or for a sample's check that the demo reset loaded from the judge snapshot. Those runs have no `model_call_id`, and their `created_at` is the time of the real call they came from. |
 | status | ok or failed. |
 | failure | A short code when failed, like schema, cut_off, rate_limited, no_key, or session_limit. |
 | note | What the creator read when the run failed. |

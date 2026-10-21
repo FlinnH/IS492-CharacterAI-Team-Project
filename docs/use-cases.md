@@ -1,6 +1,6 @@
 # Use cases
 
-Walkthroughs of the CP3 workbench: one per flow, then the edge cases. Each one says what to do, what you should see, and which tests cover it. The flows follow the journey from the design spec: Define, Stress-test, Diagnose, and Repair.
+Walkthroughs of the CP3 workbench: one per flow, then the edge cases, then a checklist for the live demo. Each one says what to do, what you should see, and which tests cover it. The flows follow the journey from the design spec: Define, Stress-test, Diagnose, and Repair.
 
 The test character is Harry Potter right after book 4. Spec v1 is copied from `validation/fixtures/CHARACTER_SPEC.md`, and in every chat the tester plays Alex, a Hufflepuff in Harry's year.
 
@@ -321,3 +321,36 @@ Tests:
 - `tests/test_judge.py::test_a_busy_judge_is_tried_again_after_a_pause`
 - `tests/test_judge.py::test_a_judge_that_falls_back_to_the_writers_model_labels_its_flags`
 - `tests/test_recheck.py::test_a_recheck_that_fails_changes_nothing`
+
+## Demo checklist
+
+For the live demo. The reset needs the app stopped, so it comes first.
+
+1. Stop the app if it's running: press Ctrl+C in its terminal. The reset refuses while the app answers on its port.
+2. From the repo root, reset the database:
+
+   ```bash
+   app/.venv/bin/python app/scripts/reset_demo.py
+   ```
+
+   It copies the database to `app/data/backups/`, with the date and time in the file name, then makes a fresh one with spec v1 and the CLA-F2 and GPT-F2 samples. Each sample gets the check saved in `app/samples/judge_snapshot.json`, a real AI judge run made earlier, so its flags are the same every time and showing them makes no model call. Nothing from rehearsals stays: no live runs, calls on flags, model calls, or events. It makes no model calls. Read its output: a warning means the snapshot doesn't fit today's judge, and the samples start unchecked (see [app/INSTALL.md](../app/INSTALL.md) to make a new one). To undo the reset, stop the app and copy the backup over `app/data/workbench.db`.
+3. Start the app with `app/run.sh`, and open http://127.0.0.1:8492.
+4. Load the seeded transcript: Import a chat, "Seeded transcript", Preview, Import.
+5. Open the screens in demo order:
+   - Slide 3: Spec editor (spec v1 and the empty setting's warning). Run a conversation: start F2 live, send one typed line, and press Check this chat. A live check's flags change from run to run, and it may find none. Flag review: pick Claude (CLA-F2) in the switcher, whose saved check always has 3 flags. Show in context and Agree on the sentence-limit flag on turn 2, then Override the invented claim about the user on turn 6 with a reason, since that line is about Hermione, not Alex.
+   - Slide 4: check the seeded transcript on Run a conversation, then Re-check it on Flag review. Back on Run a conversation, Import a chat, "Sample: Planted instruction (synthetic)". In a second terminal at the repo root, run `app/.venv/bin/pytest tests/test_evidence.py -v`. Then Settings, Advanced: turn on "Simulate a busy AI service (for demos)", Save, and send one line in the F2 chat to show the fallback. Turn it off and Save again.
+
+Tests:
+
+- `tests/test_demo.py::test_reset_backs_up_the_old_database_then_leaves_only_the_demo_state`
+- `tests/test_demo.py::test_a_server_that_starts_after_the_reset_shows_the_demo_state`
+- `tests/test_demo.py::test_reset_refuses_while_the_server_runs`
+- `tests/test_demo.py::test_without_a_database_the_reset_makes_one_and_backs_up_nothing`
+- `tests/test_demo.py::test_two_resets_in_one_second_keep_both_backups`
+- `tests/test_demo.py::test_a_reset_that_fails_partway_leaves_the_old_database_in_place`
+- `tests/test_demo.py::test_after_a_reset_checking_cla_f2_needs_no_model_call`
+- `tests/test_demo.py::test_a_snapshot_quote_that_fails_the_evidence_checks_stays_hidden`
+- `tests/test_demo.py::test_a_snapshot_that_doesnt_fit_today_is_skipped_with_a_warning`
+- `tests/test_demo.py::test_a_missing_snapshot_leaves_the_samples_unchecked`
+- `tests/test_demo.py::test_the_saved_snapshot_fits_the_samples_and_the_judge_prompt`
+- `tests/test_demo.py::test_preflight_flags_a_retired_or_rerouted_model`

@@ -40,6 +40,28 @@ class Database:
         finally:
             conn.close()
 
+    def backup(self, target: Path) -> None:
+        """Copies the database to target, a file that doesn't exist yet, then checks the copy.
+
+        SQLite's backup API copies the database as one consistent snapshot, so
+        the copy is whole even if a write ended a moment before.
+        """
+        target = Path(target)
+        if not self.path.is_file():
+            raise FileNotFoundError(f"There's no database at {self.path} to copy.")
+        if target.exists():
+            raise FileExistsError(f"{target} already exists.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with self.connect() as conn:
+            copy = sqlite3.connect(target)
+            try:
+                conn.backup(copy)
+                result = copy.execute("PRAGMA quick_check").fetchone()[0]
+            finally:
+                copy.close()
+        if result != "ok":
+            raise RuntimeError(f"The copy at {target} failed SQLite's check: {result}")
+
 
 @contextmanager
 def transaction(conn: Connection) -> Iterator[Connection]:

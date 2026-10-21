@@ -122,7 +122,25 @@ Check the model setup with real calls. Stop the server first, since call spacing
 app/.venv/bin/python app/scripts/preflight.py
 ```
 
-It checks that a key is set and that the service lists each model in the Model menu. Then, for each model and each reasoning effort it compares, it runs the first 3 turns of F2. It ends with a table of time to first token and token counts, never chat text, and today's count of calls. That's about 12 free-tier calls and about a minute when Gemini answers quickly. When Google is busy, retries add calls and it can take several minutes. A turn with no first words within 30 seconds shows "no first token in time" in the Error column. Its calls are logged and count toward the daily cap. It won't run while `WORKBENCH_FORCE_MODEL_ERROR` is on, or with the fake model.
+It checks that a key is set and that the service lists each model in the Model menu. Then, for each model and each reasoning effort it compares, it runs the first 3 turns of F2. It ends with a table of time to first token and token counts, never chat text, and today's count of calls. That's about 12 free-tier calls and about a minute when Gemini answers quickly. When Google is busy, retries add calls and it can take several minutes. A turn with no first words within 30 seconds shows "no first token in time" in the Error column. Its calls are logged and count toward the daily cap. It won't run while `WORKBENCH_FORCE_MODEL_ERROR` is on, or with the fake model. It ends with an error when a model in the Model menu, or the judge's model, looks retired or rerouted: the service no longer lists it, or a reply says another model wrote it. Then pick another model in Settings.
+
+## Reset before a demo
+
+Stop the app first, then run this from the repo root:
+
+```bash
+app/.venv/bin/python app/scripts/reset_demo.py
+```
+
+It copies the database to `app/data/backups/`, with the date and time in the file name. Then it makes a fresh one: spec v1, and the CLA-F2 and GPT-F2 samples, each with the check saved in `app/samples/judge_snapshot.json`. The snapshot is a real AI judge run made earlier, so Check this chat on a sample shows the same flags every time, with no model call. Nothing else stays: no live runs, calls on flags, model calls, or events. The reset makes no model calls, takes under a second, and refuses while the app is running. The seeded transcript isn't loaded, so load it in Import a chat afterward. To undo a reset, stop the app and copy the backup over `app/data/workbench.db`.
+
+After a reset, the count of calls used today starts over, since the app reads it from the database. Google's own count doesn't.
+
+When the judge's model, reasoning effort, prompt, or schema changes, the reset skips the snapshot with a warning, and the samples start unchecked. Make a new snapshot with 2 judge calls:
+
+```bash
+app/.venv/bin/python app/scripts/judge_snapshot.py
+```
 
 ## Run the tests
 
@@ -164,7 +182,3 @@ While Gemini is busy, this test can fail with an error like `assert 6 == 3` even
 - [docs/observability.md](../docs/observability.md): what the database logs, and queries for debugging.
 - [docs/safety_privacy.md](../docs/safety_privacy.md): personal data, keys, limits, and what the app doesn't handle.
 - [app/prompts/README.md](prompts/README.md): each prompt, schema, and model setting.
-
-## Coming in M8
-
-A script that resets the database to a known state before a demo. It isn't built yet.
