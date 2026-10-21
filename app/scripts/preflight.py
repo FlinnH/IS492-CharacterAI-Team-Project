@@ -10,9 +10,11 @@ scenario as one chat for each reasoning effort in the models file. Earlier
 replies go back as plain assistant text, the way the Run screen sends them.
 Every call is logged in the database like any other (role "preflight") and
 counts toward the daily cap. It prints no chat text. It exits 1 if a model
-fails with the reasoning effort the models file sets for it. A busy model is
-retried like any call, but never swapped for its fallback model, so each
-model's numbers stay its own.
+fails with the reasoning effort the models file sets for it, and when a model
+in the Model menu, or the AI judge's model, looks retired or rerouted: the
+service no longer lists it, or a reply says another model wrote it. A busy
+model is retried like any call, but never swapped for its fallback model, so
+each model's numbers stay its own.
 """
 
 import asyncio
@@ -23,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workbench import app_settings, db, specs, transcripts  # noqa: E402
-from workbench.config import SPEC_PLACEHOLDER, load_prompts, load_settings  # noqa: E402
+from workbench.config import SPEC_PLACEHOLDER, judge_model, load_prompts, load_settings  # noqa: E402
 from workbench.gateway import CapReached, Gateway, Wait  # noqa: E402
 from workbench.limiter import Limiter  # noqa: E402
 from workbench.providers import ProviderError, build  # noqa: E402
@@ -36,6 +38,25 @@ def table(rows: list[list[str]]) -> str:
     lines = ["  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip() for row in rows]
     lines.insert(1, "  ".join("-" * width for width in widths))
     return "\n".join(lines)
+
+
+def model_problems(model_ids, listed: set[str] | None, reported: dict[str, set[str]]) -> list[str]:
+    """A plain line for each model that looks retired or rerouted.
+
+    listed is None when the service's model list couldn't be read, so nothing
+    is said about it. reported maps a model to the names its replies gave. A
+    name that only adds to the one asked for, like a dated version, is the
+    same model. Any other name means the service sends the model's calls to
+    another one, as Google did when it rerouted gemini-3.5-flash to 3.6.
+    """
+    problems = []
+    for model_id in model_ids:
+        if listed is not None and model_id not in listed:
+            problems.append(f"{model_id} isn't in the service's model list any more, so it may be retired.")
+        for name in sorted(reported.get(model_id, ())):
+            if not name.startswith(model_id):
+                problems.append(f"{model_id} was answered by {name}, so the service reroutes it.")
+    return problems
 
 
 async def run_chat(gateway, prompts, system, lines, model_id, effort) -> dict:
@@ -110,13 +131,15 @@ async def main() -> int:
     spec = specs.get_spec(database, scenarios.character, check.spec_version)
     system = prompts.character_template.replace(SPEC_PLACEHOLDER, specs.render_text(spec.body)).strip()
     model_ids = prompts.models.character_models(provider_name)
+    # The judge's model is listed too, since a reset's judge snapshot and every check depend on it.
+    checked_ids = [model_id for model_id in dict.fromkeys([*model_ids, judge_model(settings, prompts.models)]) if model_id]
 
     try:
         listed = set(await provider.list_models())
     except ProviderError as error:
         print(f"Listing models failed: {error.detail}")
         listed = None
-    for model_id in model_ids:
+    for model_id in checked_ids:
         state = "unknown" if listed is None else ("listed" if model_id in listed else "NOT LISTED")
         print(f"Model {model_id}: {state}.")
 
@@ -127,12 +150,14 @@ async def main() -> int:
     )
     rows = [["Model", "Effort", "Turns OK", "Median TTFT", "Tokens in/out/thinking", "Model reported", "Error"]]
     failed_configured = False
+    reported: dict[str, set[str]] = {}
     try:
         for model_id in model_ids:
             configured = prompts.models.models[model_id].reasoning_effort
             for effort in check.reasoning_efforts:
                 print(f"{model_id}, {effort}:", flush=True)
                 outcome = await run_chat(gateway, prompts, system, lines, model_id, effort)
+                reported.setdefault(model_id, set()).update(outcome["reported"])
                 median = f"{statistics.median(outcome['ttft']):.0f} ms" if outcome["ttft"] else "-"
                 label = f"{effort} (configured)" if effort == configured else effort
                 rows.append(
@@ -157,10 +182,14 @@ async def main() -> int:
     print()
     print(table(rows))
     print(f"\nCalls today on {provider_name}, counting these: {gateway.used_today()} of {settings.workbench_daily_call_cap}.")
+    problems = model_problems(checked_ids, listed, reported)
+    for problem in problems:
+        print(problem)
+    if problems:
+        print("Pick another model in Settings, or save a models version that drops it.")
     if failed_configured:
         print("A model failed with the reasoning effort the models file sets for it.")
-        return 1
-    return 0
+    return 1 if failed_configured or problems else 0
 
 
 if __name__ == "__main__":

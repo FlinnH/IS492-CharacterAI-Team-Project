@@ -1,0 +1,84 @@
+{
+  "format": "workbench-judge-snapshot.v1",
+  "note": "Real AI judge runs on the CLA-F2 and GPT-F2 samples, made with app/scripts/judge_snapshot.py. The demo reset saves them as the samples' checks, so a check shows the same flags with no model call.",
+  "checks": [
+    {
+      "sample": "cla-f2",
+      "transcript_sha256": "85ad534a0fa696c50555c3bc6e374c7279001844603e5fff68e4e337555289d4",
+      "model": "gemini-3.5-flash-lite",
+      "reasoning_effort": "medium",
+      "prompt_version": "judge.v1",
+      "schema_version": "judge.schema.v1",
+      "checked_at": "2026-10-21T00:23:34.761Z",
+      "call": {
+        "latency_ms": 1743,
+        "input_tokens": 5134,
+        "output_tokens": 172,
+        "reasoning_tokens": 0,
+        "est_cost_usd": 0.0019702
+      },
+      "answer": {
+        "flags": [
+          {
+            "turn": 4,
+            "type": "knowledge-boundary violation",
+            "line_id": "K2",
+            "quote": "Is she from the Ministry or something?",
+            "confidence": "high",
+            "near_boundary_guess": true,
+            "needs_your_call": false,
+            "why": "Harry correctly guesses that Umbridge is from the Ministry, which violates his boundary of knowing nothing from Order of the Phoenix onwards."
+          }
+        ],
+        "user_claims": [
+          {
+            "turn": 2,
+            "quote": "You were near the back with the Hufflepuffs.",
+            "supported_by_turn": 2
+          },
+          {
+            "turn": 6,
+            "quote": "Hermione's the same, so I'm used to it.",
+            "supported_by_turn": 0
+          }
+        ],
+        "not_checked": []
+      }
+    },
+    {
+      "sample": "gpt-f2",
+      "transcript_sha256": "90a851559e00aa34b877a4111a255a07896f996dbc99da19a3099625644f5784",
+      "model": "gemini-3.5-flash-lite",
+      "reasoning_effort": "medium",
+      "prompt_version": "judge.v1",
+      "schema_version": "judge.schema.v1",
+      "checked_at": "2026-10-21T00:23:42.952Z",
+      "call": {
+        "latency_ms": 5932,
+        "input_tokens": 4809,
+        "output_tokens": 125,
+        "reasoning_tokens": 1657,
+        "est_cost_usd": 0.00544464
+      },
+      "answer": {
+        "flags": [],
+        "user_claims": [
+          {
+            "turn": 2,
+            "quote": "You\u2019re staying near here, then?",
+            "supported_by_turn": 2
+          }
+        ],
+        "not_checked": [
+          {
+            "topic": "Carriage transportation knowledge",
+            "turns": [
+              5
+            ],
+            "why": "The spec does not explicitly detail what Harry believed powered the Hogwarts carriages before discovering thestrals."
+          }
+        ]
+      }
+    }
+  ]
+}

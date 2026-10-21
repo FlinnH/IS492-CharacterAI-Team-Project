@@ -666,6 +666,40 @@ class JudgeOutput(Model):
     not_checked: list[JudgeGap] = Field(description="What the spec and the chat alone can't settle.")
 
 
+# The judge snapshot (M8): real AI judge answers on the demo samples, kept in
+# app/samples/judge_snapshot.json, so the demo reset can save them as the
+# samples' checks with no model call.
+
+
+class SnapshotCall(Model):
+    """The real call an answer came from, so its numbers stay on record."""
+
+    latency_ms: int | None
+    input_tokens: int | None
+    output_tokens: int | None
+    reasoning_tokens: int | None
+    est_cost_usd: float | None
+
+
+class SnapshotCheck(Model):
+    sample: str
+    # Of the chat as the judge saw it, so an edited sample never reuses an old answer.
+    transcript_sha256: str
+    model: str
+    reasoning_effort: str | None
+    prompt_version: str
+    schema_version: str
+    checked_at: str
+    call: SnapshotCall
+    answer: JudgeOutput
+
+
+class JudgeSnapshot(Model):
+    format: Literal["workbench-judge-snapshot.v1"]
+    note: str
+    checks: list[SnapshotCheck]
+
+
 # The follow-up re-check's answer. app/prompts/recheck.schema.v1.json is this
 # model's JSON schema written out the same way, and config checks it too.
 

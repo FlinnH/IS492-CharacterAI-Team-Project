@@ -612,8 +612,14 @@ def preview(database: db.Database, settings: Settings, request: ImportRequest) -
     )
 
 
-def import_chat(database: db.Database, settings: Settings, request: ImportRequest, session: str | None) -> tuple[int, bool]:
-    """Saves the chat and returns (chat ID, True), or (the saved chat's ID, False) if it's already in."""
+def import_chat(
+    database: db.Database, settings: Settings, request: ImportRequest, session: str | None, *, record: bool = True
+) -> tuple[int, bool]:
+    """Saves the chat and returns (chat ID, True), or (the saved chat's ID, False) if it's already in.
+
+    record=False saves no import event. The demo reset uses it, since loading
+    its samples isn't something the creator did, so the event log starts empty.
+    """
     plan = plan_import(database, settings, request)
     if plan.parsed.problems:
         raise ImportInvalid("Some rows can't be read. Fix them and try again.", plan.parsed.problems)
@@ -656,7 +662,8 @@ def import_chat(database: db.Database, settings: Settings, request: ImportReques
             " VALUES (?, ?, ?, ?, ?, 'import', 0, NULL, ?)",
             [(chat_id, seq, number, speaker, text, now) for seq, (number, speaker, text) in enumerate(plan.messages, start=1)],
         )
-    telemetry.record_event(database, "import", session=session, transcript_id=chat_id, reason=plan.sample or "paste")
+    if record:
+        telemetry.record_event(database, "import", session=session, transcript_id=chat_id, reason=plan.sample or "paste")
     return chat_id, True
 
 
