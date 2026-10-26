@@ -27,8 +27,10 @@ from workbench.schemas import (
 
 SAMPLE_FILE = APP_DIR / "samples" / "spec_v1.json"
 
+# The screens call the setting Scene, so the warning does too. The field and
+# the text the models read keep the name setting.
 SETTING_WARNING = (
-    "The setting is empty. Say where and how this conversation happens, "
+    "The scene is empty. Say where and when the user meets the character, "
     "or the character may keep asking how you found them."
 )
 

@@ -9,6 +9,7 @@ What the workbench logs, how it measures each model call, and how we debug a cas
 - The chats, specs, checks, flags, and re-checks are saved in their own tables, so a model call or an event can be traced back to them.
 - Every settings change is a dated `app_settings` row, and each call names the row it ran with. These rows record only whether a key is set, never the key.
 - Text that people typed or a model wrote is redacted before it is saved: emails, phone numbers, and key-like strings become labels like `[email removed]` (see [safety_privacy.md](safety_privacy.md)).
+- The tour and the decorations log nothing. Whether someone took the tour, skipped it, or switched decorations off stays in their browser's `localStorage`, so the event log can't show it. A CP4 study session that needs this has to note it by hand.
 
 **Append-only.** Triggers refuse UPDATE, DELETE, and INSERT OR REPLACE from any connection, including the sqlite3 command line. Three columns may change:
 
@@ -32,7 +33,7 @@ Migrations 001 to 008 in `app/workbench/migrations/` make these tables. Times ar
 | --- | --- |
 | id, character_id, version | The character and the version number, from 1 up. |
 | parent | The version this one was edited from. NULL for v1. |
-| body | The whole spec as canonical JSON: fields, setting, sections, lines, line attributes, and check limits. |
+| body | The whole spec as canonical JSON: fields, setting (shown on screen as Scene), sections, lines, line attributes, and check limits. |
 | sha256 | The hash of body. |
 | note | The creator's "What changed" note. |
 | created_at | When it was saved. Spec saves are logged here, not in `events`. |

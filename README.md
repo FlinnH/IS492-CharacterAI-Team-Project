@@ -22,7 +22,7 @@ app/run.sh
 
 The first run makes `app/.venv` and installs the pinned packages. Then:
 
-1. Open http://127.0.0.1:8492.
+1. Open http://127.0.0.1:8492. On your first visit, a short tour shows each part of the screen. Press Next to follow it, or Skip tutorial to close it. The ? button at the right end of the top bar opens it again.
 2. Press Connect an AI, paste a free Gemini key from https://aistudio.google.com/apikey (no card needed), and press Test, then Save.
 
 To run the tests (no key and no network):
@@ -42,8 +42,8 @@ app/.venv/bin/pytest
   - Gemini 3.5 Flash-Lite is the AI judge and the re-check.
   - Both run on the free tier.
   - Settings can switch to `gpt-oss:20b` on the creator's own computer through Ollama, or to another OpenAI-compatible service.
-- **Screens.** Plain HTML, CSS, and JavaScript in `app/static/`, copied from the CP2 prototype, with Google's Material 3 design.
-- **Tests.** pytest 9.1, with a fake model in place of the real ones.
+- **Screens.** Plain HTML, CSS, and JavaScript in `app/static/`, copied from the CP2 prototype, with Google's Material 3 design. They add a first-visit tour and a few quiet drawings, like a theater-mask mascot in empty screens, drawn in the page itself so they work offline. The Decorations switch in Settings turns the drawings off.
+- **Tests.** pytest 9.1, with a fake model in place of the real ones. The tests that cover the screens check the page's files without opening a browser.
 
 **The CP3 docs:**
 

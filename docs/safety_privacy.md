@@ -137,12 +137,13 @@ The made-up quote edge case in [use-cases.md](use-cases.md) lists the tests.
 - **The server.** It listens on 127.0.0.1 port 8492, so only this computer can reach it. Keep `WORKBENCH_HOST` at 127.0.0.1. The workbench has no login, so a server open to the network would let anyone on it run chats on your key.
 - **The database.** `app/data/workbench.db` holds the specs, chats, checks, calls, and logs. Git ignores `app/data/`.
 - **The settings.** `app/.env` holds the key and the settings. Git ignores it.
+- **The browser's own storage.** The browser keeps two preferences, in `localStorage`: whether it has shown the tour, and whether the Decorations switch is on. They hold no chat text, personal data, or key, and the server never reads them. Each tab also keeps its session ID in `sessionStorage` (see [architecture.md](architecture.md)).
 - **The seeded transcript.** It stays at `WORKBENCH_SEEDED_TRANSCRIPT_PATH`, and the server reads it only when the creator picks it in Import. The tests are blocked from opening it.
 
 What leaves the computer:
 
 - **Model calls.** Each call goes to the provider in force, with the spec, the chat, and for the judge and re-check, the flags and question. With Gemini, that means Google. With Ollama, nothing leaves. With another service, it goes to that service's address.
-- **Fonts.** The page loads Roboto and its icons from Google Fonts.
+- **Fonts.** The page loads Roboto and its icons from Google Fonts. The tour and the decorations are drawn in the page itself, so they load nothing from outside.
 - **Links.** The "Free key, no card" link in Settings opens Google AI Studio in a new tab.
 
 ## What we don't handle
