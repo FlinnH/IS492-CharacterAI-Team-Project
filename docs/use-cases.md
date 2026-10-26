@@ -1,6 +1,6 @@
 # Use cases
 
-Walkthroughs of the CP3 workbench: one per flow, then the edge cases, then a checklist for the live demo. Each one says what to do, what you should see, and which tests cover it. The flows follow the journey from the design spec: Define, Stress-test, Diagnose, and Repair.
+Walkthroughs of the CP3 workbench: first how to get around (the tour, the top bar, and the decorations), then one per flow, then the edge cases, then a checklist for the live demo. Each one says what to do, what you should see, and which tests cover it. The flows follow the journey from the design spec: Define, Stress-test, Diagnose, and Repair.
 
 The test character is Harry Potter right after book 4. Spec v1 is copied from `validation/fixtures/CHARACTER_SPEC.md`, and in every chat the tester plays Alex, a Hufflepuff in Harry's year.
 
@@ -12,7 +12,67 @@ The test character is Harry Potter right after book 4. Spec v1 is copied from `v
 app/.venv/bin/pytest tests/test_review.py::test_undo_reopens_the_flag
 ```
 
-Some behavior lives only in the screens' JavaScript, which has no automated tests. Where a step depends on it, the walkthrough says so, and it's checked in the browser.
+Some behavior lives only in the screens' JavaScript. A few tests read those files, for example to check that every tour step points at a real part of the page, but no test runs them in a browser. Where a step depends on that behavior, the walkthrough says so, and it's checked in the browser.
+
+## Getting around
+
+### The tour
+
+The tour shows first-time users around the app. It opens by itself the first time a browser opens the app.
+
+1. The tour has 8 steps. Each one draws a ring around one part of the screen and says what it's for in a sentence or two: what the app is for, Settings, the Spec editor, Run a conversation, Check this chat, Flag review, Compare runs, and the ? button. The card says where you are, like "Step 2 of 8".
+2. Press Next and Back to move through it. Some steps open another screen first. On the last step, Next reads Done.
+3. Press Skip tutorial, or Escape, to close it at any step.
+4. To see it again, press ? at the right end of the top bar. Its tooltip and its name for screen readers are "Take the tour".
+
+Expected:
+
+- A step whose part of the screen isn't there yet still makes sense. For example, before any chat has a finished reply, the Check this chat step rings the Run a conversation tab instead.
+- Tab and Shift+Tab stay inside the card. Closing the tour goes back to the screen it started on, and focus goes back to the ? button if you opened it from there.
+- On a phone-sized screen, under 600 pixels wide, the card sits at the bottom of the screen.
+- The browser remembers that the tour opened, in its own storage on this computer (`localStorage`). If the browser blocks that storage, as some private windows do, the tour opens again on the next visit. Everything else works the same.
+- The words of every step are in one list, `TOUR_STEPS`, at the top of the tour's code in `app/static/app.js`, so they're easy to edit.
+
+Tests:
+
+- `tests/test_screens.py::test_the_tour_has_eight_steps`
+- `tests/test_screens.py::test_every_tour_step_points_at_an_element_in_index_html`
+- `tests/test_screens.py::test_the_tour_visits_every_screen_and_ends_on_its_button`
+- `tests/test_screens.py::test_the_tour_words_follow_the_prose_rules`
+- `tests/test_screens.py::test_storage_is_only_touched_inside_try`
+- Moving between steps, the ring, and the keyboard handling are JavaScript with no automated test, so they're checked in the browser.
+
+### The top bar
+
+The bar at the top of every screen holds, from left to right: the app's name, a "Live chats and AI checks" label, Codes, Settings, the Light and Dark theme buttons, and ?. Codes opens "What the codes mean", which explains the scenario codes (like F2), the spec line IDs (like K2), and the chat names (like CLA-F2). The bar fits on one row in any window at least 1024 pixels wide, so a 1280-pixel window fits it even at 125% browser zoom. On a phone, it wraps onto several rows.
+
+### Decorations
+
+The decorations are a few quiet drawings that make the screens feel less plain. They appear only in empty spots, while a check runs, after you finish a chat's flags, and in the side margins of wide windows, never behind or on top of words. Every drawing is original and drawn in the page's own code (inline SVG), so it works offline.
+
+1. On Run a conversation with no chats yet, the mascot sits above the "No chats yet" message with faint speech bubbles around it. The mascot is a friendly theater mask, like the app's mark in the top bar.
+2. Before any chat is checked, Flag review and Compare runs show the mascot with faint line IDs taken from the spec, like K2 and B4.
+3. Press Check this chat. While the check runs, a magnifier sweeps across a faux line of words where the progress bar was. Re-check shows the same magnifier.
+4. On Flag review, make a call that leaves no flag in the chat waiting for you. Three small stars sparkle once next to your call. They don't sparkle when you agreed with every flag in the chat, since that's when the screen asks you to check again.
+5. In a window 1440 pixels wide or wider, faint speech bubbles and line IDs sit in the side margins.
+6. To turn the drawings off, open Settings, then Advanced, and switch off Decorations. Turn it off for a study session.
+
+Expected:
+
+- Only three things move: the mascot blinks or tilts now and then, the magnifier sweeps while a check runs, and the sparkle plays once. The background drawings stay still and faint, at 10% opacity, never more than 12%.
+- Nothing moves while the browser tab is hidden. With the computer's reduce motion setting on, nothing moves at all, and the sparkle doesn't show.
+- The magnifier only decorates. The "Checking this chat" words and what screen readers hear stay the same, and screen readers skip every drawing.
+- The Decorations switch works on its own: it applies at once, Save and Cancel don't touch it, and only this browser remembers it (`localStorage`). It starts on.
+- The last call can be an Agree or an Override. Either one sparkles, unless every flag in the chat is now agreed. Like the "Needs your call" counts, it rewards making calls, not agreeing.
+
+Tests:
+
+- `tests/test_screens.py::test_settings_has_a_decorations_switch_under_advanced`
+- `tests/test_screens.py::test_background_art_stays_faint_and_still`
+- `tests/test_screens.py::test_only_the_mascot_the_magnifier_and_the_sparkle_move`
+- `tests/test_screens.py::test_decorations_pause_when_hidden_and_stay_still_when_motion_is_reduced`
+- `tests/test_styles.py`, which checks that text keeps its contrast in both themes
+- When the sparkle plays, and how the switch takes effect at once, live in JavaScript with no automated test, so they're checked in the browser.
 
 ## Flows
 
@@ -20,7 +80,7 @@ Some behavior lives only in the screens' JavaScript, which has no automated test
 
 On Spec editor (Step 1 of 4: Define).
 
-1. Spec v1 shows six fields (Name, From, Point in the story, Who you are talking to, Personality, Voice), an empty setting, and eight sections with 52 numbered lines: C1 to C25, R1 to R15, K1 to K6, and B1 to B6.
+1. Spec v1 shows six fields (Name, From, Point in the story, Who you are talking to, Personality, Voice), an empty Scene, and eight sections with 52 numbered lines: C1 to C25, R1 to R15, K1 to K6, and B1 to B6.
 2. Type an ID like K2, or words, in Search lines.
 3. Select an ID to open "Flags that cite K2", a side sheet that lists every saved flag that cites the line.
 4. Press Edit spec. Change any line or field. Add a line or Delete a line as needed. A new line gets its ID when you save, and a deleted line stays until you save, with Undo. Fill in "What changed (optional)".
@@ -207,18 +267,19 @@ Tests:
 
 ## Edge cases
 
-### Empty setting
+### Empty scene
 
-1. Open Spec editor on v1, whose setting is empty.
-2. A warning reads: "The setting is empty. Say where and how this conversation happens, or the character may keep asking how you found them."
-3. Press Add a setting, which opens the editor at the Setting field. Write one and press Save as v2.
+1. Open Spec editor on v1, whose Scene is empty.
+2. A warning reads: "The scene is empty. Say where and when the user meets the character, or the character may keep asking how you found them."
+3. Press Add a scene, which opens the editor at the Scene field. Write one and press Save as v2.
 
-Expected: the warning is gone on v2. The setting goes in the spec text right after the fields, so the character and the judge both read it, and a flag can cite it as "Setting". Saving a setting of only spaces keeps the warning.
+Expected: the warning is gone on v2. The scene goes in the spec text right after the fields, labeled "Setting" there, so the character and the judge both read it. A flag can cite it as "Setting", and its card shows that cite as Scene. Saving a scene of only spaces keeps the warning. The spec's saved JSON keeps the field name `setting`.
 
 Tests:
 
 - `tests/test_spec_api.py::test_empty_setting_returns_warning`
 - `tests/test_specs.py::test_render_text_puts_the_setting_after_the_fields`
+- `tests/test_screens.py::test_the_spec_field_reads_scene_on_screen`
 
 ### Made-up quote
 
@@ -334,10 +395,10 @@ For the live demo. The reset needs the app stopped, so it comes first.
    ```
 
    It copies the database to `app/data/backups/`, with the date and time in the file name, then makes a fresh one with spec v1 and the CLA-F2 and GPT-F2 samples. Each sample gets the check saved in `app/samples/judge_snapshot.json`, a real AI judge run made earlier, so its flags are the same every time and showing them makes no model call. Nothing from rehearsals stays: no live runs, calls on flags, model calls, or events. It makes no model calls. Read its output: a warning means the snapshot doesn't fit today's judge, and the samples start unchecked (see [app/INSTALL.md](../app/INSTALL.md) to make a new one). To undo the reset, stop the app and copy the backup over `app/data/workbench.db`.
-3. Start the app with `app/run.sh`, and open http://127.0.0.1:8492.
+3. Start the app with `app/run.sh`, and open http://127.0.0.1:8492 in the browser you'll present from. If the tour opens, press Skip tutorial, so it doesn't open during the demo. Decorations can stay on.
 4. Load the seeded transcript: Import a chat, "Seeded transcript", Preview, Import.
 5. Open the screens in demo order:
-   - Slide 3: Spec editor (spec v1 and the empty setting's warning). Run a conversation: start F2 live, send one typed line, and press Check this chat. A live check's flags change from run to run, and it may find none. Flag review: pick Claude (CLA-F2) in the switcher, whose saved check always has 3 flags. Show in context and Agree on the sentence-limit flag on turn 2, then Override the invented claim about the user on turn 6 with a reason, since that line is about Hermione, not Alex.
+   - Slide 3: Spec editor (spec v1 and the empty Scene's warning). Run a conversation: start F2 live, send one typed line, and press Check this chat. A live check's flags change from run to run, and it may find none. Flag review: pick Claude (CLA-F2) in the switcher, whose saved check always has 3 flags. Show in context and Agree on the sentence-limit flag on turn 2, then Override the invented claim about the user on turn 6 with a reason, since that line is about Hermione, not Alex.
    - Slide 4: check the seeded transcript on Run a conversation, then Re-check it on Flag review. Back on Run a conversation, Import a chat, "Sample: Planted instruction (synthetic)". In a second terminal at the repo root, run `app/.venv/bin/pytest tests/test_evidence.py -v`. Then Settings, Advanced: turn on "Simulate a busy AI service (for demos)", Save, and send one line in the F2 chat to show the fallback. Turn it off and Save again.
 
 Tests:

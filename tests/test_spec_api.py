@@ -111,7 +111,10 @@ def test_line_ids_are_never_reused(client):
 def test_empty_setting_returns_warning(client):
     v1 = latest(client)
     assert [warning["field"] for warning in v1["warnings"]] == ["setting"]
-    assert "setting" in v1["warnings"][0]["message"].lower()
+    # The screens call the field Scene, so its warning does too.
+    message = v1["warnings"][0]["message"].lower()
+    assert "scene" in message
+    assert "setting" not in message
 
     edit = edit_payload(v1)
     edit["setting"] = "  \n "

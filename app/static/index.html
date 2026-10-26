@@ -17,17 +17,19 @@
     <div class="app-header__inner">
       <div class="top-app-bar">
         <span class="icon top-app-bar__icon" aria-hidden="true">theater_comedy</span>
-        <p class="top-app-bar__title">Character Consistency Workbench</p>
+        <p class="top-app-bar__title" data-tour="brand">Character Consistency Workbench</p>
         <div class="top-app-bar__actions">
           <span class="chip chip--icon-leading">
             <span class="icon" aria-hidden="true">fact_check</span>
             <span>Live chats and AI checks</span>
           </span>
-          <button type="button" class="btn btn--text btn--icon-leading" data-action="show-codes" aria-haspopup="dialog">
+          <!-- The dialog's own title describes the button, so the short label fits the bar on one row. -->
+          <button type="button" class="btn btn--text btn--icon-leading" data-action="show-codes" aria-haspopup="dialog"
+            aria-describedby="codes-title" data-tooltip="What the codes mean">
             <span class="icon" aria-hidden="true">help</span>
-            <span>What do the codes mean?</span>
+            <span>Codes</span>
           </button>
-          <button type="button" class="btn btn--text btn--icon-leading" data-action="open-settings" aria-haspopup="dialog">
+          <button type="button" class="btn btn--text btn--icon-leading" data-action="open-settings" data-tour="settings" aria-haspopup="dialog">
             <span class="icon" aria-hidden="true">settings</span>
             <span>Settings</span>
           </button>
@@ -43,26 +45,29 @@
               <span>Dark</span>
             </button>
           </div>
+          <!-- A plain "?" rather than an icon, so it shows offline too. -->
+          <button type="button" class="icon-btn" data-action="start-tour" data-tour="tour" aria-haspopup="dialog"
+            aria-label="Take the tour" data-tooltip="Take the tour"><span aria-hidden="true">?</span></button>
         </div>
       </div>
 
       <div class="tabs" role="tablist" aria-label="Workbench screens">
-        <button type="button" class="tab" role="tab" id="tab-define" data-screen="define" aria-controls="panel-define" aria-selected="true" tabindex="0">
+        <button type="button" class="tab" role="tab" id="tab-define" data-screen="define" data-tour="define" aria-controls="panel-define" aria-selected="true" tabindex="0">
           <span class="icon" aria-hidden="true">edit_note</span>
           <span>Spec editor</span>
         </button>
-        <button type="button" class="tab" role="tab" id="tab-run" data-screen="run" aria-controls="panel-run" aria-selected="false" tabindex="-1">
+        <button type="button" class="tab" role="tab" id="tab-run" data-screen="run" data-tour="run" aria-controls="panel-run" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">forum</span>
           <span>Run a conversation</span>
         </button>
-        <button type="button" class="tab" role="tab" id="tab-diagnose" data-screen="diagnose" aria-controls="panel-diagnose" aria-selected="false" tabindex="-1">
+        <button type="button" class="tab" role="tab" id="tab-diagnose" data-screen="diagnose" data-tour="diagnose" aria-controls="panel-diagnose" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">flag</span>
           <span>Flag review</span>
           <!-- How many flags still need the creator's call. app.js fills it. -->
           <span class="badge" data-todo-badge aria-hidden="true" hidden></span>
           <span class="visually-hidden" data-todo-label></span>
         </button>
-        <button type="button" class="tab" role="tab" id="tab-compare" data-screen="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1">
+        <button type="button" class="tab" role="tab" id="tab-compare" data-screen="compare" data-tour="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">compare_arrows</span>
           <span>Compare runs</span>
         </button>
@@ -110,6 +115,10 @@
   <footer class="app-footer">
     <p>Workbench for IS 492 CP3. Live chats, Check this chat, Re-check, and Test in Settings make model calls. Your calls on Flag review are saved with each check.</p>
   </footer>
+
+  <!-- Still, faint drawings in the side margins of wide windows, behind
+       everything. app.js draws them; the Decorations switch hides them. -->
+  <div class="decor decor-margins" data-decor-margins aria-hidden="true"></div>
 
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="visually-hidden" id="announcer" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -184,6 +193,30 @@
         <button type="submit" class="btn btn--text" value="discard">Discard</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- The walkthrough, from the "?" button or once on a first visit. It
+       covers the window: the ring rings the step's target and dims the rest,
+       and app.js fills the card from TOUR_STEPS and places it by the ring. -->
+  <dialog class="tour" id="tour-dialog" aria-labelledby="tour-title" aria-describedby="tour-text">
+    <div class="tour__ring" data-tour-ring aria-hidden="true"></div>
+    <div class="tour__card" data-tour-card>
+      <div class="tour__body" aria-live="polite" aria-atomic="true">
+        <div class="tour__head">
+          <div class="decor tour__mascot" data-tour-mascot aria-hidden="true"></div>
+          <div>
+            <p class="tour__count" data-tour-count></p>
+            <h2 class="tour__title" id="tour-title" data-tour-title></h2>
+          </div>
+        </div>
+        <p class="tour__text" id="tour-text" data-tour-text></p>
+      </div>
+      <div class="tour__actions">
+        <button type="button" class="btn btn--text tour__skip" data-action="tour-skip">Skip tutorial</button>
+        <button type="button" class="btn btn--outlined" data-action="tour-back">Back</button>
+        <button type="button" class="btn btn--filled" data-action="tour-next">Next</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog class="side-sheet" id="citing-flags-sheet" aria-labelledby="citing-flags-title">

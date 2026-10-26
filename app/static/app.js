@@ -78,6 +78,9 @@
       recheckDrafts: {}, // the question being typed, keyed by chat ID
       flagFilter: "All",
       reviewTurn: null, // the turn highlighted in the conversation
+      // The flag whose call left no open flag in its chat, for one redraw
+      // with the sparkle (see Decorations in section 5).
+      sparkleFlagId: null,
       // Set by "Open K2 in the spec" on Compare runs: { lineId, note }. The
       // Spec editor highlights that line once and lands on it.
       specHighlight: null,
@@ -146,7 +149,7 @@
     Low: "signal_cellular_alt_1_bar",
   };
 
-  // What the codes mean, exactly as the "What do the codes mean?" dialog in
+  // What the codes mean, exactly as the "What the codes mean" dialog in
   // index.html says. Tooltips use these meanings and no others.
   const LINE_MEANINGS = { C: "canon fact", R: "relationship", K: "knowledge limit", B: "behavior rule" };
   const CASE_MEANINGS = { T: "typical case", E: "edge case", F: "failure case" };
@@ -159,10 +162,19 @@
     F2: "things Harry can't know yet",
   };
 
+  // The spec's setting is saved, and cited by flags, as "Setting". The
+  // screens call it Scene, so nobody mistakes it for the app's Settings.
+  const SCENE_CITE = "Setting";
+
+  // How a cite shows on screen: a line ID like K2, a field like Voice, or Scene.
+  function citeLabel(lineId) {
+    return lineId === SCENE_CITE ? "Scene" : lineId;
+  }
+
   // Tooltip for a spec line, like "K2: knowledge limit", or a field a flag
   // cites, like "Voice: spec field".
   function lineTip(lineId) {
-    return `${lineId}: ${citeMeaning(lineId)}`;
+    return `${citeLabel(lineId)}: ${citeMeaning(lineId)}`;
   }
 
   // Tooltip for a scenario, like "F2: failure case, things Harry can't know yet".
@@ -236,6 +248,8 @@
       state.specView = view;
       state.specLoad = { status: "ready", message: "" };
       shown = true;
+      // The margin art's line IDs come from the spec on screen.
+      drawMarginArt();
     } catch (error) {
       if (ticket !== specRequest) return false;
       // A spotlight waiting for this load would fire much later and clear the search.
@@ -349,11 +363,11 @@
       .join("");
   }
 
-  // A warning from the server, like an empty setting. On the latest version
+  // A warning from the server, like an empty Scene. On the latest version
   // it offers the fix.
   function renderSpecWarning(warning, isLatest) {
     const fix = isLatest && warning.field === "setting"
-      ? '<button type="button" class="btn btn--filled" data-action="add-setting" data-focus-key="add-setting">Add a setting</button>'
+      ? '<button type="button" class="btn btn--filled" data-action="add-setting" data-focus-key="add-setting">Add a scene</button>'
       : "";
     return `
       <div class="card card--filled spec-notice spec-notice--warning">
@@ -459,8 +473,8 @@
   }
 
   // The spec as cards of lines. "Who Harry is" holds the opening instruction,
-  // the labeled fields, and the setting, which have no IDs. Every other line
-  // has an ID.
+  // the labeled fields, and the setting (shown as Scene), which have no IDs.
+  // Every other line has an ID.
   function specCards(spec) {
     return [
       {
@@ -468,7 +482,7 @@
         lines: [
           { text: spec.preamble },
           ...spec.fields.map((field) => ({ label: field.label, text: field.text })),
-          { label: "Setting", text: spec.setting || "Not set yet.", empty: !spec.setting },
+          { label: "Scene", text: spec.setting || "Not set yet.", empty: !spec.setting },
         ],
       },
       ...spec.sections.map((section) => ({
@@ -635,8 +649,8 @@
               ${draft.fields
                 .map((field, i) => `<li class="spec-edit-line">${textField(`field-${i}`, field.label, field.text, { invalid: invalid(`field-${i}`) })}</li>`)
                 .join("")}
-              <li class="spec-edit-line">${textField("setting", "Setting", draft.setting, {
-                hint: "Where and how this conversation happens.",
+              <li class="spec-edit-line">${textField("setting", "Scene", draft.setting, {
+                hint: "Where and when the user meets the character.",
                 invalid: invalid("setting"),
               })}</li>
             </ul>
@@ -1313,13 +1327,20 @@
       </div>`;
   }
 
+  // No chats yet gets the mascot with speech bubbles; a load error doesn't.
   function renderNoChat() {
-    const text = state.chatsLoad.status === "failed"
+    const failed = state.chatsLoad.status === "failed";
+    const text = failed
       ? `The saved chats didn't load. ${state.chatsLoad.message}`
       : "No chats yet. Pick a scenario and a model, then press Start run. Or import a saved chat.";
     return `
       <section class="card card--outlined transcript" aria-label="Transcript">
-        <div class="chat"><p class="chat__empty">${escapeHtml(text)}</p></div>
+        <div class="chat">
+          <div class="chat__empty">
+            ${failed ? "" : decorScene("chat")}
+            <p>${escapeHtml(text)}</p>
+          </div>
+        </div>
       </section>`;
   }
 
@@ -1393,7 +1414,7 @@
     if (flags.length > 0) {
       flagStatus = `<span class="bubble__status bubble__status--flagged"><span class="icon icon--filled" aria-hidden="true">flag</span><span>Flagged</span></span>`;
     } else if (alsoLines.length > 0) {
-      flagStatus = `<span class="bubble__status"><span class="icon" aria-hidden="true">flag</span><span>Also breaks ${escapeHtml(listText(alsoLines))}</span></span>`;
+      flagStatus = `<span class="bubble__status"><span class="icon" aria-hidden="true">flag</span><span>Also breaks ${escapeHtml(listText(alsoLines.map(citeLabel)))}</span></span>`;
     }
     return `
       <li class="bubble bubble--${message.speaker === "user" ? "user" : "character"}" data-seq="${message.seq}"
@@ -2234,7 +2255,7 @@
             <p class="check-start__body">${here
               ? "The automatic checks run first. Then the AI judge reads the whole chat in one call, which can take a minute."
               : "A check of this chat started in another tab or before a reload. Look again in a moment."}</p>
-            ${here ? '<div class="check-progress" aria-hidden="true"></div>' : ""}
+            ${here ? `<div class="check-progress" aria-hidden="true"></div>${decorScan()}` : ""}
           </div>
           ${here
             ? ""
@@ -2612,7 +2633,7 @@
       body.innerHTML = `
         <div class="review">
           ${renderChangedChats()}
-          <p class="card card--outlined flag-cards__empty">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>
+          ${renderNoCheckedChats()}
         </div>`;
       return null;
     }
@@ -2711,6 +2732,16 @@
     if (!target) return null;
     revealTurn(body);
     return body.querySelector(`#${cardId(target)}`);
+  }
+
+  // Flag review and Compare runs before any chat is checked: the words, with
+  // the mascot and faint line IDs beside them.
+  function renderNoCheckedChats() {
+    return `
+      <div class="card card--outlined flag-cards__empty empty-state">
+        ${decorScene("ids")}
+        <p class="empty-state__text">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>
+      </div>`;
   }
 
   // When the chat was checked and which judge read it, plus the judge's note
@@ -2816,7 +2847,7 @@
   // did and why, and Go to flag while the flag is still in the review.
   function renderChange(item, change) {
     const flag = item.flags.find((found) => found.id === change.flag_id) || null;
-    const place = `${numberWord(item.chat)} ${change.turn}, ${change.type}, ${change.line_id}`;
+    const place = `${numberWord(item.chat)} ${change.turn}, ${change.type}, ${citeLabel(change.line_id)}`;
     let did = "";
     if (change.change === "rerated") {
       did = `${capitalized(change.from_confidence)} to ${capitalized(change.to_confidence)}. `;
@@ -2883,6 +2914,7 @@
           <p class="check-start__title" tabindex="-1" data-focus-key="recheck-status">Re-checking this chat</p>
           <p class="check-start__body">The AI judge reads the chat again in one call, which can take a minute.</p>
           <div class="check-progress" aria-hidden="true"></div>
+          ${decorScan()}
         </div>`
       : `
         <div class="follow-up__actions">
@@ -3095,7 +3127,7 @@
         data-flag="${flag.id}" data-line="${escapeHtml(lineId)}" aria-expanded="${open}"
         aria-controls="${key}-text" data-focus-key="${key}"
         data-tooltip="${escapeHtml(lineTip(lineId))}">
-        <span>${escapeHtml(lineId)}<span class="visually-hidden">: ${escapeHtml(citeMeaning(lineId))}</span></span>
+        <span>${escapeHtml(citeLabel(lineId))}<span class="visually-hidden">: ${escapeHtml(citeMeaning(lineId))}</span></span>
         <span class="icon" aria-hidden="true">${open ? "expand_less" : "expand_more"}</span>
       </button>`;
   }
@@ -3105,7 +3137,7 @@
     const open = Boolean(state.citesOpen[`${flag.id}:${flag.line_id}`]);
     return `
       <p class="flag-card__cite-text" id="cite-${flag.id}-text"${open ? "" : " hidden"}>
-        <span class="flag-card__label">${escapeHtml(flag.line_id)}.</span> ${escapeHtml(flag.line_text)}
+        <span class="flag-card__label">${escapeHtml(citeLabel(flag.line_id))}.</span> ${escapeHtml(flag.line_text)}
       </p>`;
   }
 
@@ -3198,7 +3230,7 @@
         : ""}
       ${lines.join("")}
       <p class="context-line">
-        <span class="context-line__speaker">Spec ${escapeHtml(flag.line_id)}</span>
+        <span class="context-line__speaker">Spec ${escapeHtml(citeLabel(flag.line_id))}</span>
         ${escapeHtml(flag.line_text)}
       </p>`;
   }
@@ -3212,12 +3244,16 @@
         Undo<span class="visually-hidden">: ${escapeHtml(flagTitle(item.chat, flag))}</span>
       </button>`;
 
+    // The call that left no open flag in the chat gets the sparkle, once.
+    const sparkle = flag.id === state.sparkleFlagId ? sparkleHtml() : "";
+
     if (verdict === "agreed") {
       return `
         <div class="flag-card__actions">
           <p class="flag-card__status">
             <span class="icon icon--filled" aria-hidden="true">check_circle</span>
             <span>Agreed by you</span>
+            ${sparkle}
           </p>
           ${undo}
         </div>`;
@@ -3229,7 +3265,7 @@
         : '<span class="icon" aria-hidden="true">block</span><span>Overridden by you</span>';
       return `
         <div class="flag-card__actions">
-          <p class="flag-card__status">${status}</p>
+          <p class="flag-card__status">${status}${sparkle}</p>
           <p class="flag-card__reason"><span class="flag-card__label">Your reason:</span> ${escapeHtml(flag.call.reason)}</p>
           ${undo}
         </div>`;
@@ -3390,11 +3426,17 @@
     delete state.overrideDrafts[flagId];
     delete state.overrideTypes[flagId];
     delete state.overrideErrors[flagId];
+    // The call that leaves no open flag in the chat gets a sparkle in this
+    // redraw only. Not when the rubber-stamp check shows, since the screen
+    // warns then. Like the other cues, it counts calls, not agreements.
+    const finished = found.item.open_calls > 0 && updated.open_calls === 0;
+    state.sparkleFlagId = finished && !updated.agreed_with_every ? flagId : null;
     const body = currentScreen === "diagnose" ? diagnoseBody() : null;
     const card = body ? body.querySelector(`#${cardId(found.flag)}`) : null;
     const inCard = Boolean(card && card.contains(document.activeElement)) && state.reviewChatId === found.item.chat.id;
     if (body) refresh(inCard ? { focusKey } : {});
     else redrawReview();
+    state.sparkleFlagId = null;
     if (state.reviewChatId === found.item.chat.id) announceReview();
   }
 
@@ -3703,8 +3745,7 @@
     }
     const item = selectedReview();
     if (!item) {
-      body.innerHTML =
-        '<p class="card card--outlined flag-cards__empty">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>';
+      body.innerHTML = renderNoCheckedChats();
       return null;
     }
     // The same chat stays on Flag review and here.
@@ -3814,7 +3855,7 @@
     if (status === "break") {
       // A retyped flag is a break of the type the creator gave it.
       const types = [...new Set(standing.map((flag) => (verdictOf(flag) === "retyped" ? flag.call.type : flag.type)))].join(", ");
-      const cites = [...new Set(standing.map((flag) => flag.line_id))].join(", ");
+      const cites = [...new Set(standing.map((flag) => citeLabel(flag.line_id)))].join(", ");
       label = `
         <p class="compare-reply__label">
           <span class="icon icon--filled" aria-hidden="true">flag</span>
@@ -4125,8 +4166,8 @@
 
   const codesDialog = document.getElementById("codes-dialog");
 
-  // "What do the codes mean?" in the top bar. Escape, Close, or a click on
-  // the scrim closes it, and focus goes back to the button.
+  // Codes in the top bar opens "What the codes mean". Escape, Close, or a
+  // click on the scrim closes it, and focus goes back to the button.
   actions["show-codes"] = (button) => {
     openDialog(codesDialog, button);
   };
@@ -4407,6 +4448,11 @@
             <input type="checkbox" role="switch" class="switch" id="settings-busy" aria-describedby="settings-busy-help"${view.simulate_busy ? " checked" : ""}>
           </div>
           <p class="settings__line" id="settings-busy-help">${escapeHtml(busyLine)}</p>
+          <div class="settings__switch-row">
+            <label class="settings__switch-label" for="settings-decor">Decorations</label>
+            <input type="checkbox" role="switch" class="switch" id="settings-decor" aria-describedby="settings-decor-help"${document.documentElement.dataset.decor === "on" ? " checked" : ""}>
+          </div>
+          <p class="settings__line" id="settings-decor-help">Faint drawings in empty, waiting, and finished spots. Changes right away, in this browser only.</p>
         </div>
       </details>
       <p class="settings__saved">${view.saved_at ? `These settings were saved ${escapeHtml(chatTime(view.saved_at))}. ` : ""}Every model call records the settings it used.</p>
@@ -4580,8 +4626,9 @@
     }
   }
 
+  // Advanced holds two switches, so its note names the one that matters in a demo.
   function showBusyNote() {
-    settingsBody.querySelector("[data-settings-busy-note]").textContent = settingsField("settings-busy").checked ? "On" : "";
+    settingsBody.querySelector("[data-settings-busy-note]").textContent = settingsField("settings-busy").checked ? "Busy service on" : "";
   }
 
   function settingsResult(ok, message, next) {
@@ -4665,6 +4712,10 @@
       connectionChanged();
     } else if (control.id === "settings-busy") {
       showBusyNote();
+    } else if (control.id === "settings-decor") {
+      // Not part of Save or Cancel: it applies now and stays in this browser.
+      applyDecorations(control.checked);
+      rememberDecorations(control.checked);
     }
   });
 
@@ -5008,9 +5059,409 @@
       .catch(() => {});
   }
 
+  // Decorations ------------------------------------------------------------
+  // Original drawings for quiet places only (styles.css says how they look
+  // and move): the mascot with still art in empty states, the magnifier
+  // while a check runs, the sparkle after a chat's last call, and still art
+  // in the side margins of wide windows. All are drawn here as inline SVG,
+  // so they work offline, and all are aria-hidden. They show while the
+  // Decorations switch in Settings, Advanced is on. It starts on, and this
+  // browser remembers it.
+
+  const DECOR_KEY = "workbench-decorations";
+  // Line IDs for the faint art: the 2nd knowledge limit, the 4th behavior
+  // rule, and so on, from the spec on screen once it has loaded.
+  const DECOR_PICKS = [["K", 2], ["B", 4], ["C", 17], ["R", 3]];
+
+  function decorationsOn() {
+    try {
+      return localStorage.getItem(DECOR_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  }
+
+  function applyDecorations(on) {
+    document.documentElement.dataset.decor = on ? "on" : "off";
+  }
+
+  function rememberDecorations(on) {
+    try {
+      localStorage.setItem(DECOR_KEY, on ? "on" : "off");
+    } catch {
+      // Storage can be off; the choice then lasts until a reload.
+    }
+  }
+
+  // Nothing moves while the tab is hidden (styles.css keys off this).
+  function trackPageVisibility() {
+    document.documentElement.toggleAttribute("data-page-hidden", document.hidden);
+  }
+
+  document.addEventListener("visibilitychange", trackPageVisibility);
+
+  function decorIds() {
+    const ids = state.specView
+      ? state.specView.body.sections.flatMap((section) => section.lines.map((line) => line.id))
+      : [];
+    return DECOR_PICKS.map(([letter, nth]) => {
+      const same = ids.filter((id) => id[0] === letter);
+      return same.length > 0 ? same[Math.min(nth, same.length) - 1] : `${letter}${nth}`;
+    });
+  }
+
+  // The mascot: a friendly theater mask, like the top bar's mark. Its eyes
+  // blink and its head tilts now and then.
+  function mascotSvg() {
+    return `
+      <svg class="mascot" viewBox="0 0 64 64" width="56" height="56" focusable="false" aria-hidden="true">
+        <path class="mascot__ribbon" d="M11 20C5 22 4 30 8 35M53 20C59 22 60 30 56 35"/>
+        <path class="mascot__face" d="M11 14C21 7 43 7 53 14C56 31 50 47 32 57C14 47 8 31 11 14Z"/>
+        <path class="mascot__brow" d="M17 21Q22.5 17 28 21M36 21Q41.5 17 47 21"/>
+        <g class="mascot__eyes">
+          <ellipse class="mascot__ink" cx="22.5" cy="27" rx="4.5" ry="3"/>
+          <ellipse class="mascot__ink" cx="41.5" cy="27" rx="4.5" ry="3"/>
+        </g>
+        <circle class="mascot__cheek" cx="17.5" cy="35" r="3.2"/>
+        <circle class="mascot__cheek" cx="46.5" cy="35" r="3.2"/>
+        <path class="mascot__ink" d="M22 38Q32 50 42 38Q32 43 22 38Z"/>
+      </svg>`;
+  }
+
+  function bubbleSvg(flip = false) {
+    return `
+      <svg class="decor-bubble${flip ? " decor-bubble--flip" : ""}" viewBox="0 0 44 34" width="44" height="34" focusable="false" aria-hidden="true">
+        <path d="M7 3h30a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H18l-8 6v-6H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z"/>
+        <path d="M10 11h20M10 17h13"/>
+      </svg>`;
+  }
+
+  function idTag(id) {
+    return `<span class="decor-id">${escapeHtml(id)}</span>`;
+  }
+
+  // An empty state's drawing: the mascot with still, faint art around it,
+  // speech bubbles for a chat ("chat") or line IDs for flags ("ids").
+  function decorScene(kind) {
+    const art = kind === "chat" ? [bubbleSvg(), bubbleSvg(true), bubbleSvg()] : decorIds().map(idTag);
+    return `
+      <div class="decor decor-scene" aria-hidden="true">
+        <div class="decor-art">
+          ${art.map((item, i) => `<span class="decor-scene__item decor-scene__item--${i + 1}">${item}</span>`).join("")}
+        </div>
+        ${mascotSvg()}
+      </div>`;
+  }
+
+  // While a check or re-check runs: a magnifier sweeps a faux line of words.
+  // The status words beside it say what's happening; this only decorates.
+  function decorScan() {
+    return `
+      <div class="decor decor-scan" aria-hidden="true">
+        <div class="decor-scan__line decor-art">${'<span class="decor-scan__word"></span>'.repeat(7)}</div>
+        <div class="decor-scan__mover">
+          <svg class="decor-scan__lens" viewBox="0 0 32 32" width="32" height="32" focusable="false" aria-hidden="true">
+            <circle cx="13" cy="13" r="9"/>
+            <path d="M20 20l8 8"/>
+          </svg>
+        </div>
+      </div>`;
+  }
+
+  // Three small stars that play once, after the call that leaves no open
+  // flag in a chat (see sendCall).
+  function sparkleHtml() {
+    const star = '<svg class="decor-sparkle__star" viewBox="0 0 12 12" focusable="false" aria-hidden="true"><path d="M6 0L7.4 4.6L12 6L7.4 7.4L6 12L4.6 7.4L0 6L4.6 4.6Z"/></svg>';
+    return `<span class="decor decor-sparkle" aria-hidden="true">${star.repeat(3)}</span>`;
+  }
+
+  // The side margins of wide windows, redrawn when the spec loads so the
+  // line IDs match it. styles.css shows them from 1440px.
+  function drawMarginArt() {
+    const [first, second, third] = decorIds();
+    const side = (where, items) => `
+      <div class="decor-margins__side decor-margins__side--${where} decor-art">
+        ${items.map((item) => `<span class="decor-margins__item">${item}</span>`).join("")}
+      </div>`;
+    document.querySelector("[data-decor-margins]").innerHTML =
+      side("start", [bubbleSvg(), idTag(first), bubbleSvg(true)]) + side("end", [idTag(second), bubbleSvg(true), idTag(third)]);
+  }
+
+  // Walkthrough, from the "?" in the top app bar -----------------------------
+  // The words of every step live in TOUR_STEPS. A step can open a screen
+  // first. Its ring goes around the first of its spots that is drawn, and
+  // until one is (no chat checked yet, the spec still loading) around its
+  // anchor, a data-tour element of index.html, so every step makes sense on
+  // a first visit. Escape skips, Tab stays in the card, and closing returns
+  // to the screen the tour started on and to the control that opened it.
+
+  const TOUR_STEPS = [
+    {
+      anchor: "brand",
+      title: "Welcome to the workbench",
+      text: "Build an AI character that stays in character. You write its spec, test it in chats, and decide which flagged breaks are real.",
+    },
+    {
+      anchor: "settings",
+      title: "Connect an AI",
+      text: "Open Settings to choose an AI service, paste its key, then press Test and Save. You need this before a live run or an AI check.",
+    },
+    {
+      screen: "define",
+      anchor: "define",
+      spots: [".spec-toolbar"],
+      title: "Spec editor",
+      text: "Every spec line has an ID, like K2 for knowledge limit 2, and each save makes a new version, so older runs keep theirs. Scene says where and when the user meets the character.",
+    },
+    {
+      screen: "run",
+      anchor: "run",
+      spots: [".run-setup"],
+      title: "Run a conversation",
+      text: "Pick a test script and a model, then press Start run and watch each reply arrive. You can also import a saved chat.",
+    },
+    {
+      screen: "run",
+      anchor: "run",
+      spots: [".check-start", ".check"],
+      title: "Check this chat",
+      text: "After a run, Check this chat counts sentences, looks for banned words, and has an AI judge read the whole chat. Each possible break becomes a flag with a quote and the spec line it breaks.",
+    },
+    {
+      screen: "diagnose",
+      anchor: "diagnose",
+      spots: [".flag-card", ".review__bar-wrap"],
+      title: "Flag review",
+      text: "Open the evidence with Show in context before you Agree, or Override a flag with a reason when the AI is wrong. Follow-up re-check has the AI look again at its weakest flags.",
+    },
+    {
+      screen: "compare",
+      anchor: "compare",
+      spots: [".drift"],
+      title: "Compare runs",
+      text: "Chats that ran the same script on the same spec version line up turn by turn, so you can see where each one broke. Flags you overrode don't count as breaks.",
+    },
+    {
+      anchor: "tour",
+      title: "Take the tour again",
+      text: "Press this button any time to see these steps again.",
+    },
+  ];
+
+  // Set once the walkthrough has opened in this browser. Blocked storage only
+  // means it opens again on the next visit.
+  const TOUR_SEEN_KEY = "workbench-tour-seen";
+  const tourDialog = document.getElementById("tour-dialog");
+  const tourRing = tourDialog.querySelector("[data-tour-ring]");
+  const tourCard = tourDialog.querySelector("[data-tour-card]");
+  const tourButtons = {
+    skip: tourDialog.querySelector('[data-action="tour-skip"]'),
+    back: tourDialog.querySelector('[data-action="tour-back"]'),
+    next: tourDialog.querySelector('[data-action="tour-next"]'),
+  };
+  const phoneQuery = window.matchMedia("(max-width: 599px)");
+  // The open tour, as { step, startScreen, target }, or null.
+  let tour = null;
+  let tourFrame = 0;
+  // Redraws can move the target, so the ring follows the page's size too.
+  const tourResize = "ResizeObserver" in window ? new ResizeObserver(() => placeTourSoon()) : null;
+
+  function tourSeen() {
+    try {
+      return localStorage.getItem(TOUR_SEEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function rememberTourSeen() {
+    try {
+      localStorage.setItem(TOUR_SEEN_KEY, "1");
+    } catch {
+      // Storage can be off; the tour then opens again next time.
+    }
+  }
+
+  function openTour(opener) {
+    if (tour || document.querySelector("dialog[open]")) return;
+    rememberTourSeen();
+    hideTooltip();
+    tour = { step: 0, startScreen: currentScreen, target: null };
+    document.documentElement.toggleAttribute("data-touring", true);
+    tourDialog.querySelector("[data-tour-mascot]").innerHTML = mascotSvg();
+    // The words go in first, so the dialog opens with its name.
+    showTourWords(0);
+    openDialog(tourDialog, opener, closeTour);
+    tourButtons.next.focus();
+    window.addEventListener("scroll", placeTourSoon, { capture: true, passive: true });
+    window.addEventListener("resize", placeTourSoon);
+    if (tourResize) tourResize.observe(document.body);
+    if (document.fonts) document.fonts.ready.then(placeTourSoon);
+    placeTour({ scroll: true });
+  }
+
+  // Runs as the dialog closes (Done, Skip tutorial, or Escape), before focus
+  // goes back to the control that opened it.
+  function closeTour() {
+    window.removeEventListener("scroll", placeTourSoon, { capture: true });
+    window.removeEventListener("resize", placeTourSoon);
+    if (tourResize) tourResize.disconnect();
+    cancelAnimationFrame(tourFrame);
+    const start = tour ? tour.startScreen : null;
+    tour = null;
+    document.documentElement.toggleAttribute("data-touring", false);
+    tourDialog.querySelector("[data-tour-mascot]").innerHTML = "";
+    if (start && start !== currentScreen) visitScreen(start);
+  }
+
+  // Opens a screen without a history entry, so Back after the tour doesn't
+  // step through the screens it showed. The hash change that follows finds
+  // the screen already showing.
+  function visitScreen(id) {
+    showScreen(id);
+    location.replace(`#${id}`);
+  }
+
+  function showTourWords(index) {
+    const step = TOUR_STEPS[index];
+    const last = index === TOUR_STEPS.length - 1;
+    tourDialog.querySelector("[data-tour-count]").textContent = `Step ${index + 1} of ${TOUR_STEPS.length}`;
+    tourDialog.querySelector("[data-tour-title]").textContent = step.title;
+    tourDialog.querySelector("[data-tour-text]").textContent = step.text;
+    tourButtons.back.hidden = index === 0;
+    tourButtons.skip.hidden = last;
+    tourButtons.next.textContent = last ? "Done" : "Next";
+  }
+
+  function showTourStep(index) {
+    const step = TOUR_STEPS[index];
+    tour.step = index;
+    showTourWords(index);
+    if (step.screen && step.screen !== currentScreen) visitScreen(step.screen);
+    placeTour({ scroll: true });
+    // A button that just hid (Back on the first step) hands focus to Next.
+    if (!tourCard.contains(document.activeElement)) tourButtons.next.focus();
+  }
+
+  // The first drawn spot of the step on its screen, else its anchor.
+  function tourTarget(step) {
+    const panel = step.screen ? panelFor(step.screen) : null;
+    for (const selector of step.spots || []) {
+      const spot = panel ? panel.querySelector(selector) : null;
+      if (spot && spot.getClientRects().length > 0) return spot;
+    }
+    return document.querySelector(`[data-tour="${step.anchor}"]`);
+  }
+
+  // The box to ring. The title's own box fills the bar's free space, so the
+  // ring goes around its words instead.
+  function tourBox(target) {
+    if (!target) return null;
+    let box = target.getBoundingClientRect();
+    if (target.dataset.tour === "brand") {
+      const words = document.createRange();
+      words.selectNodeContents(target);
+      box = words.getBoundingClientRect();
+    }
+    return box.width > 0 && box.height > 0 ? box : null;
+  }
+
+  // A target on a screen scrolls to just below the header (and Flag review's
+  // sticky bar). The header's own controls need no scrolling, except on
+  // phones, where the header scrolls away with the page.
+  function revealTourTarget(target) {
+    if (!target) return;
+    if (header.contains(target)) {
+      if (getComputedStyle(header).position !== "sticky") window.scrollTo(0, 0);
+      return;
+    }
+    scrollBelowHeader(target);
+  }
+
+  function placeTour({ scroll = false } = {}) {
+    if (!tour) return;
+    // Room under the page as tall as the card, so a target at the very end
+    // can still scroll up above a docked card.
+    document.documentElement.style.setProperty("--tour-room", `${tourCard.offsetHeight + 32}px`);
+    const target = tourTarget(TOUR_STEPS[tour.step]);
+    // A spot that just got drawn takes over from the anchor, so it scrolls into view.
+    const moved = target !== tour.target;
+    tour.target = target;
+    if (scroll || moved) revealTourTarget(target);
+    const box = tourBox(target);
+    tourDialog.classList.toggle("is-untargeted", !box);
+    tourRing.hidden = !box;
+    if (box) {
+      const pad = 6;
+      tourRing.style.left = `${box.left - pad}px`;
+      tourRing.style.top = `${box.top - pad}px`;
+      tourRing.style.width = `${box.width + pad * 2}px`;
+      tourRing.style.height = `${box.height + pad * 2}px`;
+    }
+    placeTourCard(box);
+  }
+
+  // Below the ring if the card fits there, else above it, else docked at
+  // the bottom of the window, where it always sits on a phone.
+  function placeTourCard(box) {
+    const margin = 16;
+    let spot = null;
+    if (box && !phoneQuery.matches) {
+      const card = tourCard.getBoundingClientRect();
+      const below = box.bottom + margin;
+      const above = box.top - margin - card.height;
+      let top = null;
+      if (below + card.height <= window.innerHeight - margin) top = below;
+      else if (above >= margin) top = above;
+      if (top !== null) {
+        spot = { top, left: Math.min(Math.max(margin, box.left), window.innerWidth - card.width - margin) };
+      }
+    }
+    tourDialog.classList.toggle("is-docked", !spot);
+    tourCard.style.top = spot ? `${spot.top}px` : "";
+    tourCard.style.left = spot ? `${spot.left}px` : "";
+  }
+
+  function placeTourSoon() {
+    cancelAnimationFrame(tourFrame);
+    tourFrame = requestAnimationFrame(() => placeTour());
+  }
+
+  // Tab and Shift+Tab go round the card's buttons and never leave it.
+  tourDialog.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const buttons = Object.values(tourButtons).filter((button) => !button.hidden);
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    const at = buttons.indexOf(document.activeElement);
+    if (at === -1 || (event.shiftKey && at === 0) || (!event.shiftKey && at === buttons.length - 1)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    }
+  });
+
+  actions["start-tour"] = (button) => openTour(button);
+
+  actions["tour-next"] = () => {
+    if (!tour) return;
+    if (tour.step === TOUR_STEPS.length - 1) tourDialog.close("done");
+    else showTourStep(tour.step + 1);
+  };
+
+  actions["tour-back"] = () => {
+    if (tour && tour.step > 0) showTourStep(tour.step - 1);
+  };
+
+  actions["tour-skip"] = () => {
+    if (tour) tourDialog.close("skip");
+  };
+
   // 6. Start ===============================================================
 
   applyTheme(darkQuery && darkQuery.matches ? "dark" : "light");
+  applyDecorations(decorationsOn());
+  trackPageVisibility();
+  drawMarginArt();
   window.addEventListener("hashchange", onHashChange);
   revealIconsWhenReady();
   updateHeader();
@@ -5023,4 +5474,6 @@
   loadSamples();
   loadChats();
   loadReview();
+  // A first visit opens the walkthrough once.
+  if (!tourSeen()) openTour(null);
 })();

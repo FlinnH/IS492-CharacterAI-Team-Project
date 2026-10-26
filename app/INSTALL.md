@@ -32,6 +32,8 @@ The first run makes `app/.venv`, installs the pinned packages in `app/requiremen
 
 Then open http://127.0.0.1:8492 in your browser. The page opens on the Spec editor. To stop the server, press Ctrl+C in the terminal where it runs.
 
+On your first visit, a short tour opens. Its 8 steps each point at one part of the screen and say what it's for. Press Next and Back to move through it, or Skip tutorial (or Escape) to close it. The ? button at the right end of the top bar opens it again any time. The browser remembers that you've seen it, so it opens by itself only once.
+
 ## Connect an AI
 
 ### 1. Get a free Gemini key, no card
@@ -57,7 +59,9 @@ The dialog also has:
 
 - **Models.** Harry's model (Gemini 3.1 Flash-Lite by default) and the judge's model (Gemini 3.5 Flash-Lite by default). If one model would do both, a note says the judge would be checking its own replies.
 - **Limits.** Calls per minute, the daily cap, and the two session limits, with today's use in the header.
-- **Advanced.** "Simulate a busy AI service (for demos)". It makes every call to the first model fail as if busy, so the fallback model answers, until the server restarts. It doesn't change `app/.env`.
+- **Advanced.** Two switches:
+  - "Simulate a busy AI service (for demos)" makes every call to the first model fail as if busy, so the fallback model answers, until the server restarts. It doesn't change `app/.env`. While it's on, the Advanced header says "Busy service on".
+  - "Decorations", on by default, shows a few quiet drawings: a theater-mask mascot on empty screens, a magnifier while a check runs, and a small sparkle when the last flag in a chat gets your call (but not when you agreed with every flag). Switching it off hides them at once, with no Save, and only this browser remembers the choice. Switch it off for a study session. [docs/use-cases.md](../docs/use-cases.md) says where each drawing shows.
 
 If a setting is also set in the shell that started the server, the shell wins, and Settings shows it as locked.
 
@@ -152,6 +156,8 @@ app/.venv/bin/pytest
 
 The tests use the fake model and a database in a temporary folder, so they need no key and no network, and they never read `app/.env` or touch `app/data/`.
 
+The screen tests check the page's own files without opening a browser. `tests/test_screens.py` checks that every tour step points at a real part of the page, that the spec field reads Scene, and that the decorations stay faint and move only where they should. `tests/test_styles.py` checks that text keeps enough contrast in both themes. Clicks and keyboard use on the screens are checked by hand in a browser, as [docs/use-cases.md](../docs/use-cases.md) notes.
+
 One live test, skipped unless you ask for it, runs 3 turns of F2 against the provider in `app/.env` and prints the logged call rows. It's the only test that reads `app/.env`. It uses about 3 free-tier calls, more when a busy Gemini makes the app try again:
 
 ```bash
@@ -174,6 +180,7 @@ While Gemini is busy, this test can fail with an error like `assert 6 == 3` even
 - **"The model service didn't accept the key."** Paste the key again in Settings and press Test.
 - **"Today's 200 model calls are used up."** Wait for midnight Pacific time, or raise the daily cap under Limits in Settings, up to 500.
 - **Old screens after an update.** Reload the page. The server tells the browser to check every file again.
+- **The tour opens on every visit.** The browser blocks the page's storage, as some private windows do, so it can't remember the tour, and the Decorations switch starts on again too. Press Skip tutorial. Everything else works the same.
 
 ## More docs
 

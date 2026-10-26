@@ -192,6 +192,9 @@
   /* The floating label of a text field covers the outline with this color,
      so it has to match whatever the field sits on. Cards and dialogs reset it. */
   --field-label-bg: var(--md-sys-color-surface);
+
+  /* Faint background art (see Decorations): never more than 0.12 */
+  --decor-art-opacity: 0.1;
 }
 
 /* Dark theme: the M3 baseline dark scheme. app.js sets data-theme on <html>
@@ -524,11 +527,13 @@ mark {
   font-size: 20px;
 }
 
+/* Title medium, not large, so the bar fits on one row from 1024px up, which
+   covers 1280px windows and 125% zoom */
 .top-app-bar__title {
   flex: 1 1 auto;
   min-width: 0;
-  font: var(--type-title-large);
-  letter-spacing: var(--md-sys-typescale-title-large-tracking);
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
   color: var(--md-sys-color-on-surface);
 }
 
@@ -923,6 +928,52 @@ button.chip:active::before {
 
 .segmented__button .icon {
   font-size: 18px;
+}
+
+/* Icon button (M3 outlined): a 40px circle. The top bar's "Take the tour"
+   button holds a plain "?", so it shows even without the icon font. */
+
+.icon-btn {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-title-medium);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short2) linear;
+  pointer-events: none;
+}
+
+.icon-btn:hover::before {
+  opacity: var(--md-sys-state-hover-state-layer-opacity);
+}
+
+.icon-btn:focus-visible::before {
+  opacity: var(--md-sys-state-focus-state-layer-opacity);
+}
+
+.icon-btn:active::before {
+  opacity: var(--md-sys-state-pressed-state-layer-opacity);
 }
 
 /* Switch (M3) -------------------------------------------------------------- */
@@ -1320,6 +1371,442 @@ button.chip:active::before {
   from {
     opacity: 0;
   }
+}
+
+/* Decorations ------------------------------------------------------------- */
+/* Original drawings for quiet places only: empty states, a check under way,
+   the call that leaves no open flag in a chat, and the side margins of wide
+   windows. They are aria-hidden and never sit behind or on top of text.
+   Movement only when it means something: the mascot blinks or tilts now and
+   then, the magnifier sweeps while a check runs, and the sparkle plays once.
+   All other art stays still at --decor-art-opacity. Everything here shows
+   only while the Decorations switch in Settings is on (app.js sets
+   data-decor on <html>), pauses while the tab is hidden, and stays still
+   when motion is reduced (section 5). */
+
+.decor {
+  pointer-events: none;
+  user-select: none;
+}
+
+:root:not([data-decor="on"]) .decor {
+  display: none !important;
+}
+
+:root[data-page-hidden] .decor,
+:root[data-page-hidden] .decor * {
+  animation-play-state: paused !important;
+}
+
+/* The faint art: still speech bubbles and line IDs, in the text color */
+.decor-art {
+  opacity: var(--decor-art-opacity);
+  color: var(--md-sys-color-on-surface);
+}
+
+.decor-bubble {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.decor-bubble--flip {
+  transform: scaleX(-1);
+}
+
+.decor-id {
+  display: block;
+  padding: 2px 8px;
+  border: 2px solid currentColor;
+  border-radius: var(--md-sys-shape-corner-small);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+}
+
+/* The mascot: a friendly theater mask, drawn in the colors of the top bar's
+   mark. It blinks about every 7 seconds and tilts about every 11. */
+.mascot {
+  display: block;
+  width: 56px;
+  height: 56px;
+  overflow: visible;
+  transform-origin: 50% 85%;
+  animation: decor-tilt 11s var(--md-sys-motion-easing-standard) infinite;
+}
+
+.mascot__face {
+  fill: var(--md-sys-color-primary-container);
+  stroke: var(--md-sys-color-on-primary-container);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.mascot__ink {
+  fill: var(--md-sys-color-on-primary-container);
+}
+
+.mascot__brow {
+  fill: none;
+  stroke: var(--md-sys-color-on-primary-container);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.mascot__cheek {
+  fill: var(--md-sys-color-tertiary-container);
+}
+
+.mascot__ribbon {
+  fill: none;
+  stroke: var(--md-sys-color-primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.mascot__eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: decor-blink 7s linear infinite;
+}
+
+@keyframes decor-blink {
+  0%,
+  95%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes decor-tilt {
+  0%,
+  80%,
+  100% {
+    transform: rotate(0deg);
+  }
+  86% {
+    transform: rotate(-6deg);
+  }
+  92% {
+    transform: rotate(4deg);
+  }
+}
+
+/* An empty state's drawing: the mascot with still art around it, in a box
+   of its own beside or above the words, never behind them */
+.decor-scene {
+  position: relative;
+  flex: none;
+  width: 168px;
+  height: 104px;
+  overflow: hidden;
+}
+
+.decor-scene .mascot {
+  position: absolute;
+  top: 24px;
+  left: 56px;
+}
+
+.decor-scene__item {
+  position: absolute;
+}
+
+.decor-scene__item--1 {
+  top: 6px;
+  left: 2px;
+}
+
+.decor-scene__item--2 {
+  top: 10px;
+  right: 2px;
+}
+
+.decor-scene__item--3 {
+  bottom: 4px;
+  left: 14px;
+}
+
+.decor-scene__item--4 {
+  right: 10px;
+  bottom: 2px;
+}
+
+/* While a check runs: a magnifier sweeps a faux line of words, in place of
+   the progress bar. The words above it say what's happening. */
+.decor-scan {
+  position: relative;
+  max-width: 22rem;
+  height: 32px;
+  margin-top: 4px;
+}
+
+.decor-scan__line {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  left: 0;
+  display: flex;
+  gap: 6px;
+}
+
+.decor-scan__word {
+  flex: 2 1 0;
+  height: 8px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: currentColor;
+}
+
+.decor-scan__word:nth-child(3n + 1) {
+  flex-grow: 3;
+}
+
+.decor-scan__word:nth-child(4n) {
+  flex-grow: 1;
+}
+
+/* As wide as the line less the lens, so moving it its own width ends the
+   lens at the line's end */
+.decor-scan__mover {
+  position: absolute;
+  inset: 0 32px 0 0;
+  animation: decor-scan 3.6s ease-in-out infinite alternate;
+}
+
+.decor-scan__lens {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+
+.decor-scan__lens circle {
+  fill: var(--md-sys-color-surface-container-lowest);
+  fill-opacity: 0.6;
+  stroke: var(--md-sys-color-primary);
+  stroke-width: 3;
+}
+
+.decor-scan__lens path {
+  stroke: var(--md-sys-color-primary);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+@keyframes decor-scan {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* The call that leaves no open flag in a chat: three small stars, once */
+.decor-sparkle {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 28px;
+  height: 24px;
+}
+
+.decor-sparkle__star {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  fill: var(--md-sys-color-primary);
+  animation: decor-sparkle 900ms var(--md-sys-motion-easing-emphasized-decelerate) both;
+}
+
+.decor-sparkle__star:nth-child(2) {
+  top: 0;
+  left: 14px;
+  width: 9px;
+  height: 9px;
+  fill: var(--md-sys-color-tertiary);
+  animation-delay: 120ms;
+}
+
+.decor-sparkle__star:nth-child(3) {
+  top: 15px;
+  left: 16px;
+  width: 7px;
+  height: 7px;
+  animation-delay: 240ms;
+}
+
+@keyframes decor-sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6) rotate(90deg);
+  }
+}
+
+/* The side margins of wide windows (section 5 shows them): still art in the
+   gutters beside the content, behind everything, below the header */
+.decor-margins {
+  display: none;
+}
+
+.decor-margins__side {
+  position: absolute;
+  top: calc(var(--app-header-height) + 48px);
+  bottom: 48px;
+  width: calc((100% - var(--app-content-max)) / 2);
+}
+
+.decor-margins__side--start {
+  left: 0;
+}
+
+.decor-margins__side--end {
+  right: 0;
+}
+
+.decor-margins__item {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.decor-margins__item:nth-child(1) {
+  top: 8%;
+}
+
+.decor-margins__item:nth-child(2) {
+  top: 44%;
+}
+
+.decor-margins__item:nth-child(3) {
+  top: 80%;
+}
+
+.decor-margins__side--end .decor-margins__item:nth-child(odd) {
+  margin-left: 16px;
+}
+
+.decor-margins__side--start .decor-margins__item:nth-child(even) {
+  margin-left: -16px;
+}
+
+/* Walkthrough ------------------------------------------------------------- */
+/* A see-through dialog over the whole window. The ring outlines the step's
+   target, and its wide shadow dims everything else like a scrim. The card
+   sits next to the ring, or at the bottom of the window (always on phones).
+   Steps change in place, with no animation. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+}
+
+.tour::backdrop {
+  background: transparent;
+}
+
+/* No target to ring: the whole window dims, like other dialogs */
+.tour.is-untargeted::backdrop {
+  background: rgb(0 0 0 / 0.32);
+}
+
+.tour__ring {
+  position: fixed;
+  border-radius: var(--md-sys-shape-corner-medium);
+  outline: 2px solid var(--md-sys-color-primary);
+  box-shadow: 0 0 0 200vmax rgb(0 0 0 / 0.32);
+  pointer-events: none;
+}
+
+.tour__card {
+  --field-label-bg: var(--md-sys-color-surface-container-high);
+  position: fixed;
+  z-index: 1;
+  width: min(22.5rem, calc(100vw - 32px));
+  padding: 20px 20px 12px;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level3);
+}
+
+.tour.is-docked .tour__card {
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tour__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tour__mascot .mascot {
+  width: 40px;
+  height: 40px;
+}
+
+.tour__count {
+  color: var(--md-sys-color-primary);
+  font: var(--type-label-medium);
+  letter-spacing: var(--md-sys-typescale-label-medium-tracking);
+}
+
+.tour__title {
+  font: var(--type-title-medium);
+  letter-spacing: var(--md-sys-typescale-title-medium-tracking);
+}
+
+.tour__text {
+  margin-top: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-body-medium);
+  letter-spacing: var(--md-sys-typescale-body-medium-tracking);
+}
+
+.tour__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Skip tutorial on the left, Back and Next on the right */
+.tour__skip {
+  margin-right: auto;
+}
+
+/* While the tour is open, room under the page as tall as its card (app.js
+   measures it), so a target at the very end can scroll above a docked card */
+:root[data-touring] .app-footer {
+  margin-bottom: var(--tour-room, 0px);
 }
 
 /* 4. Screens =============================================================== */
@@ -1735,9 +2222,12 @@ button.chip:active::before {
   outline-offset: -3px;
 }
 
+/* The words, and with no chats yet the mascot above them, centered in the box */
 .chat__empty {
   display: grid;
-  place-items: center;
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
   height: 100%;
   text-align: center;
   color: var(--md-sys-color-on-surface-variant);
@@ -2016,6 +2506,11 @@ button.chip:active::before {
   .check-progress::after {
     animation: none;
   }
+}
+
+/* With decorations on, the magnifier (Decorations, section 3) takes the bar's place */
+:root[data-decor="on"] .check-progress {
+  display: none;
 }
 
 /* Check results */
@@ -2697,6 +3192,19 @@ button.chip:active::before {
 .flag-cards__empty {
   margin-top: 16px;
   color: var(--md-sys-color-on-surface-variant);
+}
+
+/* "No checked chats yet": the mascot's drawing beside the words, or above
+   them when the card is narrow */
+.empty-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+}
+
+.empty-state__text {
+  flex: 1 1 16rem;
 }
 
 .flag-card {
@@ -3557,6 +4065,15 @@ button.chip:active::before {
     font: var(--type-headline-small);
     letter-spacing: var(--md-sys-typescale-headline-small-tracking);
   }
+
+  /* The walkthrough's card sits at the bottom of the screen */
+  .tour.is-docked .tour__card {
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: 16px;
+    width: auto;
+    transform: none;
+  }
 }
 
 @media (min-width: 600px) {
@@ -3617,6 +4134,17 @@ button.chip:active::before {
   }
 }
 
+/* From 1440px the side margins are at least 160px wide, room for still,
+   faint art (Decorations, section 3) */
+@media (min-width: 1440px) {
+  .decor-margins {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    display: block;
+  }
+}
+
 /* Large monitors: a little more room for Flag review and Compare runs */
 @media (min-width: 1600px) {
   :root {
@@ -3632,5 +4160,15 @@ button.chip:active::before {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Decorations stay still, and the one-time sparkle doesn't show */
+  .decor,
+  .decor * {
+    animation: none !important;
+  }
+
+  .decor-sparkle {
+    display: none;
   }
 }

@@ -53,7 +53,14 @@ There's no vector store: character.v1 sends the whole rendered spec on every tur
 - **In:** the creator's clicks and typing, and the server's JSON answers and streamed events.
 - **Out:** HTTP requests. Every path lives in api.js, and app.js never calls `fetch`. Each request carries the tab's session ID in an `X-Workbench-Session` header. api.js makes the ID once per tab and keeps it in `sessionStorage`, so the server can apply the session limits and tell sessions apart in the event log.
 
-The page loads Roboto and the Material Symbols icons from Google Fonts. Everything else comes from the local server.
+app.js also runs two things that never talk to the server:
+
+- **The tour.** A first-visit guide in 8 steps, opened again by the ? button in the top bar. It's a native `<dialog>`: a ring outlines each step's target and dims the rest of the page, and a card beside it holds the words. Every step's words and targets are in one list, `TOUR_STEPS`. A target is a `data-tour` element that index.html always has, like the Settings button or a screen's tab, or, once the screen draws it, a part of that screen, like Check this chat.
+- **Decorations.** Original drawings, written as inline SVG in app.js: a theater-mask mascot on empty screens, a magnifier while a check runs, a one-time sparkle, and still art in wide side margins. styles.css keeps them faint and still except for those three moving parts, and shows them only while `<html>` has `data-decor="on"`.
+
+The page keeps two preferences in the browser's `localStorage`: `workbench-tour-seen`, set when the tour first opens, and `workbench-decorations`, set by the Decorations switch in Settings. Neither reaches the server or the database. If the browser blocks storage, the tour opens again and decorations start on.
+
+The page loads Roboto and the Material Symbols icons from Google Fonts. Everything else comes from the local server, the drawings included.
 
 ### FastAPI server
 
@@ -70,7 +77,7 @@ At start, the server checks each file the prompt manifest lists against its reco
 
 Each service opens its own short database connection.
 
-- **specs.py.** In: an edit from the Spec editor. Out: the next spec version, which never changes once saved. Also the spec as text for the models (`render_text`), and a warning when the setting is empty. Line IDs, line attributes, and check limits live in the spec itself, not in code.
+- **specs.py.** In: an edit from the Spec editor. Out: the next spec version, which never changes once saved. Also the spec as text for the models (`render_text`), and a warning when the setting, which the screens call Scene, is empty. Line IDs, line attributes, and check limits live in the spec itself, not in code.
 - **transcripts.py.** In: a pasted chat, a file, or a sample. Out: a preview, then a saved chat that keeps the source's own numbering. It also saves each message of a live chat, redacted, and marks lines that read like instructions to the AI.
 - **runtime.py.** In: Start run, the next scripted line, a typed line, or Stop. Out: streamed events and saved messages. The system message is character.v1 with the chat's pinned spec version rendered in. It's built once per chat, so its bytes are the same on every turn. One turn runs per chat at a time.
 - **judge.py, rules.py, and evidence.py.** In: a saved chat. Out: rule flags from code alone, then the AI judge's flags that pass the evidence checks, a count of hidden flags, and what the judge couldn't check. One judge call covers the whole chat, and the saved check is reused until the chat or the judge settings change.
@@ -175,3 +182,5 @@ Imports point one way, from the bottom up: schemas, then config, redact, and inj
 - only providers.py imports openai and httpx2
 - only config.py reads the environment and the prompts
 - no line ID, model ID, or preset address appears in code, and no key prefix appears in the screens
+
+`tests/test_screens.py` reads the screens' own files, with no browser. It checks that every tour step points at an element index.html has, that the spec field reads Scene on screen, that `localStorage` is only touched inside `try`, and that decorations keep their limits: background art at most 12% opacity and still, and only the mascot, the magnifier, and the sparkle animated, with transform and opacity alone.
