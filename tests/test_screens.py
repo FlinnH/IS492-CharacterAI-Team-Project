@@ -1,5 +1,6 @@
-"""Screen tests: the walkthrough, the Scene wording, and the decorations, read
-from app/static with no browser and no network.
+"""Screen tests: the walkthrough, the Scene wording, the decorations, the
+buttons that take people where a message sends them, the seconds a check has
+run, and the tab icon, read from app/static with no browser and no network.
 
 Every walkthrough step points at a hook index.html always has, so a step makes
 sense before anything loads. The decorations keep the rules in styles.css:
@@ -165,3 +166,100 @@ def test_decorations_pause_when_hidden_and_stay_still_when_motion_is_reduced():
     reduced = STYLES[STYLES.rindex("@media (prefers-reduced-motion: reduce)"):]
     assert re.search(r"\.decor \*\s*\{\s*animation: none !important;", reduced)
     assert re.search(r"\.decor-sparkle\s*\{\s*display: none;", reduced)
+
+
+def test_the_sparkle_lasts_about_a_second_and_is_easy_to_see():
+    rules = css_rules(STYLES)
+    star = next(body for selector, body in rules if selector == ".decor-sparkle__star")
+    duration = int(re.search(r"animation: decor-sparkle (\d+)ms", star).group(1))
+    delays = [int(ms) for selector, body in rules if "decor-sparkle__star" in selector for ms in re.findall(r"animation-delay: (\d+)ms;", body)]
+    assert 900 < duration <= 1200
+    assert delays and duration + max(delays) <= 1500
+    assert "infinite" not in star
+    box = next(body for selector, body in rules if selector == ".decor-sparkle" and "width" in body)
+    assert int(re.search(r"width: (\d+)px;", box).group(1)) >= 32
+    # Agreeing with every flag gets the rubber-stamp reminder, never a sparkle.
+    assert "state.sparkleFlagId = finished && !updated.agreed_with_every ? flagId : null;" in CODE
+
+
+# Getting people where a message sends them
+
+
+def function_body(name):
+    """The source of one function in app.js, up to its closing brace at two spaces."""
+    found = re.search(rf"\n  function {name}\([^)]*\) \{{(.*?)\n  \}}", CODE, re.S)
+    assert found, f"app.js has no function {name}"
+    return found.group(1)
+
+
+def test_every_message_that_sends_people_to_another_screen_has_a_button():
+    lines = CODE.splitlines()
+    sends = [number for number, line in enumerate(lines) if re.search(r"\b[Oo]n (Run a conversation|Flag review|Spec editor|Compare runs)(,| first)", line)]
+    assert len(sends) == 3
+    for number in sends:
+        nearby = "\n".join(lines[number:number + 6])
+        assert re.search(r'data-action="(go-to-screen|check-changed-chat)"', nearby), lines[number]
+        assert ">Go to " in nearby, lines[number]
+    assert '>Go to Run a conversation</button>' in function_body("renderNoCheckedChats")
+    assert '>Go to Flag review</button>' in function_body("renderCompare")
+
+
+def test_go_to_buttons_name_a_real_screen():
+    screens = re.findall(r'data-action="go-to-screen" data-screen="([a-z]+)"', CODE)
+    assert screens and set(screens) <= set(TABS)
+    assert 'actions["go-to-screen"] = (button) => goToScreen(button.dataset.screen);' in CODE
+
+
+def test_every_message_that_points_to_settings_has_an_open_settings_button():
+    assert re.search(r"function mentionsSettings\(text\) \{\s*return /\\bin Settings\\b/", CODE)
+    button = function_body("settingsButton")
+    assert 'data-action="open-settings"' in button and "<span>Open Settings</span>" in button
+    # The session run limit, a turn's error, a failed check, the judge's note, and a failed re-check.
+    for message, key in [
+        ("blocked", "raise-limit"),
+        ("error.message", "run-error-settings"),
+        ("check.message", "check-error-settings"),
+        ("judge.note", "judge-note-settings"),
+        ("failed", "recheck-error-settings"),
+    ]:
+        assert re.search(rf'mentionsSettings\({re.escape(message)}\) \? [^:]*settingsButton\("{key}"\)', CODE), key
+
+
+def test_a_running_check_counts_its_seconds_without_announcing_them():
+    for action, entry in [("check-chat", "state.checks[chatId]"), ("recheck", "state.rechecks[chatId]")]:
+        body = re.search(rf'actions\["{action}"\] = async \(button\) => \{{(.*?)\n  \}};', CODE, re.S).group(1)
+        assert re.search(rf"{re.escape(entry)} = \{{ status: \"running\",[^}}]*startedAt: Date\.now\(\) \}};", body), action
+        assert "startElapsedTimer();" in body, action
+    # The count sits in the status text, never inside the bar or the magnifier,
+    # which hide or show by the Decorations switch.
+    check = function_body("renderCheck")
+    assert check.index("elapsedLine(check.startedAt)") < check.index('<div class="check-progress"')
+    follow_up = function_body("renderFollowUp")
+    assert follow_up.index("elapsedLine(recheck.startedAt)") < follow_up.index('<div class="check-progress"')
+    assert '`${seconds} ${seconds === 1 ? "second" : "seconds"} so far`' in function_body("elapsedText")
+    line = function_body("elapsedLine")
+    assert "data-elapsed-since" in line and "aria-live" not in line and "role=" not in line
+    # One timer, once a second, updating the text in place and stopping when nothing runs.
+    timer = function_body("startElapsedTimer")
+    assert "setInterval(" in timer and "}, 1000);" in timer and "clearInterval(elapsedTimer);" in timer
+    assert "textContent = elapsedText(" in timer
+    assert "announce(" not in timer and "refresh" not in timer
+    assert ".check-start__elapsed" in dict(css_rules(STYLES))
+
+
+# The tab icon
+
+
+def test_the_tab_icon_is_the_mascot_drawn_in_the_page():
+    from urllib.parse import unquote
+
+    link = re.search(r'<link rel="icon" type="image/svg\+xml" href="(data:image/svg\+xml,[^"]+)">', INDEX)
+    assert link, "index.html has no inline SVG favicon"
+    assert link.group(1).isascii()
+    svg = unquote(link.group(1).removeprefix("data:image/svg+xml,"))
+    assert svg.startswith("<svg xmlns='http://www.w3.org/2000/svg'") and svg.endswith("</svg>")
+    # The mascot's face, from mascotSvg(), and nothing loaded from anywhere.
+    face = re.search(r'class="mascot__face" d="([^"]+)"', APP_JS).group(1)
+    assert f"d='{face}'" in svg
+    assert re.findall(r"https?://[^']+", svg) == ["http://www.w3.org/2000/svg"]
+    assert "href" not in svg and "<image" not in svg

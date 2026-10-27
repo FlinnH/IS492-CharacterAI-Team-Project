@@ -16,14 +16,14 @@ Seven slides in 5 to 8 minutes, following the CP3 guide, with at least 3 of thos
 
 ## What the app does
 
-A creator defines a character, Harry Potter, as a structured spec, runs scripted or typed chats live while Gemini plays Harry, and gets an AI judge plus automatic checks that flag where and why Harry breaks character. Every flag carries an exact quote and the spec line it breaks, and the creator decides each one. The app covers all seven features in validation/OPPORTUNITY_FRAMING.md:
+A creator defines a character, Harry Potter, as a structured spec and runs scripted or typed chats live while Gemini plays Harry. An AI judge plus automatic checks flag where and why Harry breaks character. Every flag carries an exact quote and the spec line it breaks, and the creator decides each one. The app covers all seven features in validation/OPPORTUNITY_FRAMING.md:
 
 1. Evidence-first flags: Agree unlocks only after the evidence is opened, and Override needs a reason of 3 words or more.
 2. A follow-up re-check, with the creator's own question.
 3. A structured spec with line IDs, saved versions, and a Scene field.
-4. Automatic rule checks with no AI: sentence count and banned words.
-5. A provenance check: claims about the user that the user never made.
-6. Compare runs, a stretch goal that was built anyway.
+4. Automatic rule checks with no AI: sentence count and banned words, on every reply when the chat is checked.
+5. A provenance check: the check flags claims about the user that the user never made, and other unsupported facts are caught by the judge's factual-contradiction type.
+6. Compare runs, a stretch goal we built anyway.
 7. Persona exits and near-boundary guesses always need the creator's call.
 
 ## Results
@@ -38,36 +38,36 @@ The seeded transcript is the CP2 chat with 7 planted mistakes.
 | Plus a general follow-up question | 5 of 7 | 0 |
 | Plus a specific follow-up question | 6 of 7, including the Portkey joke every AI missed alone in CP2 | 0 |
 
-The general question was "Does Harry's tone ever clash with what Alex just said?" The specific one was "Does Harry joke about anything painful right after Alex mentions it?" In short: a free model plus one human question beats the model alone, which is our CP2 finding, now working in our own tool.
+The general question was "Does Harry's tone ever clash with what Alex just said?" The specific one was "Does Harry joke about anything painful right after Alex mentions it?" So a free model plus one human question beats the model alone. That is our CP2 finding, now working in our own tool.
 
 | Measure | Number |
 | --- | --- |
-| Harry's first word, minimal vs low thinking | 0.74 s vs 1.54 s; the first live turn at low took 7.2 s |
+| Harry's first word, minimal vs low thinking | 0.74 s vs 1.54 s; the first live turn at low took 7.2 s (M2 live test, Oct 11) |
 | Cost at paid rates | about $0.001 to $0.002 per reply, and about $0.002 per judge call |
 | What we paid | $0, on Gemini's free tier |
-| Automated tests | 416 passing on a clean machine, plus a live test with real calls |
+| Automated tests | 426 passing, plus 1 live test with real calls that runs only with --live. A machine without python3.11 skips the 3.11 compile check, so 425 pass there. |
 
 ## Live demo path
 
-Before class (15 minutes): run the reset from app/INSTALL.md, import the seeded transcript and press Check this chat once, then open Settings and press Test. If the first-visit tour opens in the browser you'll present from, press Skip tutorial, so it doesn't open during the demo. Zoom the browser to 125% (the top bar stays on one row), close other tabs, and turn on Do Not Disturb.
+Before class (15 minutes): run the reset from app/INSTALL.md, start the app with app/run.sh (it opens the browser by itself), import the seeded transcript and press Check this chat once, then open Settings and press Test. If the first-visit tour opens in the browser you'll present from, press Skip tutorial, so it doesn't open during the demo. Zoom the browser to 125% (the top bar stays on one row), close other tabs, and turn on Do Not Disturb.
 
 Slide 3 (2 minutes):
 
 1. Spec editor on v1: point at a line ID and the Scene field.
-2. Run a conversation: pick F2 and press Start. The reply streams in.
-3. Type one question of your own, such as "Wait, are you actually an AI?" Type it before checking, because typing after a check moves the chat to "Changed since its check."
+2. Run a conversation: pick F2 in Scenario and press Start run. The replies stream in.
+3. When the script finishes (or after Stop), type one question of your own, such as "Wait, are you actually an AI?" Type it before checking, because typing after a check moves the chat to "Changed since its check."
 4. Press Check this chat.
 5. Flag review: Agree is locked, so open Show in context, then press Agree.
 6. Override a wrong flag with a reason of 3 words or more.
 
 Slide 4 (1.5 minutes):
 
-1. On the seeded chat, run Follow-up re-check with the specific question above, and read What changed.
+1. On the seeded chat, in the Follow-up re-check card, type the specific question above in Your question (optional), press Re-check, and read What changed in the re-check.
 2. Import the Planted instruction sample. The preview says 2 items were removed and marks turn 3.
-3. In Settings, turn on Simulate a busy AI service, run one F2 turn, see the Fallback chip, then turn it off.
+3. In Settings, turn on Simulate a busy AI service and press Save, run one F2 turn, see the Fallback chip, then turn it off and Save again.
 4. In a terminal, run: app/.venv/bin/pytest tests/test_evidence.py -q
 
-If the Wi-Fi or Gemini fails: open Settings, pick Local model (Ollama), and keep going offline. For a merely busy Gemini, the app's own retries and fallback model already cover it.
+If the Wi-Fi or Gemini fails: open Settings, pick Local model (Ollama), and keep going offline. If Gemini is only busy, the app's own retries and fallback model already cover it.
 
 ## Likely questions
 

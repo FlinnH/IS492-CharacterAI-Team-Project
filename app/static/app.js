@@ -1015,6 +1015,55 @@
     return `${whole} ${whole === 1 ? "second" : "seconds"}`;
   }
 
+  // A message that sends people to Settings gets a button that opens it.
+  function mentionsSettings(text) {
+    return /\bin Settings\b/.test(text || "");
+  }
+
+  function settingsButton(focusKey) {
+    return `
+      <button type="button" class="btn btn--outlined btn--icon-leading" data-action="open-settings" data-focus-key="${focusKey}"
+        aria-haspopup="dialog">
+        <span class="icon" aria-hidden="true">settings</span>
+        <span>Open Settings</span>
+      </button>`;
+  }
+
+  // While Check this chat or a re-check runs, its card counts the seconds, so
+  // a slow AI never looks frozen. The count is plain text, outside any live
+  // region, so screen readers hear only the start and the end.
+  let elapsedTimer = null;
+
+  function elapsedText(since) {
+    const seconds = Math.max(0, Math.floor((Date.now() - since) / 1000));
+    return `${seconds} ${seconds === 1 ? "second" : "seconds"} so far`;
+  }
+
+  function elapsedLine(since) {
+    return `<p class="check-start__elapsed" data-elapsed-since="${since}">${elapsedText(since)}</p>`;
+  }
+
+  function anyCheckRunning() {
+    const running = (entry) => Boolean(entry && entry.status === "running");
+    return Object.values(state.checks).some(running) || Object.values(state.rechecks).some(running);
+  }
+
+  // One timer for every running check. It updates the count in place, with no
+  // redraw, and stops once nothing is running.
+  function startElapsedTimer() {
+    if (elapsedTimer) return;
+    elapsedTimer = setInterval(() => {
+      if (!anyCheckRunning()) {
+        clearInterval(elapsedTimer);
+        elapsedTimer = null;
+        return;
+      }
+      document.querySelectorAll("[data-elapsed-since]").forEach((line) => {
+        line.textContent = elapsedText(Number(line.dataset.elapsedSince));
+      });
+    }, 1000);
+  }
+
   function chatTime(iso) {
     return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
   }
@@ -1286,12 +1335,15 @@
       `Calls start at least ${secondsText(60 / runOptions.calls_per_minute)} apart. ${runOptions.used_today} of ${runOptions.daily_cap} calls used today.`;
     const busy = Boolean(state.live || state.runStarting);
     // With no AI connected, Connect an AI is the step to take, so it comes first and Start steps back.
-    const connect = runOptions.key_set ? "" : `
+    // At the session run limit, Open Settings is where the limit goes up.
+    const connect = !runOptions.key_set
+      ? `
           <button type="button" class="btn btn--filled btn--icon-leading" data-action="open-settings" data-focus-key="connect-ai"
             aria-haspopup="dialog">
             <span class="icon" aria-hidden="true">link</span>
             <span>Connect an AI</span>
-          </button>`;
+          </button>`
+      : mentionsSettings(blocked) ? settingsButton("raise-limit") : "";
     return `
       <div class="run-setup">
         ${selectField("run-scenario", "Scenario", scenarioOptions, {
@@ -1474,6 +1526,7 @@
         <div class="card card--outlined run-error">
           <span class="icon" aria-hidden="true">error</span>
           <p class="run-error__text">${escapeHtml(error.message)}</p>
+          ${mentionsSettings(error.message) ? settingsButton("run-error-settings") : ""}
           ${error.retry && canRetry(chat)
             ? '<button type="button" class="btn btn--filled" data-action="retry-turn" data-focus-key="retry-turn">Try again</button>'
             : ""}
@@ -2255,7 +2308,7 @@
             <p class="check-start__body">${here
               ? "The automatic checks run first. Then the AI judge reads the whole chat in one call, which can take a minute."
               : "A check of this chat started in another tab or before a reload. Look again in a moment."}</p>
-            ${here ? `<div class="check-progress" aria-hidden="true"></div>${decorScan()}` : ""}
+            ${here ? `${elapsedLine(check.startedAt)}<div class="check-progress" aria-hidden="true"></div>${decorScan()}` : ""}
           </div>
           ${here
             ? ""
@@ -2268,6 +2321,7 @@
         <div class="card card--outlined run-error">
           <span class="icon" aria-hidden="true">error</span>
           <p class="run-error__text">${escapeHtml(check.message)}</p>
+          ${mentionsSettings(check.message) ? settingsButton("check-error-settings") : ""}
           ${check.retry === "look"
             ? '<button type="button" class="btn btn--filled" data-action="reload-check" data-focus-key="reload-check">Look again</button>'
             : checkButton("Try again", "check-chat")}
@@ -2294,6 +2348,7 @@
         <li class="check__note check__note--error">
           <span class="icon" aria-hidden="true">error</span>
           <span class="check__note-text">${escapeHtml(judge.note)}</span>
+          ${mentionsSettings(judge.note) ? settingsButton("judge-note-settings") : ""}
           ${checkButton("Try again", "check-chat")}
         </li>`);
     }
@@ -2384,9 +2439,10 @@
     const chat = state.chat;
     if (!chat || isLive(chat.id) || checkRunning(chat.id) || (button && button.getAttribute("aria-disabled") === "true")) return;
     const chatId = chat.id;
-    state.checks[chatId] = { status: "running", view: null, message: "", retry: null };
+    state.checks[chatId] = { status: "running", view: null, message: "", retry: null, startedAt: Date.now() };
     refreshRun({ focusKey: "check-status" });
     announce("Checking this chat. The AI judge can take a minute.");
+    startElapsedTimer();
     try {
       const view = await WorkbenchApi.checkChat(chatId);
       state.checks[chatId] = { status: "ready", view, message: "", retry: null };
@@ -2741,6 +2797,7 @@
       <div class="card card--outlined flag-cards__empty empty-state">
         ${decorScene("ids")}
         <p class="empty-state__text">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>
+        <button type="button" class="btn btn--filled" data-action="go-to-screen" data-screen="run" data-focus-key="go-to-run">Go to Run a conversation</button>
       </div>`;
   }
 
@@ -2899,6 +2956,10 @@
         <section class="card card--outlined follow-up" aria-labelledby="follow-up-title">
           ${title}
           <p class="follow-up__text">The re-check needs the AI judge's first pass, which didn't finish for this chat. Check the chat again on Run a conversation first.</p>
+          <div class="follow-up__actions">
+            <button type="button" class="btn btn--outlined" data-action="check-changed-chat" data-chat="${chat.id}"
+              data-focus-key="follow-up-go-run">Go to Run a conversation</button>
+          </div>
         </section>`;
     }
     const weak = weakFlags(item).length;
@@ -2913,6 +2974,7 @@
         <div class="follow-up__status">
           <p class="check-start__title" tabindex="-1" data-focus-key="recheck-status">Re-checking this chat</p>
           <p class="check-start__body">The AI judge reads the chat again in one call, which can take a minute.</p>
+          ${elapsedLine(recheck.startedAt)}
           <div class="check-progress" aria-hidden="true"></div>
           ${decorScan()}
         </div>`
@@ -2929,7 +2991,8 @@
           ? `<p class="follow-up__error">
               <span class="icon" aria-hidden="true">error</span>
               <span>${escapeHtml(failed)}</span>
-            </p>`
+            </p>
+            ${mentionsSettings(failed) ? `<div class="follow-up__actions">${settingsButton("recheck-error-settings")}</div>` : ""}`
           : ""}`;
     return `
       <section class="card card--outlined follow-up" aria-labelledby="follow-up-title">
@@ -3574,9 +3637,10 @@
     if (state.rechecks[chatId] && state.rechecks[chatId].status === "running") return;
     const question = (state.recheckDrafts[chatId] || "").trim();
     const before = item.recheck ? item.recheck.id : null;
-    state.rechecks[chatId] = { status: "running", message: "" };
+    state.rechecks[chatId] = { status: "running", message: "", startedAt: Date.now() };
     refresh({ focusKey: "recheck-status" });
     announce("Re-checking this chat. The AI judge can take a minute.");
+    startElapsedTimer();
     const here = () => currentScreen === "diagnose" && state.reviewChatId === chatId;
     try {
       const updated = await WorkbenchApi.recheckChat(chatId, question || null);
@@ -3753,7 +3817,10 @@
     const items = compareGroup(item);
     if (items.length === 0) {
       body.innerHTML = `
-        <p class="card card--outlined flag-cards__empty">Compare runs lines up chats that ran the same test script. ${escapeHtml(reviewLabel(item.chat))} was imported without one, so there's nothing to compare it with. On Flag review, pick a chat from a scenario run.</p>`;
+        <div class="card card--outlined flag-cards__empty empty-state">
+          <p class="empty-state__text">Compare runs lines up chats that ran the same test script. ${escapeHtml(reviewLabel(item.chat))} was imported without one, so there's nothing to compare it with. On Flag review, pick a chat from a scenario run.</p>
+          <button type="button" class="btn btn--filled" data-action="go-to-screen" data-screen="diagnose" data-focus-key="go-to-review">Go to Flag review</button>
+        </div>`;
       return null;
     }
     const turns = comparedTurns(items);
@@ -3950,6 +4017,9 @@
     navigatingFromTab = fromTab;
     location.hash = id;
   }
+
+  // The "Go to" button in an empty state that names another screen.
+  actions["go-to-screen"] = (button) => goToScreen(button.dataset.screen);
 
   function showScreen(id, { moveFocus = false } = {}) {
     const isChange = currentScreen !== null && currentScreen !== id;

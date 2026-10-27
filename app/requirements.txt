@@ -9,6 +9,9 @@ pydantic-settings==2.15.0
 uvicorn==0.54.0
 # config.py reads app/.env with it, and Settings writes the creator's changes back.
 python-dotenv==1.2.4
+# The daily count follows Pacific days, and Python on Windows has no time zone
+# data of its own. macOS and Linux skip this line.
+tzdata==2026.5; sys_platform == "win32"
 
 # Model calls. openai 3.x sends its requests with httpx2, which Starlette's
 # TestClient uses too.

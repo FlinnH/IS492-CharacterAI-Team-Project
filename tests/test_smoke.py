@@ -1,8 +1,11 @@
-"""Smoke tests: the screens load, health hides the key, run.sh checks Python, and a refusal to start is one plain line."""
+"""Smoke tests: the screens load, health hides the key, run.sh checks Python and
+opens the browser once the server answers, and a refusal to start is one plain line."""
 
 import os
 import shutil
+import socket
 import subprocess
+import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -11,6 +14,9 @@ import pytest
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 RUN_SH = APP_DIR / "run.sh"
 STATIC_DIR = APP_DIR / "static"
+
+# run.sh is a bash script, which native Windows doesn't run (INSTALL.md has the PowerShell steps).
+needs_bash = pytest.mark.skipif(sys.platform == "win32" or not shutil.which("bash"), reason="run.sh needs bash")
 
 
 class TabFinder(HTMLParser):
@@ -82,6 +88,7 @@ def test_health_never_echoes_key(make_client):
     assert response.json()["key_set"] is False
 
 
+@needs_bash
 def test_run_sh_refuses_python_older_than_3_11(tmp_path):
     assert os.access(RUN_SH, os.X_OK), "app/run.sh must be executable"
 
@@ -107,6 +114,88 @@ def test_run_sh_refuses_python_older_than_3_11(tmp_path):
     assert "3.10.14" in result.stderr
     assert "3.11" in result.stderr
     assert not (app_copy / ".venv").exists()
+
+
+@needs_bash
+def test_run_sh_refuses_an_unknown_option(tmp_path):
+    result = subprocess.run(
+        [shutil.which("bash") or "/bin/bash", str(RUN_SH), "--no-brwoser"],
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 2
+    assert result.stderr == 'run.sh: unknown option "--no-brwoser". Use app/run.sh, or app/run.sh --no-browser.\n'
+
+
+@pytest.fixture
+def health_server(tmp_path):
+    """A stand-in for the workbench: a separate process that answers /api/health on a free port."""
+    site = tmp_path / "site"
+    (site / "api").mkdir(parents=True)
+    (site / "api" / "health").write_text('{"status": "ok"}')
+    with socket.socket() as probe:  # bind is allowed; only connections are blocked
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = subprocess.Popen(
+        [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1", "--directory", str(site)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    yield f"http://127.0.0.1:{port}"
+    server.terminate()
+    server.wait(timeout=10)
+
+
+def wait_then_open(tmp_path, url, browser="yes", opener_exit=0):
+    """Sources run.sh and runs its open_when_ready, with every browser opener faked."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir(exist_ok=True)
+    log = tmp_path / "opened.txt"
+    for name in ("open", "xdg-open", "wslview"):
+        opener = fake_bin / name
+        opener.write_text(f'#!/bin/sh\necho "$1" >> "{log}"\nexit {opener_exit}\n')
+        opener.chmod(0o755)
+    (fake_bin / "python3").symlink_to(sys.executable)
+    result = subprocess.run(
+        [shutil.which("bash") or "/bin/bash", "-c", f'source "{RUN_SH}"; open_when_ready "{url}" "$$" {browser}'],
+        env={"PATH": os.pathsep.join([str(fake_bin), "/usr/bin", "/bin"]), "HOME": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    opened = log.read_text().split() if log.exists() else []
+    return result, opened
+
+
+@needs_bash
+def test_run_sh_opens_the_browser_once_the_server_answers(tmp_path, health_server):
+    result, opened = wait_then_open(tmp_path, health_server)
+    assert result.returncode == 0
+    assert opened == [health_server]
+    assert f"The workbench is running at {health_server}\n" in result.stdout
+    assert "Your browser should open it now." in result.stdout
+    assert "Keep this window open while you use the app.\n" in result.stdout
+    assert "Press Ctrl+C to stop.\n" in result.stdout
+
+
+@needs_bash
+def test_run_sh_no_browser_only_prints_the_address(tmp_path, health_server):
+    result, opened = wait_then_open(tmp_path, health_server, browser="no")
+    assert result.returncode == 0
+    assert opened == []
+    assert f"The workbench is running at {health_server}\n  Open that address in your browser.\n" in result.stdout
+    assert "Press Ctrl+C to stop.\n" in result.stdout
+
+
+@needs_bash
+def test_a_browser_that_fails_never_stops_the_start(tmp_path, health_server):
+    result, opened = wait_then_open(tmp_path, health_server, opener_exit=1)
+    assert result.returncode == 0
+    assert opened == [health_server]
+    assert "Open that address in your browser." in result.stdout
+    assert "Press Ctrl+C to stop.\n" in result.stdout
 
 
 def test_a_refusal_to_start_is_one_plain_line(monkeypatch, capsys, tmp_path):

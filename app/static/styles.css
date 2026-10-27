@@ -1606,40 +1606,41 @@ button.chip:active::before {
   }
 }
 
-/* The call that leaves no open flag in a chat: three small stars, once */
+/* The call that leaves no open flag in a chat: three small stars, once, for
+   about a second */
 .decor-sparkle {
   position: relative;
   display: inline-block;
   flex: none;
-  width: 28px;
-  height: 24px;
+  width: 36px;
+  height: 30px;
 }
 
 .decor-sparkle__star {
   position: absolute;
-  top: 6px;
+  top: 8px;
   left: 0;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   fill: var(--md-sys-color-primary);
-  animation: decor-sparkle 900ms var(--md-sys-motion-easing-emphasized-decelerate) both;
+  animation: decor-sparkle 1000ms var(--md-sys-motion-easing-emphasized-decelerate) both;
 }
 
 .decor-sparkle__star:nth-child(2) {
   top: 0;
-  left: 14px;
-  width: 9px;
-  height: 9px;
+  left: 18px;
+  width: 12px;
+  height: 12px;
   fill: var(--md-sys-color-tertiary);
-  animation-delay: 120ms;
+  animation-delay: 100ms;
 }
 
 .decor-sparkle__star:nth-child(3) {
-  top: 15px;
-  left: 16px;
-  width: 7px;
-  height: 7px;
-  animation-delay: 240ms;
+  top: 19px;
+  left: 21px;
+  width: 9px;
+  height: 9px;
+  animation-delay: 200ms;
 }
 
 @keyframes decor-sparkle {
@@ -1647,9 +1648,13 @@ button.chip:active::before {
     opacity: 0;
     transform: scale(0) rotate(0deg);
   }
-  40% {
+  30% {
     opacity: 1;
-    transform: scale(1) rotate(45deg);
+    transform: scale(1.1) rotate(40deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1) rotate(70deg);
   }
   100% {
     opacity: 0;
@@ -2470,6 +2475,14 @@ button.chip:active::before {
 
 .check-start__body {
   color: var(--md-sys-color-on-surface-variant);
+}
+
+/* The seconds a check or re-check has run, so a slow AI never looks frozen */
+.check-start__elapsed {
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--type-label-large);
+  letter-spacing: var(--md-sys-typescale-label-large-tracking);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The judge's one call has no steps to count, so the bar only says it's working.

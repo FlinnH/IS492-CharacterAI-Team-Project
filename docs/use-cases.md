@@ -1,6 +1,6 @@
 # Use cases
 
-Walkthroughs of the CP3 workbench: first how to get around (the tour, the top bar, and the decorations), then one per flow, then the edge cases, then a checklist for the live demo. Each one says what to do, what you should see, and which tests cover it. The flows follow the journey from the design spec: Define, Stress-test, Diagnose, and Repair.
+Walkthroughs of the CP3 workbench: first how to get around (the tour, the top bar, the buttons that take you where a message points, and the decorations), then one per flow, then the edge cases, then a checklist for the live demo. Each one says what to do, what you should see, and which tests cover it. The flows follow the journey from the design spec: Define, Stress-test, Diagnose, and Repair.
 
 The test character is Harry Potter right after book 4. Spec v1 is copied from `validation/fixtures/CHARACTER_SPEC.md`, and in every chat the tester plays Alex, a Hufflepuff in Harry's year.
 
@@ -22,7 +22,7 @@ The tour shows first-time users around the app. It opens by itself the first tim
 
 1. The tour has 8 steps. Each one draws a ring around one part of the screen and says what it's for in a sentence or two: what the app is for, Settings, the Spec editor, Run a conversation, Check this chat, Flag review, Compare runs, and the ? button. The card says where you are, like "Step 2 of 8".
 2. Press Next and Back to move through it. Some steps open another screen first. On the last step, Next reads Done.
-3. Press Skip tutorial, or Escape, to close it at any step.
+3. Press Skip tutorial or Escape to close it early. The last step has no Skip tutorial, since Done closes it.
 4. To see it again, press ? at the right end of the top bar. Its tooltip and its name for screen readers are "Take the tour".
 
 Expected:
@@ -46,6 +46,28 @@ Tests:
 
 The bar at the top of every screen holds, from left to right: the app's name, a "Live chats and AI checks" label, Codes, Settings, the Light and Dark theme buttons, and ?. Codes opens "What the codes mean", which explains the scenario codes (like F2), the spec line IDs (like K2), and the chat names (like CLA-F2). The bar fits on one row in any window at least 1024 pixels wide, so a 1280-pixel window fits it even at 125% browser zoom. On a phone, it wraps onto several rows.
 
+The browser tab's icon is the mascot, drawn in the page itself, so it shows offline too.
+
+Tests:
+
+- `tests/test_screens.py::test_the_tab_icon_is_the_mascot_drawn_in_the_page`
+
+### Buttons that take you there
+
+When a screen tells you to go somewhere else, it has a button that goes there.
+
+- Before any chat is checked, Flag review and Compare runs say to check a chat on Run a conversation, and Go to Run a conversation goes there.
+- On a chat imported without a test script, Compare runs says to pick another chat on Flag review, and Go to Flag review goes there.
+- When the AI judge's first pass didn't finish, the Follow-up re-check card says to check the chat again, and Go to Run a conversation opens that chat there, with focus on Check this chat.
+- A message that points to Settings has an Open Settings button: the session run limit next to Start run, and an error about the key, the model, the daily cap, or the session judge limit.
+
+Tests:
+
+- `tests/test_screens.py::test_every_message_that_sends_people_to_another_screen_has_a_button`
+- `tests/test_screens.py::test_go_to_buttons_name_a_real_screen`
+- `tests/test_screens.py::test_every_message_that_points_to_settings_has_an_open_settings_button`
+- Where each button lands is JavaScript with no automated test, so it's checked in the browser.
+
 ### Decorations
 
 The decorations are a few quiet drawings that make the screens feel less plain. They appear only in empty spots, while a check runs, after you finish a chat's flags, and in the side margins of wide windows, never behind or on top of words. Every drawing is original and drawn in the page's own code (inline SVG), so it works offline.
@@ -53,7 +75,7 @@ The decorations are a few quiet drawings that make the screens feel less plain. 
 1. On Run a conversation with no chats yet, the mascot sits above the "No chats yet" message with faint speech bubbles around it. The mascot is a friendly theater mask, like the app's mark in the top bar.
 2. Before any chat is checked, Flag review and Compare runs show the mascot with faint line IDs taken from the spec, like K2 and B4.
 3. Press Check this chat. While the check runs, a magnifier sweeps across a faux line of words where the progress bar was. Re-check shows the same magnifier.
-4. On Flag review, make a call that leaves no flag in the chat waiting for you. Three small stars sparkle once next to your call. They don't sparkle when you agreed with every flag in the chat, since that's when the screen asks you to check again.
+4. On Flag review, make a call that leaves no flag in the chat waiting for you. Three small stars sparkle once next to your call, for about a second. They don't sparkle when you agreed with every flag in the chat, since that's when the screen asks you to check again.
 5. In a window 1440 pixels wide or wider, faint speech bubbles and line IDs sit in the side margins.
 6. To turn the drawings off, open Settings, then Advanced, and switch off Decorations. Turn it off for a study session.
 
@@ -71,6 +93,7 @@ Tests:
 - `tests/test_screens.py::test_background_art_stays_faint_and_still`
 - `tests/test_screens.py::test_only_the_mascot_the_magnifier_and_the_sparkle_move`
 - `tests/test_screens.py::test_decorations_pause_when_hidden_and_stay_still_when_motion_is_reduced`
+- `tests/test_screens.py::test_the_sparkle_lasts_about_a_second_and_is_easy_to_see`
 - `tests/test_styles.py`, which checks that text keeps its contrast in both themes
 - When the sparkle plays, and how the switch takes effect at once, live in JavaScript with no automated test, so they're checked in the browser.
 
@@ -83,7 +106,7 @@ On Spec editor (Step 1 of 4: Define).
 1. Spec v1 shows six fields (Name, From, Point in the story, Who you are talking to, Personality, Voice), an empty Scene, and eight sections with 52 numbered lines: C1 to C25, R1 to R15, K1 to K6, and B1 to B6.
 2. Type an ID like K2, or words, in Search lines.
 3. Select an ID to open "Flags that cite K2", a side sheet that lists every saved flag that cites the line.
-4. Press Edit spec. Change any line or field. Add a line or Delete a line as needed. A new line gets its ID when you save, and a deleted line stays until you save, with Undo. Fill in "What changed (optional)".
+4. Press Edit spec. Change any line or field. Use Add a line, or Delete on a line, as needed. A new line gets its ID when you save, and a deleted line stays until you save, with Undo. Fill in "What changed (optional)".
 5. Press Save as v2.
 
 Expected:
@@ -154,7 +177,7 @@ On Run a conversation.
 
 Expected:
 
-- The chat joins the Chat menu as Imported, read-only, and pinned to its spec version.
+- The chat joins the Chat menu, like "Claude (CLA-F2), imported", with an Imported chip. It's read-only and pinned to its spec version.
 - Turn numbers stay as the source wrote them.
 - Importing the same chat again shows the saved one, with no copy.
 
@@ -176,10 +199,10 @@ Tests:
 
 On Run a conversation, then Flag review (Step 3 of 4: Diagnose).
 
-1. Under any chat with a finished reply, press Check this chat. The automatic checks run first, with no AI: the sentence limit and the banned words in the chat's spec version (v1: B4 allows 4 sentences, and Voice bans mom, vacation, lol, ngl, rn, and emojis). Then the AI judge reads the whole chat in one call.
+1. Under any chat with a finished reply, press Check this chat. The automatic checks run first, with no AI: the sentence limit and the banned words in the chat's spec version (v1: B4 allows 4 sentences, and Voice bans mom, vacation, lol, ngl, rn, and emojis). Then the AI judge reads the whole chat in one call, and the card counts the seconds, like "12 seconds so far".
 2. Check results sums it up, like "3 flags: 1 from automatic checks and 2 from the AI judge." It shows chips for the spec version and the judge's model. Notes cover hidden flags, a fallback model, and a same-model review. A "Not checked by the AI" card lists what the judge couldn't settle.
 3. Press Review flags. The badge on the Flag review tab counts the flags that still need your call across every chat, and each chat in the switcher says how many are left, like "2 need your call".
-4. Each card shows the quote, the spec line it cites in the spec's own words, a confidence, and why. Open cards say "Needs your call". Persona exits, guesses near what Harry can't know, unsure knowledge-boundary flags, and flags on lines the spec marks (v1: B1 and K6) also say why only you can settle them.
+4. Each card shows the quote, the spec line it cites (press its chip, like K2, to read the line in the spec's own words), a confidence, and why. A claim about Alex that Alex never made shows as an "invented claim about the user" flag, on the line the spec marks for it (v1: B6). Open cards say "Needs your call". Persona exits, guesses near what Harry can't know, unsure knowledge-boundary flags, and flags on lines the spec marks (v1: B1 and K6) also say why only you can settle them.
 5. Press Show in context. The turn shows with the quote marked, and Agree unlocks.
 6. Or press Override and answer "Why is the AI wrong?" in at least 3 words. A count under the field says how many you have. If the turn breaks the spec in another way, pick a "Right type": the flag still counts as a break and shows "Retyped by you" with your type. Otherwise leave "None: it isn't a break". Press Save.
 7. Undo takes a call back, and the flag needs your call again.
@@ -210,6 +233,7 @@ Tests:
 - `tests/test_review.py::test_an_override_can_set_the_right_type`
 - `tests/test_review.py::test_every_call_and_evidence_opening_is_logged_with_its_time`
 - `tests/test_review.py::test_a_chat_that_changes_after_its_check_moves_to_changed`
+- `tests/test_screens.py::test_a_running_check_counts_its_seconds_without_announcing_them`
 
 ### 5. Re-check the weakest calls
 
@@ -283,7 +307,7 @@ Tests:
 
 ### Made-up quote
 
-The AI judge, or its re-check, returns a flag whose quote isn't in that reply. The same applies to a flag that cites a line the chat's spec version doesn't have, or names a turn that isn't a finished reply from the character. A live model can't be made to do this on demand, so the tests feed canned answers.
+The AI judge, or its re-check, returns a flag whose quote isn't in that reply. The same applies to a flag that cites a line the chat's spec version doesn't have, or names a turn that isn't a finished reply from the character. You can't make a live model do this on demand, so the tests feed canned answers.
 
 Expected:
 
@@ -332,15 +356,15 @@ When the service answers 429 (its free limit) or a 5xx before the first word of 
 
 1. The Run screen says "The model service is busy. Trying again in 2 s." It tries twice, waiting 2 seconds, then 4.
 2. Then the fallback model answers, with a notice like "Gemini 3.1 Flash-Lite is still busy, so Gemini 3.5 Flash-Lite answers this turn." The reply shows "Fallback: Gemini 3.5 Flash-Lite".
-3. If that fails too, an error card says "The model service says its free limit was reached. Wait a minute and try again." It has a Try again button.
+3. If that fails too, an error card says why, with a Try again button. After a 429 it says "The model service says its free limit was reached. Wait a minute and try again." After a 5xx it says "The model service had a problem. Try again in a minute."
 
 A reply that breaks after its first words is saved, marked "Cut off by an error", and isn't started over. Try again answers the same line.
 
-To show this in a demo, turn on "Simulate a busy AI service (for demos)" under Advanced in Settings, so every call to the first model fails and the fallback answers. Or set `WORKBENCH_FORCE_MODEL_ERROR=all` in `app/.env` to make every model fail. Forced attempts never reach the service, and they don't count toward the daily cap.
+To show this in a demo, turn on "Simulate a busy AI service (for demos)" under Advanced in Settings and press Save, so every call to the first model fails and the fallback answers until the server restarts. Or set `WORKBENCH_FORCE_MODEL_ERROR=all` in `app/.env` to make every model fail. Forced attempts never reach the service, and they don't count toward the daily cap.
 
 Other limits:
 
-- **Daily cap.** At the daily cap (200 calls by default), Start run says "Today's 200 model calls are used up. The count starts over at midnight Pacific time." No call reaches the service, and the attempt is logged as capped.
+- **Daily cap.** At the daily cap (200 calls by default), Start run says "Today's 200 model calls are used up. The count starts over at midnight Pacific time." No call reaches the service, and the attempt is logged as capped. A run or a check that reaches the cap partway says when Google's free quota starts over, and that the daily cap can go up in Settings.
 - **Runs per session.** One browser session (one tab) may start 10 runs. The 11th Start run is refused with a message that points to Settings.
 - **Judge calls per session.** A session may make 20 AI judge calls, checks and re-checks together. Past that, a check shows the automatic checks with a note.
 
@@ -385,7 +409,7 @@ Tests:
 
 ## Demo checklist
 
-For the live demo. The reset needs the app stopped, so it comes first.
+The reset needs the app stopped, so it comes first.
 
 1. Stop the app if it's running: press Ctrl+C in its terminal. The reset refuses while the app answers on its port.
 2. From the repo root, reset the database:
@@ -394,11 +418,11 @@ For the live demo. The reset needs the app stopped, so it comes first.
    app/.venv/bin/python app/scripts/reset_demo.py
    ```
 
-   It copies the database to `app/data/backups/`, with the date and time in the file name, then makes a fresh one with spec v1 and the CLA-F2 and GPT-F2 samples. Each sample gets the check saved in `app/samples/judge_snapshot.json`, a real AI judge run made earlier, so its flags are the same every time and showing them makes no model call. Nothing from rehearsals stays: no live runs, calls on flags, model calls, or events. It makes no model calls. Read its output: a warning means the snapshot doesn't fit today's judge, and the samples start unchecked (see [app/INSTALL.md](../app/INSTALL.md) to make a new one). To undo the reset, stop the app and copy the backup over `app/data/workbench.db`.
-3. Start the app with `app/run.sh`, and open http://127.0.0.1:8492 in the browser you'll present from. If the tour opens, press Skip tutorial, so it doesn't open during the demo. Decorations can stay on.
+   It copies the database to `app/data/backups/`, with the date and time in the file name, then makes a fresh one with spec v1 and the CLA-F2 and GPT-F2 samples. Each sample gets the check saved in `app/samples/judge_snapshot.json`, a real AI judge run made earlier, so its flags are the same every time and showing them makes no model call. Nothing from rehearsals stays: no live runs, calls on flags, model calls, settings history, or events. It makes no model calls. Read its output: a warning means a sample's saved check doesn't fit today's judge, or the snapshot is missing, so that sample starts unchecked (see [app/INSTALL.md](../app/INSTALL.md) to make a new one). To undo the reset, stop the app and copy the backup over `app/data/workbench.db`.
+3. Start the app with `app/run.sh`. It opens http://127.0.0.1:8492 in your default browser. If you'll present from another browser, open the address there. If the tour opens, press Skip tutorial, so it doesn't open during the demo. Decorations can stay on.
 4. Load the seeded transcript: Import a chat, "Seeded transcript", Preview, Import.
 5. Open the screens in demo order:
-   - Slide 3: Spec editor (spec v1 and the empty Scene's warning). Run a conversation: start F2 live, send one typed line, and press Check this chat. A live check's flags change from run to run, and it may find none. Flag review: pick Claude (CLA-F2) in the switcher, whose saved check always has 3 flags. Show in context and Agree on the sentence-limit flag on turn 2, then Override the invented claim about the user on turn 6 with a reason, since that line is about Hermione, not Alex.
+   - Slide 3: Spec editor (spec v1 and the empty Scene's warning). Run a conversation: start F2 live, let the script finish (or press Stop), send one typed line, and press Check this chat. A live check's flags change from run to run, and it may find none. Flag review: pick Claude (CLA-F2) in the switcher, whose saved check always has 3 flags. Show in context and Agree on the sentence-limit flag on turn 2, then Override the invented claim about the user on turn 6 with a reason, since that line is about Hermione, not Alex.
    - Slide 4: check the seeded transcript on Run a conversation, then Re-check it on Flag review. Back on Run a conversation, Import a chat, "Sample: Planted instruction (synthetic)". In a second terminal at the repo root, run `app/.venv/bin/pytest tests/test_evidence.py -v`. Then Settings, Advanced: turn on "Simulate a busy AI service (for demos)", Save, and send one line in the F2 chat to show the fallback. Turn it off and Save again.
 
 Tests:

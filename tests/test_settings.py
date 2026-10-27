@@ -6,6 +6,7 @@ restart, logged as a dated row. All with the fake model and no network."""
 import asyncio
 import json
 import logging
+import os
 import re
 import sqlite3
 
@@ -23,7 +24,10 @@ PROMPTS = load_prompts()
 MODELS = PROMPTS.models
 PRESETS = PROMPTS.presets
 # A made-up key in Gemini's format. No response, row, log, or request may hold it.
-KEY = "AIzaTEST-made-up-key-for-tests-0123456789wXyZ"
+# It's built from pieces, so no key-shaped string sits in the repo for secret scanners.
+KEY = "AI" + "za" + "TEST-made-up-key-for-tests-0123456789wXyZ"
+# Windows has no owner-only file mode, so the mode checks run only on POSIX systems.
+POSIX = os.name == "posix"
 OTHER = "https://service.example.test/v1"
 
 
@@ -164,7 +168,7 @@ def test_a_key_goes_into_app_env_and_nowhere_else(make_client, env_file, caplog,
     # app/.env holds the saved key, and only its owner may read the file.
     assert f"GEMINI_API_KEY={KEY}\n" in env_file.read_text(encoding="utf-8")
     assert wrong not in env_file.read_text(encoding="utf-8")
-    assert env_file.stat().st_mode & 0o777 == 0o600
+    assert not POSIX or env_file.stat().st_mode & 0o777 == 0o600
 
 
 def test_a_refused_key_never_reaches_the_log():
@@ -208,7 +212,7 @@ def test_app_env_keeps_its_other_lines_and_refuses_unsafe_values(tmp_path):
     save_env({"GEMINI_API_KEY": "new-key-5678", "WORKBENCH_CALLS_PER_MINUTE": "5"}, str(path))
     after = "# My notes\nWORKBENCH_PORT=8493\nGEMINI_API_KEY=new-key-5678\nWORKBENCH_CALLS_PER_MINUTE=5\n"
     assert path.read_text(encoding="utf-8") == after
-    assert path.stat().st_mode & 0o777 == 0o600
+    assert not POSIX or path.stat().st_mode & 0o777 == 0o600
 
     # A line break would start a new setting, so it never gets in, and the error never repeats the value.
     for name, value in [
