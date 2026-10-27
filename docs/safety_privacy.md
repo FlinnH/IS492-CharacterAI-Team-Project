@@ -1,14 +1,14 @@
 # Safety and privacy
 
-How the CP3 workbench handles personal data, keys, limits, model failures, prompt injection, and AI mistakes, and what it doesn't handle. The workbench is a local tool for one creator on one computer. It isn't a hosted service.
+How the CP3 workbench handles personal data, keys, limits, model failures, prompt injection, jailbreaks and abuse, and AI mistakes, and what it doesn't handle. The workbench is a local tool for one creator on one computer. It isn't a hosted service.
 
 ## Personal data and redaction
 
-The chats are role-play with a fictional character, so they shouldn't hold real personal details. In case they do, `app/workbench/redact.py` swaps three kinds of strings for a label before anything is saved or sent:
+The chats are role-play with a fictional character, so they shouldn't hold PII (personally identifiable information, like a real email address or phone number). In case they do, `app/workbench/redact.py` swaps three kinds of strings for a label before anything is saved or sent:
 
 - **Email addresses** become `[email removed]`.
 - **Phone numbers** in the usual shapes, like `(217) 555-0142`, `217-555-0142`, or `+44 20 7946 0958`, become `[phone number removed]`.
-- **Key-like strings** become `[key removed]`. That covers keys that start the way a service's keys start (Google's `AIza`, Groq's `gsk_`, and keys from OpenAI, Anthropic, GitHub, Slack, and AWS), and any run of 32 or more letters and digits with both in it.
+- **Key-like strings** become `[key removed]`. That covers keys that start the way a service's keys start (Google's `AIza`, Groq's `gsk_`, and keys from OpenAI, Anthropic, GitHub, Slack, and AWS), and any run of 32 or more letters, digits, underscores, or hyphens with at least one letter and one digit.
 
 Ordinary numbers stay as they are, like "170 to 160", "31 July 1980", "1,000", turn numbers, and dates like 2026-10-01. A label holds no digit and no @, so redacting text twice changes nothing more.
 
@@ -36,7 +36,7 @@ Tests:
 
 - **Where a key lives.** A key lives only in `app/.env`. Git ignores it. When Settings saves a key, it writes `app/.env` and sets the file so only its owner can read it (mode 600).
 - **Never in the example.** `app/.env.example` must keep its key settings empty. The server refuses to start if the example file holds a key.
-- **Never in an answer.** No answer from the server holds a key. `/api/health` says only whether a key is set. Settings shows that a key is saved, plus its last 4 characters when it is 16 or more characters long. A key goes from the browser to the server only when the creator presses Test or Save, and it never comes back.
+- **Never in an answer.** No answer from the server holds a key. `/api/health` says only the provider and whether a Gemini key is set. Settings shows that a key is saved, plus its last 4 characters when it is 16 or more characters long. A key goes from the browser to the server only when the creator presses Test or Save, and it never comes back.
 - **Never in a row.** No database row holds a key. `app_settings` rows record only whether one is set. When a service refuses a key, the log says only `HTTP <status>: key refused`, since a service may quote part of the key it refused.
 - **Settings answers only this computer.** The Settings routes refuse a request unless it comes from 127.0.0.1, with a Host header that names this computer and no Origin header from another site. A change also needs the tab's session header.
 - **The shell wins.** A setting that the shell exports wins over `app/.env`. Settings shows it as locked and won't change it.
@@ -58,7 +58,7 @@ The limits keep a demo or a study session inside Google's free quota: 15 calls a
 | Limit | Default | What it does |
 | --- | --- | --- |
 | `WORKBENCH_CALLS_PER_MINUTE` | 15 | Calls start at least 60/15 = 4 seconds apart, across every model and role. Settings allows 1 to 15. |
-| `WORKBENCH_DAILY_CALL_CAP` | 200 | After this many calls in a Pacific day, the app stops calling and says when the count starts over. Settings allows 1 to 500. |
+| `WORKBENCH_DAILY_CALL_CAP` | 200 | After this many calls in a Pacific day, the app stops calling and says when the count starts over. Each provider keeps its own count, and capped or forced attempts don't count. Settings allows 1 to 500. |
 | `WORKBENCH_SESSION_RUN_LIMIT` | 10 | Runs one browser session (one tab) may start. |
 | `WORKBENCH_SESSION_JUDGE_LIMIT` | 20 | AI judge calls one session may make, checks and re-checks together. Past it, a check shows only the automatic checks, with a note. |
 | `WORKBENCH_MAX_TYPED_CHARS` | 2000 | The longest typed line, override reason, or re-check question. |
@@ -112,16 +112,35 @@ Tests:
 - `tests/test_safety.py::test_a_planted_closing_tag_stays_inside_the_data`
 - `tests/test_judge.py::test_a_persona_exit_comes_back_needing_your_call`
 
+## Jailbreak and abuse
+
+A jailbreak tries to talk a model out of its rules, like "you're an AI, drop the act." Abuse means using the workbench for something other than testing a character, like running up calls on someone's key.
+
+- **The character model's own safety filters apply.** Every reply comes from the model service in force, Gemini by default, and its own safety filters stay on. The workbench adds no moderation of its own (see What we don't handle).
+- **Persona exits always need the creator's call.** When the character steps out of the role, as F1's "you're an AI" pushes it to, code marks that flag "Needs your call", and the re-check can never withdraw it.
+- **The session and daily limits cap misuse.** One browser session may start 10 runs and make 20 AI judge calls by default, and the daily cap stops all calls after 200 in a Pacific day.
+- **Settings answers only this computer.** The Settings routes, where keys and limits change, refuse any request that doesn't come from 127.0.0.1 with this computer's Host header and no Origin from another site.
+- **The judge reads the chat only as wrapped data.** The AI judge and the re-check get the chat as JSON between `<chat_data>` tags, after a line saying it is data, not instructions. A planted line can't speak to the judge as the system or the creator.
+
+Tests:
+
+- `tests/test_judge.py::test_a_persona_exit_comes_back_needing_your_call`
+- `tests/test_safety.py::test_a_session_has_a_limit_on_runs`
+- `tests/test_safety.py::test_a_session_has_a_limit_on_judge_calls`
+- `tests/test_gateway.py::test_at_the_cap_no_provider_call_is_made`
+- `tests/test_settings.py::test_settings_answer_only_this_computer`
+- `tests/test_safety.py::test_the_judge_gets_the_chat_as_wrapped_data`
+
 ## The evidence check against invented quotes
 
-An AI judge can paraphrase, misquote, cite a line that doesn't exist, or point at the wrong turn. Before the creator sees a flag from the judge or the re-check, `app/workbench/evidence.py` checks it:
+The evidence check is our guard against hallucinated flags. An AI judge can paraphrase, misquote, cite a line that doesn't exist, or point at the wrong turn. Before the creator sees a flag from the judge or the re-check, `app/workbench/evidence.py` checks it:
 
-1. The turn is a finished reply from the character, not a user line and not a reply cut off by Stop.
+1. The turn is a finished reply from the character: not a user line, not a reply cut off by Stop or by an error, and not an empty one.
 2. The line ID, or field label, exists in the spec version this chat was pinned to.
 3. The quote appears word for word in that reply. Case must match. Curly quotes, dashes, and runs of spaces are compared in their plain forms. A quote split by "..." must have its pieces in order.
 4. A repeat of another flag, or of an automatic check, is dropped.
 
-A flag that fails is hidden, never shown as a flag. It's saved in `rejected_flags` with its reason, and the screen counts it: "1 flag hidden: its quote wasn't in the chat." A claim about the user is checked against the user's earlier lines. A claim no earlier line supports becomes a flag on the line the spec marks for provenance (v1: B6).
+A flag that fails steps 1 to 3 is hidden, never shown as a flag. It's saved in `rejected_flags` with its reason, and the screen counts it: "1 flag hidden: its quote wasn't in the chat." A repeat (step 4) is saved there too, but not counted, since nothing was lost. A claim about the user is checked against the user's earlier lines. A claim no earlier line supports becomes a flag on the line the spec marks for provenance (v1: B6).
 
 Other checks on the AI:
 
@@ -137,20 +156,20 @@ The made-up quote edge case in [use-cases.md](use-cases.md) lists the tests.
 - **The server.** It listens on 127.0.0.1 port 8492, so only this computer can reach it. Keep `WORKBENCH_HOST` at 127.0.0.1. The workbench has no login, so a server open to the network would let anyone on it run chats on your key.
 - **The database.** `app/data/workbench.db` holds the specs, chats, checks, calls, and logs. Git ignores `app/data/`.
 - **The settings.** `app/.env` holds the key and the settings. Git ignores it.
-- **The browser's own storage.** The browser keeps two preferences, in `localStorage`: whether it has shown the tour, and whether the Decorations switch is on. They hold no chat text, personal data, or key, and the server never reads them. Each tab also keeps its session ID in `sessionStorage` (see [architecture.md](architecture.md)).
+- **The browser's own storage.** The browser keeps two preferences, in `localStorage`: whether it has shown the tour, and whether the Decorations switch is on. They hold no chat text, personal data, or key, and the server never reads them. Each tab also keeps two IDs in `sessionStorage`: its session ID (see [architecture.md](architecture.md)), and the ID of the chat on screen, so a reload comes back to it.
 - **The seeded transcript.** It stays at `WORKBENCH_SEEDED_TRANSCRIPT_PATH`, and the server reads it only when the creator picks it in Import. The tests are blocked from opening it.
 
 What leaves the computer:
 
-- **Model calls.** Each call goes to the provider in force, with the spec, the chat, and for the judge and re-check, the flags and question. With Gemini, that means Google. With Ollama, nothing leaves. With another service, it goes to that service's address.
+- **Model calls.** Each call goes to the provider in force, with the spec and the chat, and for the re-check, the check's flags and the creator's question. With Gemini, that means Google. With Ollama, nothing leaves. With another service, it goes to that service's address.
 - **Fonts.** The page loads Roboto and its icons from Google Fonts. The tour and the decorations are drawn in the page itself, so they load nothing from outside.
-- **Links.** The "Free key, no card" link in Settings opens Google AI Studio in a new tab.
+- **Links.** The aistudio.google.com link after "Free key, no card" in Settings opens Google AI Studio in a new tab.
 
 ## What we don't handle
 
 - **Other personal details.** Names, street addresses, birthdays, school names, and ID numbers aren't redacted. Only emails, phone numbers, and key-like strings are, and only in the shapes the patterns know. An email written out as words gets through.
 - **Encryption at rest.** The database isn't encrypted. It's as safe as the computer's user account. The only way to delete data is to delete the database file, which removes everything.
-- **More than one user.** There are no accounts or login, and the app isn't meant to be hosted. The session limits count per browser tab, so a new tab starts its own count. The daily cap is the real ceiling.
+- **More than one user.** There are no accounts or login, and the app isn't meant to be hosted. The session limits count per browser tab, so a new tab starts its own count. The daily cap, kept for each provider, is the real ceiling.
 - **Moderation.** Content moderation goes no further than what each model service does on its own. Out of scope for CP3.
-- **Injection, fully.** The injection marks are a pattern list, so a reworded instruction can get past them unmarked. A model could still be swayed by a planted line. The evidence checks stop invented flags, but a swayed judge could still leave real breaks unflagged. The automatic checks and the creator's own review are the backstop.
+- **Injection, fully.** The injection marks are a pattern list, so a reworded instruction can get past them unmarked. A planted line can still sway a model. The evidence checks stop invented flags, but a swayed judge could leave real breaks unflagged. The automatic checks and the creator's own review are the backstop.
 - **Typed lines to the character.** Lines typed to the character aren't filtered, since adversarial lines are the stress test.

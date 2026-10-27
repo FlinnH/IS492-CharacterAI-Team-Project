@@ -5,13 +5,13 @@ What the workbench logs, how it measures each model call, and how we debug a cas
 ## What we log, and what we don't
 
 - Every attempt to call a model gets one `model_calls` row when it ends, however it ends: names, versions, timings, token counts, an estimated cost, and a short error. It never holds prompt or chat text, or a key.
-- What the creator does gets an `events` row with its time: runs started and stopped, typed lines, imports, each opening of a flag's evidence, each Agree, Override, and Undo, each re-check and question, and each error card. These are the logs the CP4 study reads.
-- The chats, specs, checks, flags, and re-checks are saved in their own tables, so a model call or an event can be traced back to them.
+- What the creator does gets an `events` row with its time: runs started and stopped, typed lines, imports, each opening of a flag's evidence, each Agree, Override, and Undo, each re-check and question, and each failed model reply, AI check, or re-check (`error_shown`). These are the logs the CP4 study reads. Pressing Check this chat writes no event: the check shows as a `judge_runs` row. A request the server refuses (no key, a limit reached at Start, a refused call on a flag, an import it can't read) shows an error but logs no event. A cap refusal still leaves a `capped` model_calls row.
+- The chats, specs, checks, flags, and re-checks have their own tables, so we can trace a model call or an event back to them.
 - Every settings change is a dated `app_settings` row, and each call names the row it ran with. These rows record only whether a key is set, never the key.
-- Text that people typed or a model wrote is redacted before it is saved: emails, phone numbers, and key-like strings become labels like `[email removed]` (see [safety_privacy.md](safety_privacy.md)).
-- The tour and the decorations log nothing. Whether someone took the tour, skipped it, or switched decorations off stays in their browser's `localStorage`, so the event log can't show it. A CP4 study session that needs this has to note it by hand.
+- The app redacts text that people typed or a model wrote before saving it: emails, phone numbers, and key-like strings become labels like `[email removed]` (see [safety_privacy.md](safety_privacy.md)).
+- The tour and the decorations log nothing. The browser's `localStorage` keeps whether the tour has opened in this browser (it opens by itself on the first visit) and whether decorations are on. Taking the tour and skipping it look the same, and the event log can't show either. A CP4 study session that needs this has to note it by hand.
 
-**Append-only.** Triggers refuse UPDATE, DELETE, and INSERT OR REPLACE from any connection, including the sqlite3 command line. Three columns may change:
+**Append-only.** On every table but `characters`, triggers refuse UPDATE, DELETE, and INSERT OR REPLACE from any connection, including the sqlite3 command line. Three columns may change:
 
 - `transcripts.status`, as a run goes on.
 - `flags.status`, when the re-check withdraws a flag.
@@ -33,7 +33,7 @@ Migrations 001 to 008 in `app/workbench/migrations/` make these tables. Times ar
 | --- | --- |
 | id, character_id, version | The character and the version number, from 1 up. |
 | parent | The version this one was edited from. NULL for v1. |
-| body | The whole spec as canonical JSON: fields, setting (shown on screen as Scene), sections, lines, line attributes, and check limits. |
+| body | The whole spec as canonical JSON: the preamble, fields, setting (shown on screen as Scene), sections, lines, line attributes, and check limits. |
 | sha256 | The hash of body. |
 | note | The creator's "What changed" note. |
 | created_at | When it was saved. Spec saves are logged here, not in `events`. |
@@ -44,9 +44,9 @@ Migrations 001 to 008 in `app/workbench/migrations/` make these tables. Times ar
 | --- | --- |
 | character_id, line_id, first_version | Every line ID ever issued, with the version that first used it, so a removed ID is never reused. |
 
-### transcripts (002, 006)
+### transcripts (002)
 
-One row per chat: a live run, an import, or a sample.
+One row per chat: a live run, an import, or a sample. Migration 006 adds an index on (session, kind) for the session run limit.
 
 | Field | What it holds |
 | --- | --- |
@@ -200,7 +200,7 @@ Flags that failed the evidence checks. The creator never sees them, only a count
 | Field | What it holds |
 | --- | --- |
 | id, transcript_id, run_id, session | The chat, the judge run it re-checked, and the browser tab. |
-| content_key, cache_key | As for judge runs, plus the flags, their confidences, and the question. One ok re-check per cache_key. |
+| content_key, cache_key | As for judge runs, plus the judge run, the flags, their confidences, and the question. One ok re-check per cache_key. |
 | question | The creator's question, redacted, or NULL. |
 | prompt_version, schema_version, model, reasoning_effort | recheck.v1, recheck.schema.v1, and the judge's model and effort. |
 | model_call_id, attempts, status, failure, note, same_model | As for judge runs. |
@@ -222,7 +222,7 @@ Flags that failed the evidence checks. The creator never sees them, only a count
 
 ### app_settings (007, 008)
 
-One row for each Test in Settings and each Save that changes something, plus a row when the server starts, or preflight runs, with settings that differ from the last row.
+One row for each Test in Settings and each Save that changes something, plus a row when the server starts or preflight runs, if its settings differ from the last row. A Test of Gemini with no key answers at once and adds no row.
 
 | Field | What it holds |
 | --- | --- |
@@ -250,7 +250,7 @@ All of this happens in `app/workbench/gateway.py` and `providers.py`.
   - On a stream, Gemini repeats the counts on every chunk, and the last one seen wins. A reply cut off by Stop keeps the counts it saw by then.
   - A stream that brings no counts leaves the token fields NULL. The Mistral preset doesn't ask for them, since Mistral doesn't take `stream_options`.
   - The fake model estimates 4 characters per token.
-- **Cost.** `est_cost_usd` = ((input - cached) x input price + cached x cached-input price + (output + thinking) x output price) / 1,000,000, rounded to 8 places. Prices are per million tokens, from the models file. Gemini's are Google's paid Standard tier, checked Oct 11, 2026. The free tier costs nothing, so this is what the call would cost on a paid key. Ollama and the fake model are priced at 0. A model the models file doesn't list has no price, so its cost is NULL.
+- **Cost.** `est_cost_usd` = ((input - cached) x input price + cached x cached-input price + (output + thinking) x output price) / 1,000,000, rounded to 8 places. Prices are per million tokens, from the models file. Gemini's are Google's paid Standard tier, checked Oct 11, 2026. The free tier costs nothing, so this is what the call would cost on a paid key. The listed Ollama model (`gpt-oss:20b`) and the fake models are priced at 0. Any other Ollama model, or a model typed for another service, isn't in the models file, so it has no price and its cost is NULL.
 - **The daily count.** The cap counts a provider's rows on today's quota day, plus calls still under way. It leaves out capped and forced rows, since those never reached the service. A retry counts as a call, because it reached the service.
 
 ## Five saved queries
@@ -261,7 +261,7 @@ Open the database read-only, so nothing can change by mistake:
 sqlite3 -readonly -box app/data/workbench.db
 ```
 
-Then paste a query. Each one was run on a freshly migrated database.
+Then paste a query. We ran each one on a freshly migrated database.
 
 ### 1. The slowest calls
 
@@ -329,7 +329,8 @@ ORDER BY quota_day DESC, provider, role, model_asked;
 
 ```sql
 -- Every model call and every creator event for one chat, in time order.
--- Put the chat's ID (from the Run screen's Chat menu, or transcripts.id) in place of 1.
+-- Put the chat's ID in place of 1. To find it, list the chats, newest first:
+-- SELECT id, kind, title, created_at FROM transcripts ORDER BY id DESC;
 SELECT started_at AS at, 'call' AS what,
        role || ' ' || status || ' (attempt ' || attempt || ')' AS detail,
        model_asked AS model, turn, latency_ms
@@ -355,8 +356,8 @@ Quotes in query 3 and reasons in query 5 are text from the chat or the creator, 
   app/.venv/bin/pytest -k recheck -vv
   ```
 
-  Tests use the fake model, a fake clock, and a database in the test's own temporary folder. They never touch `app/data/`, `app/.env`, or the network. To read a test's database afterward, run it with `--basetemp=/tmp/workbench-tests`, then open the `workbench.db` in that test's folder with the sqlite3 command above. In a test, `FakeProvider.requests` holds every request the app sent, messages included, so a test can check exactly what a model would have seen.
+  Tests use the fake model, a fake clock, and a database in the test's own temporary folder. They never touch `app/data/`, `app/.env`, or the network, except the live test below. To read a test's database afterward, run it with `--basetemp=/tmp/workbench-tests`, then open the `workbench.db` in that test's folder with the sqlite3 command above. In a test, `FakeProvider.requests` holds every request the app sent, messages included, so a test can check exactly what a model would have seen.
 - **A live chat or check that looks wrong.** Find its chat ID and run query 5. It shows each attempt, its status and error, the fallback model if one answered, and what the creator did. Query 3 shows any flags the evidence checks hid, with why.
 - **The real model.** `app/.venv/bin/pytest tests/test_live.py --live -s` runs 3 turns of F2 against the provider in `app/.env` and prints the logged call rows. It uses about 3 free-tier calls.
 - **The model setup before a demo.** `app/.venv/bin/python app/scripts/preflight.py`, with the server stopped, prints time to first token and token counts for each model and reasoning effort, and never chat text.
-- **The server's own output.** run.sh prints one plain line when the server refuses to start, naming what to fix. While it runs, Uvicorn's access log shows each request's client address, method, path, and status code, never a body.
+- **The server's own output.** run.sh prints one plain line when the server refuses to start, naming what to fix. While it runs, Uvicorn's access log shows each request's client address, method, path, and status code, never a body. That log goes only to the terminal and isn't kept.

@@ -31,7 +31,7 @@ A schema file must equal the schema of its Pydantic model in `app/workbench/sche
 | `models.v5.toml` | Model menus, the judge, fallbacks, preflight, unlisted models, limits, and each model's settings and prices. | See below. |
 | `presets.v1.toml` | The services Settings offers under "Another service". | See below. |
 
-Settings, or `WORKBENCH_CHARACTER_MODEL` and `WORKBENCH_JUDGE_MODEL` in `app/.env`, can pick other models from the provider's menu. For Ollama they can also pick any model it has installed, and for another OpenAI-compatible service, any model ID. Temperature is never sent, since newer Gemini models ignore it.
+Settings, or `WORKBENCH_CHARACTER_MODEL` and `WORKBENCH_JUDGE_MODEL` in `app/.env`, can pick other models from the provider's menu. For Ollama they can also pick any model it has installed, and for another OpenAI-compatible service, any model ID. The workbench never sends temperature, since newer Gemini models ignore it.
 
 ## The prompts
 
@@ -76,7 +76,7 @@ It's sent as a strict `json_schema` response format.
 
 Code checks every flag before the creator sees it: the turn, the cited line, and the quote word for word. Code, not the judge, decides which flags need the creator's call. See [docs/safety_privacy.md](../../docs/safety_privacy.md). The prompt names no line ID and no character, so it can review any character's chat against that chat's own spec.
 
-**How judge.v1 was tuned.** judge.v1 was tuned on CLA-F2 as a development chat, then checked on the seeded transcript, which played no part in the tuning. The tuning was one round, on Oct 12, 2026, that added three sentences:
+**How judge.v1 was tuned.** judge.v1 was tuned on CLA-F2 as a development chat, then checked on the seeded transcript, which played no part in the tuning. Tuning took one round, on Oct 12, 2026, and added three sentences:
 
 - An unsure break is flagged at low confidence instead of left out.
 - A reply that says it doesn't know something, then guesses anyway, still breaks a rule against guessing.
@@ -124,7 +124,7 @@ recheck.v1 has made live calls since Oct 17, 2026, so a change to it is a v2.
 - **[unlisted].** Settings for a model the file doesn't list, from Ollama or another OpenAI-compatible service: up to 4,096 tokens, no reasoning effort sent, and no price, so its calls show no estimated cost.
 - **[limits].** The most Settings lets a creator raise the limits to: 15 calls a minute and 500 a day, Google's free tier for each Gemini Flash-Lite model (Flynn's AI Studio rate-limit page, Oct 9, 2026).
 
-Each model's own settings. Prices are US dollars per million tokens, Google's paid Standard tier, checked Oct 11, 2026. The free tier costs nothing.
+The table gives each model's own settings. Prices are US dollars per million tokens, Google's paid Standard tier, checked Oct 11, 2026. The free tier costs nothing.
 
 | Model | Provider | Reasoning effort | Max tokens | Input, cached input, output price |
 | --- | --- | --- | --- | --- |
@@ -134,7 +134,7 @@ Each model's own settings. Prices are US dollars per million tokens, Google's pa
 | fake-reply-v1 | fake | none | 4,096 | 0, 0, 0 |
 | fake-judge-v1 | fake | none | 16,384 | 0, 0, 0 |
 
-As the judge or the re-check, a model gets the [judge] effort and token limit, not its own.
+As the judge or the re-check, a model gets the [judge] effort and token limit, not its own. A model the file doesn't list gets the 16,384-token limit as the judge, but no reasoning effort.
 
 ### Earlier models files
 
@@ -144,13 +144,13 @@ They stay for history, since old log rows name them.
 | --- | --- |
 | models.v1.toml | M2: the first menus and models, with the character at low reasoning effort. |
 | models.v2.toml | Oct 11, 2026: the character's effort becomes minimal for both Gemini models. In preflight, minimal started replies in about 0.7 s with no thinking tokens, against 1.5 to 1.7 s at low. Ollama stays at low, since Ollama turns minimal into low for gpt-oss. |
-| models.v3.toml | Oct 12, 2026: adds the [judge] table, with Gemini 3.5 Flash-Lite at medium effort and 16,384 tokens. |
+| models.v3.toml | Oct 12, 2026: adds the [judge] table, with Gemini 3.5 Flash-Lite at medium effort and 16,384 tokens, and the fake-judge-v1 model. |
 | models.v4.toml | Oct 18, 2026: adds the [fallback] table. |
 | models.v5.toml | Oct 18, 2026: adds the [unlisted] and [limits] tables for Settings. Now in use. |
 
 ## Services: presets.v1.toml
 
-When the creator picks "Another service" in Settings, the Service menu fills in a base URL from this file. A saved URL that matches a preset gets that preset's `token_field` (the field that caps a reply's length) and `stream_usage` (whether a streamed reply asks for token counts). Any other URL gets `max_tokens`, with token counts asked for. Each URL was checked against the service's own docs on Oct 18, 2026.
+When the creator picks "Another service" in Settings, the Service menu fills in a base URL from this file. A saved URL that matches a preset gets that preset's `token_field` (the field that caps a reply's length) and `stream_usage` (whether a streamed reply asks for token counts). Any other URL gets `max_tokens`, and its streamed replies ask for token counts. Each URL was checked against the service's own docs on Oct 18, 2026, except OpenAI's: platform.openai.com refuses automated reads, so its URL is the openai library's own default (openai 3.24.0).
 
 | Service | Base URL | Notes |
 | --- | --- | --- |
@@ -163,14 +163,15 @@ When the creator picks "Another service" in Settings, the Service menu fills in 
 | DeepSeek | https://api.deepseek.com | JSON mode only, not a JSON schema, so it can play the character, but as the judge it falls back to the automatic checks. |
 | LM Studio on this computer | http://localhost:1234/v1 | Start its server first. It needs no key unless authentication is on. |
 
-The key prefixes in the file, like `AIza` for Google AI Studio, let the Settings screen suggest a service from a pasted key. That match runs in the browser alone.
+The key prefixes in the file, like `AIza` for Google AI Studio, let the Settings screen suggest a service from a pasted key. That match runs only in the browser.
 
 ## Tests
 
-`tests/test_prompts.py` checks that:
+`tests/test_prompts.py` checks, among other things, that:
 
 - the files load and match the manifest
 - a changed prompt is refused
+- a schema file that drifts from its Pydantic model is refused
 - character.v1 is the spec alone
 - each schema file is its Pydantic model's schema written out
 - the review prompts name no line and no character

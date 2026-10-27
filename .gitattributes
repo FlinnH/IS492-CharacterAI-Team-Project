@@ -1,0 +1,4 @@
+# Every text file checks out with LF line endings, Windows included. The prompt
+# manifest records each prompt file's exact bytes, and bash can't run run.sh
+# with CRLF endings.
+* text=auto eol=lf
