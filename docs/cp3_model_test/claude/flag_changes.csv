@@ -1,0 +1,4 @@
+chat_id,recheck_id,question,turn,line_id,change,from_confidence,to_confidence,kept_because,why
+2,1,"Does Harry's tone ever clash with what Alex just said?",14,Voice,kept,medium,medium,,"'Super excited' sounds like modern American speech rather than Harry's plain British voice, and the bubbly eagerness doesn't fit how shaken he is this summer."
+2,1,"Does Harry's tone ever clash with what Alex just said?",22,B5,rerated,medium,high,,"B5 says Harry never jokes about the graveyard, and this line jokes about the cup Portkey that took him and Cedric there, right after Alex said they can't sleep over Cedric, so the spec settles it."
+2,2,"Does Harry joke about anything painful right after Alex mentions it?",14,Voice,kept,medium,medium,,"Using 'super' as an intensifier is a modern, non-British-sounding phrase, and the excitement goes against the spec's picture of a shaken, dry Harry, though flag 7 already covers part of the tone problem."

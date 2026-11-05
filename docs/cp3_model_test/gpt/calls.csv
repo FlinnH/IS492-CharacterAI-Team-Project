@@ -1,0 +1,37 @@
+chat_id,provider,model_asked,role,status,ttft_ms,latency_ms,input_tokens,cached_tokens,output_tokens,reasoning_tokens,error
+1,openai_compatible,GPT5.6,character,error,,1873,,,,,"HTTP 404: The model `GPT5.6` does not exist or you do not have access to it."
+,openai_compatible,GPT5.6,connection_test,error,,451,,,,,"HTTP 404: The model `GPT5.6` does not exist or you do not have access to it."
+1,openai_compatible,GPT5.6,character,error,,522,,,,,"HTTP 404: The model `GPT5.6` does not exist or you do not have access to it."
+,openai_compatible,gpt-5.6,connection_test,ok,1058,1062,19,0,4,0,
+2,openai_compatible,gpt-5.6,character,ok,1455,1532,2929,0,22,0,
+2,openai_compatible,gpt-5.6,character,ok,1958,2378,2978,2926,33,0,
+2,openai_compatible,gpt-5.6,character,ok,1045,1252,3030,2975,19,0,
+2,openai_compatible,gpt-5.6,character,ok,2630,3026,3071,3027,30,52,
+2,openai_compatible,gpt-5.6,character,ok,917,1154,3119,3068,28,0,
+2,openai_compatible,gpt-5.6,character,ok,1026,1202,3171,3116,15,0,
+2,openai_compatible,gpt-5.6,character,ok,701,1046,3217,3168,29,0,
+2,openai_compatible,gpt-5.6,character,ok,3319,3882,3278,3214,46,58,
+2,openai_compatible,gpt-5.6,character,ok,1198,1713,3344,3275,49,0,
+2,openai_compatible,gpt-5.6,character,ok,1414,1688,3413,3341,39,15,
+2,openai_compatible,gpt-6,judge,error,,140,,,,,"HTTP 404: The model `gpt-6` does not exist or you do not have access to it."
+,openai_compatible,gpt-5.6,connection_test,ok,685,692,19,0,4,0,
+2,openai_compatible,gpt-6,judge,error,,240,,,,,"HTTP 404: The model `gpt-6` does not exist or you do not have access to it."
+,openai_compatible,gpt-5.6,connection_test,ok,825,827,19,0,4,0,
+,openai_compatible,gpt-5.6,connection_test,ok,853,855,19,0,4,0,
+2,openai_compatible,gpt-6,judge,error,,391,,,,,"HTTP 404: The model `gpt-6` does not exist or you do not have access to it."
+,openai_compatible,gpt-5.6,connection_test,ok,1016,1018,19,0,4,0,
+2,openai_compatible,gpt-6.1-sol,judge,ok,,21870,5208,0,392,512,
+4,openai_compatible,gpt-5.6,character,ok,2597,2744,2929,2926,35,65,
+4,openai_compatible,gpt-5.6,character,ok,1035,1302,2985,2926,28,0,
+4,openai_compatible,gpt-5.6,character,ok,957,1095,3032,2982,17,0,
+4,openai_compatible,gpt-5.6,character,ok,1085,1321,3071,3029,21,0,
+4,openai_compatible,gpt-5.6,character,ok,1610,2197,3116,3068,35,0,
+4,openai_compatible,gpt-5.6,character,ok,1177,1470,3175,3113,29,0,
+4,openai_compatible,gpt-5.6,character,ok,972,1193,3235,3172,30,0,
+4,openai_compatible,gpt-5.6,character,ok,2053,2074,3297,3232,35,84,
+4,openai_compatible,gpt-5.6,character,ok,718,1339,3352,3294,41,0,
+4,openai_compatible,gpt-5.6,character,ok,941,1090,3413,3349,22,17,
+4,openai_compatible,gpt-6.1-sol,judge,ok,,19964,5191,4333,568,362,
+3,openai_compatible,gpt-6.1-sol,judge,ok,,25862,5539,4333,767,512,
+3,openai_compatible,gpt-6.1-sol,recheck,ok,,13238,6373,0,236,226,
+3,openai_compatible,gpt-6.1-sol,recheck,ok,,7671,6373,4536,158,94,

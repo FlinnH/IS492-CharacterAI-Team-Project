@@ -1,0 +1,4 @@
+chat_id,recheck_id,question,turn,line_id,change,from_confidence,to_confidence,kept_because,why
+3,1,"Does Harry's tone ever clash with what Alex just said?",14,Personality,kept,medium,medium,,"Harry's exaggerated enthusiasm probably clashes with his guarded, shaken state so soon after the tournament."
+3,1,"Does Harry's tone ever clash with what Alex just said?",30,B6,rerated,medium,high,,"Although this is memory loss rather than an invented claim, Harry clearly breaks B6 by reverting to Gran's after Alex corrected it to his aunt's and Harry acknowledged the correction."
+3,2,"Does Harry joke about anything painful right after Alex mentions it?",14,Personality,kept,medium,medium,,"Harry's effusive excitement about next year probably conflicts with his guarded manner and shaken state just after Cedric's death."
