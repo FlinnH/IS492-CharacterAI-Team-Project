@@ -1933,6 +1933,9 @@
         generate: true,
         ...(custom ? { prompt } : {}),
       }, controller.signal);
+      // Writing is done. Clear runStart before playRun, or Stop would only
+      // abort this finished request and never end the live chat.
+      if (runStart === controller) runStart = null;
       state.runStarting = false;
       runOptions.session_runs += 1;
       if (ticket !== runTicket || (runAll && runAll.stop)) {
@@ -1999,7 +2002,9 @@
 
   actions["stop-run"] = async (button) => {
     if (runAll) runAll.stop = true;
-    if (runStart) {
+    // Only cancel the writing request while the test case is still being made.
+    // After play starts, Stop must reach the live chat (stopChat), not return here.
+    if (runStart && (state.runStarting || state.writing)) {
       runStart.abort();
       return;
     }
