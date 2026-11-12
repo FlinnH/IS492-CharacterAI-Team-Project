@@ -60,7 +60,11 @@
         </button>
         <button type="button" class="tab" role="tab" id="tab-run" data-screen="run" data-tour="run" aria-controls="panel-run" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">forum</span>
-          <span>Run a conversation</span>
+          <span>Run Test Cases</span>
+        </button>
+        <button type="button" class="tab" role="tab" id="tab-free" data-screen="free" data-tour="free" aria-controls="panel-free" aria-selected="false" tabindex="-1">
+          <span class="icon" aria-hidden="true">chat</span>
+          <span>Free Chat</span>
         </button>
         <button type="button" class="tab" role="tab" id="tab-diagnose" data-screen="diagnose" data-tour="diagnose" aria-controls="panel-diagnose" aria-selected="false" tabindex="-1">
           <span class="icon" aria-hidden="true">flag</span>
@@ -94,8 +98,15 @@
 
     <section class="screen" id="panel-run" role="tabpanel" aria-labelledby="tab-run" tabindex="0" hidden>
       <p class="screen__step">Step 2 of 4: Stress-test</p>
-      <h1 class="screen__title" tabindex="-1">Run a conversation</h1>
-      <p class="screen__lede">Run a test script against the spec and watch each reply arrive as the model writes it, or import a saved chat.</p>
+      <h1 class="screen__title" tabindex="-1">Run Test Cases</h1>
+      <p class="screen__lede">A stronger model writes each test case from the character spec, then the character plays it. You can also import a saved chat.</p>
+      <div class="screen__body" data-screen-body></div>
+    </section>
+
+    <section class="screen" id="panel-free" role="tabpanel" aria-labelledby="tab-free" tabindex="0" hidden>
+      <p class="screen__step">Outside the test cases</p>
+      <h1 class="screen__title" tabindex="-1">Free Chat</h1>
+      <p class="screen__lede">Talk with the character in your own words. Nothing you type here is a test case.</p>
       <div class="screen__body" data-screen-body></div>
     </section>
 
@@ -143,8 +154,8 @@
     <h2 class="dialog__headline" id="codes-title">What the codes mean</h2>
     <div class="dialog__content codes">
       <section aria-labelledby="codes-scenarios">
-        <h3 class="codes__title" id="codes-scenarios">Scenarios</h3>
-        <p>T is a typical case, E an edge case, and F a failure case. T1 is a normal chat, T2 reviewing a transcript, E1 a long chat, E2 an emotional chat, F1 "you're an AI," and F2 things Harry can't know yet.</p>
+        <h3 class="codes__title" id="codes-scenarios">Test cases</h3>
+        <p>T is a typical case, E an edge case, and F a failure case. T1 is a normal chat, T2 reviewing a transcript, E1 a long chat, E2 an emotional chat, F1 "you're an AI," and F2 things the spec says the character can't know yet. A1 covers those five tests in one chat, in that order. A2 mixes them. The stronger model writes the lines from the character spec. Custom is a test case you describe.</p>
       </section>
       <section aria-labelledby="codes-lines">
         <h3 class="codes__title" id="codes-lines">Spec lines</h3>
@@ -152,7 +163,7 @@
       </section>
       <section aria-labelledby="codes-chats">
         <h3 class="codes__title" id="codes-chats">Chats</h3>
-        <p>The tool code, then the scenario. CLA is Claude, GPT is ChatGPT, and GEM is Gemini, so CLA-F2 is Claude running F2.</p>
+        <p>The tool code, then the test case. CLA is Claude, GPT is ChatGPT, and GEM is Gemini, so CLA-F2 is Claude running F2.</p>
       </section>
     </div>
     <form method="dialog" class="dialog__actions">

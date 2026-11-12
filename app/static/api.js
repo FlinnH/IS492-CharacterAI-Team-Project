@@ -71,11 +71,14 @@ window.WorkbenchApi = (() => {
     return new ApiError(response.status, message, data && data.field ? data.field : null, (data && data.problems) || []);
   }
 
-  async function request(method, path, body) {
+  async function request(method, path, body, signal) {
     let response;
     try {
-      response = await fetch(path, options(method, body, "application/json"));
-    } catch {
+      const init = options(method, body, "application/json");
+      if (signal) init.signal = signal;
+      response = await fetch(path, init);
+    } catch (error) {
+      if (error && error.name === "AbortError") throw error;
       throw new ApiError(0, UNREACHABLE);
     }
     if (!response.ok) throw await failure(response);
@@ -155,7 +158,7 @@ window.WorkbenchApi = (() => {
     runOptions: () => request("GET", "/api/run-options"),
     listChats: () => request("GET", "/api/chats"),
     getChat: (id) => request("GET", `/api/chats/${part(id)}`),
-    startChat: (start) => request("POST", "/api/chats", start),
+    startChat: (start, signal) => request("POST", "/api/chats", start, signal),
     // The next scripted line, or the line still waiting for a reply.
     nextTurn: (id, onEvent, signal) => stream(`/api/chats/${part(id)}/next`, undefined, onEvent, signal),
     sendMessage: (id, text, onEvent, signal) => stream(`/api/chats/${part(id)}/messages`, { text }, onEvent, signal),

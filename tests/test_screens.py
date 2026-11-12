@@ -52,9 +52,9 @@ def keyframes(css):
 # The walkthrough
 
 
-def test_the_tour_has_eight_steps():
+def test_the_tour_has_nine_steps():
     steps = tour_steps()
-    assert len(steps) == 8
+    assert len(steps) == 9
     assert all(step.get("anchor") and step.get("title") and step.get("text") for step in steps)
 
 
@@ -68,8 +68,8 @@ def test_every_tour_step_points_at_an_element_in_index_html(step):
 def test_the_tour_visits_every_screen_and_ends_on_its_button():
     steps = tour_steps()
     assert [step["anchor"] for step in steps[:2]] == ["brand", "settings"]
-    assert [step["screen"] for step in steps if "screen" in step] == ["define", "run", "run", "diagnose", "compare"]
-    assert set(TABS) == {"define", "run", "diagnose", "compare"}
+    assert [step["screen"] for step in steps if "screen" in step] == ["define", "run", "run", "free", "diagnose", "compare"]
+    assert set(TABS) == {"define", "run", "free", "diagnose", "compare"}
     assert steps[-1]["anchor"] == "tour"
     button = re.search(r'<button[^>]*data-tour="tour"[^>]*>', INDEX).group(0)
     assert 'data-action="start-tour"' in button
@@ -194,13 +194,13 @@ def function_body(name):
 
 def test_every_message_that_sends_people_to_another_screen_has_a_button():
     lines = CODE.splitlines()
-    sends = [number for number, line in enumerate(lines) if re.search(r"\b[Oo]n (Run a conversation|Flag review|Spec editor|Compare runs)(,| first)", line)]
+    sends = [number for number, line in enumerate(lines) if re.search(r"\b[Oo]n (Run Test Cases|Flag review|Spec editor|Compare runs)(,| first)", line)]
     assert len(sends) == 3
     for number in sends:
         nearby = "\n".join(lines[number:number + 6])
         assert re.search(r'data-action="(go-to-screen|check-changed-chat)"', nearby), lines[number]
         assert ">Go to " in nearby, lines[number]
-    assert '>Go to Run a conversation</button>' in function_body("renderNoCheckedChats")
+    assert '>Go to Run Test Cases</button>' in function_body("renderNoCheckedChats")
     assert '>Go to Flag review</button>' in function_body("renderCompare")
 
 

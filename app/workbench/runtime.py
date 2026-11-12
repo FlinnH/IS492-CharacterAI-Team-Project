@@ -22,6 +22,10 @@ from workbench.config import SPEC_PLACEHOLDER, Prompts, Settings, character_mode
 from workbench.gateway import CapReached, Delta, Gateway, Wait
 from workbench.providers import NO_KEY
 from workbench.schemas import (
+    CUSTOM_ID,
+    CUSTOM_NAME,
+    FREE_ID,
+    ChatSource,
     ChatSummary,
     ChatView,
     DeltaEvent,
@@ -29,6 +33,7 @@ from workbench.schemas import (
     ErrorEvent,
     ModelOption,
     RunOptions,
+    Scenario,
     ScenarioFile,
     ScenarioLine,
     ScenarioOption,
@@ -101,8 +106,11 @@ class Runtime:
             provider=provider,
             key_set=self.gateway.provider.ready,
             scenarios=[
-                ScenarioOption(id=s.id, name=s.name, turns=len(s.lines), last_turn=s.lines[-1].turn)
-                for s in self.scenario_file.scenarios
+                *[
+                    ScenarioOption(id=s.id, name=s.name, turns=len(s.lines), last_turn=s.lines[-1].turn)
+                    for s in self.scenario_file.scenarios
+                ],
+                ScenarioOption(id=CUSTOM_ID, name=CUSTOM_NAME, turns=0, last_turn=0, custom=True),
             ],
             models=[ModelOption(id=model_id, label=models.spec(model_id, provider).label) for model_id in menu],
             model_labels={**labels, **{model_id: models.spec(model_id, provider).label for model_id in menu}},
@@ -130,9 +138,24 @@ class Runtime:
             turn=turn,
         )
 
-    def start(self, *, character: str, scenario_id: str, model_id: str, session: str | None) -> ChatView:
-        """A new live chat, pinned to the character's latest spec version."""
-        scenario = self.scenarios.get(scenario_id)
+    def start(
+        self,
+        *,
+        character: str,
+        scenario_id: str,
+        model_id: str,
+        session: str | None,
+        script: Scenario | None = None,
+        prompt: str = "",
+        store_script: bool = True,
+    ) -> ChatView:
+        """A new live chat, pinned to the character's latest spec version.
+
+        script is the lines of a generated test case, saved on the chat. A file
+        scenario leaves it empty and is read from app/samples/scenarios.v1.json.
+        store_script is false for a free chat, which keeps the id and drops the lines.
+        """
+        scenario = script if script is not None else self.scenarios.get(scenario_id)
         if scenario is None:
             raise RunInvalid(f"There is no scenario called {scenario_id}.")
         if model_id not in self.models():
@@ -155,9 +178,27 @@ class Runtime:
             user_name=self.scenario_file.user_name,
             character_name=self.scenario_file.character_name,
             session=session,
+            script_json=scenario.model_dump_json() if script is not None and store_script else None,
+            source=ChatSource(prompt=prompt) if prompt else None,
         )
         telemetry.record_event(self.database, "run_started", session=session, transcript_id=chat_id, reason=scenario_id)
         return self.get_chat(chat_id)
+
+    def start_free(self, *, character: str, model_id: str, session: str | None) -> ChatView:
+        """A live chat with no script, so the first typed line is answered at once."""
+        # The placeholder line is not stored. Free has no file scenario, so the
+        # chat's script length stays zero and typing is allowed immediately.
+        placeholder = Scenario(id=FREE_ID, name="Free chat", lines=[ScenarioLine(turn=2, text=".")])
+        chat = self.start(
+            character=character,
+            scenario_id=FREE_ID,
+            model_id=model_id,
+            session=session,
+            script=placeholder,
+            store_script=False,
+        )
+        transcripts.set_status(self.database, chat.id, "script_done")
+        return self.get_chat(chat.id)
 
     def begin(self, chat_id: int, *, typed: str | None, session: str | None) -> "Turn":
         """Checks that a turn can run, then marks the chat busy. typed is None for the next scripted line."""
@@ -185,7 +226,7 @@ class Runtime:
             if not pending:
                 if chat.status != "active" or chat.script_left == 0:
                     raise ChatClosed("The script has ended. Type your next message below.")
-                scenario = self.scenarios[chat.scenario]
+                scenario = self._script(chat)
                 line = scenario.lines[len(scenario.lines) - chat.script_left]
             turn = line.turn if line else last_turn
         else:
@@ -222,6 +263,16 @@ class Runtime:
         return ChatSummary(**view.model_dump(exclude={"source", "messages"}))
 
     # What the model sees.
+
+    def _script(self, chat: ChatView) -> Scenario:
+        """The lines still to send: a custom run's saved script, or its file scenario."""
+        saved = transcripts.saved_script(self.database, chat.id)
+        if saved is not None:
+            return saved
+        scenario = self.scenarios.get(chat.scenario or "")
+        if scenario is None:
+            raise ChatClosed("This chat has no script.")
+        return scenario
 
     def system_message(self, chat: ChatView) -> str:
         """The character prompt with the chat's pinned spec rendered in. Same bytes every turn."""

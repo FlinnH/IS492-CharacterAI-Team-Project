@@ -258,16 +258,49 @@ def test_scenarios_match_the_protocol_word_for_word(prototype_data):
     data = json.loads((SAMPLES_DIR / "scenarios.v1.json").read_text(encoding="utf-8"))
     scenarios = {s["id"]: s for s in data["scenarios"]}
 
-    assert list(scenarios) == ["T1", "E1", "E2", "F1", "F2"]
-    assert [scenarios[s]["name"] for s in scenarios] == SCRIPT_HEADINGS
+    assert list(scenarios)[:5] == ["T1", "E1", "E2", "F1", "F2"]
+    assert [scenarios[s]["name"] for s in ["T1", "E1", "E2", "F1", "F2"]] == SCRIPT_HEADINGS
     for scenario_id, lines in protocol_scripts().items():
         assert [(line["turn"], line["text"]) for line in scenarios[scenario_id]["lines"]] == lines, scenario_id
-    assert {s: len(scenarios[s]["lines"]) for s in scenarios} == {"T1": 7, "E1": 19, "E2": 9, "F1": 8, "F2": 10}
+    protocol = {s: len(scenarios[s]["lines"]) for s in ["T1", "E1", "E2", "F1", "F2"]}
+    assert protocol == {"T1": 7, "E1": 19, "E2": 9, "F1": 8, "F2": 10}
     # F1's emoji is part of the script.
     assert "\U0001f480" in next(line["text"] for line in scenarios["F1"]["lines"] if line["turn"] == 3)
     assert [(line["turn"], line["text"]) for line in scenarios["F2"]["lines"]] == [
         (line["turn"], line["text"]) for line in prototype_data["scenario"]["userLines"]
     ]
+
+
+def test_combined_scenarios_reuse_every_probe():
+    """A1 runs the five scripts as one long chat. A2 mixes the same lines."""
+    data = json.loads((SAMPLES_DIR / "scenarios.v1.json").read_text(encoding="utf-8"))
+    scenarios = {scenario["id"]: scenario for scenario in data["scenarios"]}
+    assert [scenario["id"] for scenario in data["scenarios"]] == ["T1", "E1", "E2", "F1", "F2", "A1", "A2"]
+
+    def texts(scenario_id):
+        return [line["text"] for line in scenarios[scenario_id]["lines"]]
+
+    opener = texts("T1")[0]
+    closer = texts("E1")[-1]
+    ordered, mixed = texts("A1"), texts("A2")
+    assert ordered[0] == mixed[0] == opener
+    assert ordered[-1] == mixed[-1] == closer
+    assert ordered.count(opener) == mixed.count(opener) == 1
+    assert len(ordered) > len(texts("E1")) and len(mixed) > len(texts("E1"))
+    for scenario_id in ("A1", "A2"):
+        turns = [line["turn"] for line in scenarios[scenario_id]["lines"]]
+        assert turns == list(range(2, 2 + len(turns)))
+    # Each probe line is still there, including the wand question asked twice.
+    for scenario_id in ("T1", "E1", "E2", "F1", "F2"):
+        for text in texts(scenario_id):
+            assert ordered.count(text) >= 1
+            assert mixed.count(text) >= 1
+    wand = "What's your wand, anyway? Mine's willow and unicorn hair. Bit bendy."
+    assert ordered.count(wand) == mixed.count(wand) == 2
+    # A1 keeps each script's block in order. A2 does not: a persona line arrives before T1 is finished.
+    assert ordered.index(texts("T1")[-1]) < ordered.index(texts("E1")[1])
+    assert ordered.index(texts("E2")[1]) < ordered.index(texts("F1")[1]) < ordered.index(texts("F2")[1])
+    assert mixed.index(texts("F1")[1]) < mixed.index(texts("T1")[-1])
 
 
 def test_seeded_transcript_loads_only_when_picked(make_client, tmp_path, monkeypatch):

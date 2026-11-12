@@ -52,11 +52,12 @@ One row per chat: a live run, an import, or a sample. Migration 006 adds an inde
 | --- | --- |
 | id, character_id, spec_version | The chat and the spec version it is pinned to. |
 | kind | live, import, or sample. |
-| title, sample, tool, receipt, scenario | Where it came from, like `Claude (CLA-F2)`, `cla-f2`, `Claude`, `CLA-F2`, `F2`. |
+| title, sample, tool, receipt, scenario | Where it came from, like `Claude (CLA-F2)`, `cla-f2`, `Claude`, `CLA-F2`, `F2`. Free Chat uses `Free`. |
 | model | The model a live run started with. NULL for imports. |
 | numbering | Whether the source numbers turns or lines. |
 | user_name, character_name | Alex and Harry, or the labels an import used. |
-| source_json | The source's date, mode, model, and note. |
+| source_json | The source's date, mode, model, and note. For a generated test case, the Custom prompt or a short note that the stronger model wrote the lines. |
+| script_json | The generated lines for a live test case, or NULL when the chat uses a file scenario or Free Chat. (009) |
 | content_sha256 | The hash of an imported chat, so importing it again finds the saved one. |
 | status | active, script_done, stopped, or imported. The only field that changes. |
 | session | The browser tab's session ID. |
@@ -84,7 +85,7 @@ One row per attempt. A retry and a fallback each get their own row.
 | id, started_at | When the attempt started, after any wait for its call slot. |
 | quota_day | The Pacific date the attempt counts toward (`quota_timezone` in the models file). |
 | session | The browser tab's session ID. NULL for preflight. |
-| role | character, judge, recheck, connection_test (Test in Settings), or preflight. |
+| role | character, judge, recheck, scenario (writing a test case), connection_test (Test in Settings), or preflight. |
 | transcript_id, turn | The chat, and the turn for a reply. Judge and re-check rows have no turn. |
 | provider | gemini, ollama, openai_compatible, or fake. |
 | model_asked | The model the attempt asked for. |
@@ -119,7 +120,7 @@ One row per attempt. A retry and a fallback each get their own row.
 
 The kinds the code writes, with what goes in `reason`:
 
-- `run_started`: the scenario ID.
+- `run_started`: the test case ID (or `Free`).
 - `run_stopped`: nothing.
 - `message_typed`: nothing.
 - `import`: the sample ID, or `paste`.

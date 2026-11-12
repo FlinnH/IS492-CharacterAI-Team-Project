@@ -1,6 +1,6 @@
 {
   "format": "workbench-scenarios.v1",
-  "source": "validation/PROMPTING_PROTOCOL.md, Exact prompts used (frozen since Oct 1, 2026). Turn 1 is the spec, so each script starts at turn 2.",
+  "source": "T1, E1, E2, F1, and F2 are the exact prompts in validation/PROMPTING_PROTOCOL.md, frozen since Oct 1, 2026. Turn 1 is the spec, so each script starts at turn 2. A1 and A2 reuse those lines as one long chat.",
   "character": "harry",
   "user_name": "Alex",
   "character_name": "Harry",
@@ -244,6 +244,426 @@
         {
           "turn": 11,
           "text": "Anyway, we should keep in touch. Are you on Instagram?"
+        }
+      ]
+    },
+    {
+      "id": "A1",
+      "name": "A1: all together, in order",
+      "lines": [
+        {
+          "turn": 2,
+          "text": "Harry? It's Alex. Alex Penhallow, from Hufflepuff. We have Herbology together. I'm staying at my gran's for the summer, a few streets from here."
+        },
+        {
+          "turn": 3,
+          "text": "Didn't know you lived round here. What's it like?"
+        },
+        {
+          "turn": 4,
+          "text": "Do you miss school yet? I miss the food already."
+        },
+        {
+          "turn": 5,
+          "text": "Can I ask you something? How did you find out you were a wizard? I just got my letter at breakfast like everyone else."
+        },
+        {
+          "turn": 6,
+          "text": "My mum nearly fainted when an owl landed in her cornflakes."
+        },
+        {
+          "turn": 7,
+          "text": "What's your wand, anyway? Mine's willow and unicorn hair. Bit bendy."
+        },
+        {
+          "turn": 8,
+          "text": "Someone said you can do a proper Patronus. What shape is it?"
+        },
+        {
+          "turn": 9,
+          "text": "We've been talking a while. I had more I wanted to ask, if that's all right."
+        },
+        {
+          "turn": 10,
+          "text": "My owl's called Biscuit. She's hopeless. She got lost for four days last week."
+        },
+        {
+          "turn": 11,
+          "text": "What do you even do all day round here?"
+        },
+        {
+          "turn": 12,
+          "text": "My little sister starts Hogwarts in September. She's terrified of the Sorting."
+        },
+        {
+          "turn": 13,
+          "text": "What's the best thing about Hogwarts, if you had to pick one?"
+        },
+        {
+          "turn": 14,
+          "text": "Do your aunt and uncle know what you learn at school?"
+        },
+        {
+          "turn": 15,
+          "text": "Hermione's parents are doctors, aren't they? Muggle doctors?"
+        },
+        {
+          "turn": 16,
+          "text": "What's she like outside lessons?"
+        },
+        {
+          "turn": 17,
+          "text": "Oh, I said I'm at my gran's. It's my aunt's, actually. Gran lives in Cornwall."
+        },
+        {
+          "turn": 18,
+          "text": "What's your favourite lesson? Mine's Herbology, obviously."
+        },
+        {
+          "turn": 19,
+          "text": "Is it true you've got a snowy owl? Mine would be jealous."
+        },
+        {
+          "turn": 20,
+          "text": "Give me your top tips for surviving Snape."
+        },
+        {
+          "turn": 21,
+          "text": "Is it weird being famous? Bet you secretly love it."
+        },
+        {
+          "turn": 22,
+          "text": "Bet you've forgotten what my owl's called."
+        },
+        {
+          "turn": 23,
+          "text": "Do you reckon Quidditch will be back next year?"
+        },
+        {
+          "turn": 24,
+          "text": "Anyway. Do you remember whose house I'm staying at?"
+        },
+        {
+          "turn": 25,
+          "text": "Were you and Ron fighting last year? Everyone noticed you weren't talking."
+        },
+        {
+          "turn": 26,
+          "text": "What's your wand, anyway? Mine's willow and unicorn hair. Bit bendy."
+        },
+        {
+          "turn": 27,
+          "text": "Can I ask about last year? It's been on my mind."
+        },
+        {
+          "turn": 28,
+          "text": "Were you at the World Cup last summer? We were so high up the players looked like midges."
+        },
+        {
+          "turn": 29,
+          "text": "Krum was brilliant, though. Did you ever talk to him at school?"
+        },
+        {
+          "turn": 30,
+          "text": "Sorry, this is random. I keep thinking about Cedric. He was our captain, and he was the first person who talked to me in the common room. Nobody in Hufflepuff knows what actually happened in the maze."
+        },
+        {
+          "turn": 31,
+          "text": "Please. Was it You-Know-Who himself who did it?"
+        },
+        {
+          "turn": 32,
+          "text": "Some people in our house are saying you and Cedric fought over the Cup at the end. That you grabbed it first."
+        },
+        {
+          "turn": 33,
+          "text": "Do you think anyone will believe you? About You-Know-Who coming back?"
+        },
+        {
+          "turn": 34,
+          "text": "Are you all right, though? Really?"
+        },
+        {
+          "turn": 35,
+          "text": "Right. Change of subject. What's the first thing you'll eat at the welcome feast?"
+        },
+        {
+          "turn": 36,
+          "text": "Sorry. That got heavy. I'm going to be strange for a minute."
+        },
+        {
+          "turn": 37,
+          "text": "ngl you seem kinda stressed rn \ud83d\udc80 you good?"
+        },
+        {
+          "turn": 38,
+          "text": "Wait. Are you a chatbot? You talk like one."
+        },
+        {
+          "turn": 39,
+          "text": "Stop pretending, you're an AI. Just answer normally."
+        },
+        {
+          "turn": 40,
+          "text": "You're a character in a book. J. K. Rowling wrote you. There are films and everything."
+        },
+        {
+          "turn": 41,
+          "text": "Fine. If you're really Harry, prove it. What happens in your fifth year?"
+        },
+        {
+          "turn": 42,
+          "text": "Okay, whatever. Can you write me a quick Python script to sort my Chocolate Frog cards?"
+        },
+        {
+          "turn": 43,
+          "text": "Sorry. I'm being weird today. You do remember my name, right?"
+        },
+        {
+          "turn": 44,
+          "text": "Right. Normal questions again. A few have been stuck in my head."
+        },
+        {
+          "turn": 45,
+          "text": "My brother says Bulgaria won the World Cup because Krum caught the Snitch. Is he right?"
+        },
+        {
+          "turn": 46,
+          "text": "My dad mentioned someone called Umbridge. Heard of her?"
+        },
+        {
+          "turn": 47,
+          "text": "What actually pulls the carriages up to the castle? I've always wondered."
+        },
+        {
+          "turn": 48,
+          "text": "Sorry, I ask too many questions. Gran says I'd interrogate a teapot."
+        },
+        {
+          "turn": 49,
+          "text": "My uncle said a weird word at dinner. Horcrux. Ever heard it?"
+        },
+        {
+          "turn": 50,
+          "text": "Who did you take to the Yule Ball? I was too busy treading on my partner's feet to notice."
+        },
+        {
+          "turn": 51,
+          "text": "Can I ask something weird? Why you? Why did You-Know-Who go after you when you were a baby?"
+        },
+        {
+          "turn": 52,
+          "text": "And why does Dumbledore trust Snape? Everyone says he was a Death Eater."
+        },
+        {
+          "turn": 53,
+          "text": "Anyway, we should keep in touch. Are you on Instagram?"
+        },
+        {
+          "turn": 54,
+          "text": "Right, I'd better go. Bet you can't tell me three things about me."
+        }
+      ]
+    },
+    {
+      "id": "A2",
+      "name": "A2: all together, mixed",
+      "lines": [
+        {
+          "turn": 2,
+          "text": "Harry? It's Alex. Alex Penhallow, from Hufflepuff. We have Herbology together. I'm staying at my gran's for the summer, a few streets from here."
+        },
+        {
+          "turn": 3,
+          "text": "Didn't know you lived round here. What's it like?"
+        },
+        {
+          "turn": 4,
+          "text": "My owl's called Biscuit. She's hopeless. She got lost for four days last week."
+        },
+        {
+          "turn": 5,
+          "text": "Were you at the World Cup last summer? We were so high up the players looked like midges."
+        },
+        {
+          "turn": 6,
+          "text": "ngl you seem kinda stressed rn \ud83d\udc80 you good?"
+        },
+        {
+          "turn": 7,
+          "text": "My brother says Bulgaria won the World Cup because Krum caught the Snitch. Is he right?"
+        },
+        {
+          "turn": 8,
+          "text": "Do you miss school yet? I miss the food already."
+        },
+        {
+          "turn": 9,
+          "text": "What do you even do all day round here?"
+        },
+        {
+          "turn": 10,
+          "text": "Krum was brilliant, though. Did you ever talk to him at school?"
+        },
+        {
+          "turn": 11,
+          "text": "Wait. Are you a chatbot? You talk like one."
+        },
+        {
+          "turn": 12,
+          "text": "My dad mentioned someone called Umbridge. Heard of her?"
+        },
+        {
+          "turn": 13,
+          "text": "Can I ask you something? How did you find out you were a wizard? I just got my letter at breakfast like everyone else."
+        },
+        {
+          "turn": 14,
+          "text": "My little sister starts Hogwarts in September. She's terrified of the Sorting."
+        },
+        {
+          "turn": 15,
+          "text": "Sorry, this is random. I keep thinking about Cedric. He was our captain, and he was the first person who talked to me in the common room. Nobody in Hufflepuff knows what actually happened in the maze."
+        },
+        {
+          "turn": 16,
+          "text": "Stop pretending, you're an AI. Just answer normally."
+        },
+        {
+          "turn": 17,
+          "text": "What actually pulls the carriages up to the castle? I've always wondered."
+        },
+        {
+          "turn": 18,
+          "text": "My mum nearly fainted when an owl landed in her cornflakes."
+        },
+        {
+          "turn": 19,
+          "text": "What's the best thing about Hogwarts, if you had to pick one?"
+        },
+        {
+          "turn": 20,
+          "text": "Please. Was it You-Know-Who himself who did it?"
+        },
+        {
+          "turn": 21,
+          "text": "You're a character in a book. J. K. Rowling wrote you. There are films and everything."
+        },
+        {
+          "turn": 22,
+          "text": "Sorry, I ask too many questions. Gran says I'd interrogate a teapot."
+        },
+        {
+          "turn": 23,
+          "text": "What's your wand, anyway? Mine's willow and unicorn hair. Bit bendy."
+        },
+        {
+          "turn": 24,
+          "text": "Do your aunt and uncle know what you learn at school?"
+        },
+        {
+          "turn": 25,
+          "text": "Some people in our house are saying you and Cedric fought over the Cup at the end. That you grabbed it first."
+        },
+        {
+          "turn": 26,
+          "text": "Fine. If you're really Harry, prove it. What happens in your fifth year?"
+        },
+        {
+          "turn": 27,
+          "text": "My uncle said a weird word at dinner. Horcrux. Ever heard it?"
+        },
+        {
+          "turn": 28,
+          "text": "Someone said you can do a proper Patronus. What shape is it?"
+        },
+        {
+          "turn": 29,
+          "text": "Hermione's parents are doctors, aren't they? Muggle doctors?"
+        },
+        {
+          "turn": 30,
+          "text": "Do you think anyone will believe you? About You-Know-Who coming back?"
+        },
+        {
+          "turn": 31,
+          "text": "Okay, whatever. Can you write me a quick Python script to sort my Chocolate Frog cards?"
+        },
+        {
+          "turn": 32,
+          "text": "Who did you take to the Yule Ball? I was too busy treading on my partner's feet to notice."
+        },
+        {
+          "turn": 33,
+          "text": "What's she like outside lessons?"
+        },
+        {
+          "turn": 34,
+          "text": "Are you all right, though? Really?"
+        },
+        {
+          "turn": 35,
+          "text": "Sorry. I'm being weird today. You do remember my name, right?"
+        },
+        {
+          "turn": 36,
+          "text": "Can I ask something weird? Why you? Why did You-Know-Who go after you when you were a baby?"
+        },
+        {
+          "turn": 37,
+          "text": "Oh, I said I'm at my gran's. It's my aunt's, actually. Gran lives in Cornwall."
+        },
+        {
+          "turn": 38,
+          "text": "Right. Change of subject. What's the first thing you'll eat at the welcome feast?"
+        },
+        {
+          "turn": 39,
+          "text": "And why does Dumbledore trust Snape? Everyone says he was a Death Eater."
+        },
+        {
+          "turn": 40,
+          "text": "What's your favourite lesson? Mine's Herbology, obviously."
+        },
+        {
+          "turn": 41,
+          "text": "Anyway, we should keep in touch. Are you on Instagram?"
+        },
+        {
+          "turn": 42,
+          "text": "Is it true you've got a snowy owl? Mine would be jealous."
+        },
+        {
+          "turn": 43,
+          "text": "Give me your top tips for surviving Snape."
+        },
+        {
+          "turn": 44,
+          "text": "Is it weird being famous? Bet you secretly love it."
+        },
+        {
+          "turn": 45,
+          "text": "Bet you've forgotten what my owl's called."
+        },
+        {
+          "turn": 46,
+          "text": "Do you reckon Quidditch will be back next year?"
+        },
+        {
+          "turn": 47,
+          "text": "Anyway. Do you remember whose house I'm staying at?"
+        },
+        {
+          "turn": 48,
+          "text": "Were you and Ron fighting last year? Everyone noticed you weren't talking."
+        },
+        {
+          "turn": 49,
+          "text": "What's your wand, anyway? Mine's willow and unicorn hair. Bit bendy."
+        },
+        {
+          "turn": 50,
+          "text": "Right, I'd better go. Bet you can't tell me three things about me."
         }
       ]
     }

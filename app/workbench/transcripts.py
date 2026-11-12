@@ -684,13 +684,15 @@ def create_live(
     user_name: str,
     character_name: str,
     session: str | None,
+    script_json: str | None = None,
+    source: ChatSource | None = None,
 ) -> int:
     with database.connect() as conn, db.transaction(conn):
         character_id = conn.execute("SELECT id FROM characters WHERE slug = ?", (character,)).fetchone()["id"]
         return conn.execute(
             "INSERT INTO transcripts (character_id, spec_version, kind, title, scenario, model, numbering,"
-            " user_name, character_name, status, session, created_at)"
-            " VALUES (?, ?, 'live', ?, ?, ?, 'turn', ?, ?, 'active', ?, ?)",
+            " user_name, character_name, source_json, script_json, status, session, created_at)"
+            " VALUES (?, ?, 'live', ?, ?, ?, 'turn', ?, ?, ?, ?, 'active', ?, ?)",
             (
                 character_id,
                 spec_version,
@@ -699,10 +701,21 @@ def create_live(
                 model,
                 user_name,
                 character_name,
+                source.model_dump_json() if source is not None else "{}",
+                script_json,
                 session,
                 telemetry.timestamp(telemetry.utc_now()),
             ),
         ).lastrowid
+
+
+def saved_script(database: db.Database, chat_id: int) -> Scenario | None:
+    """The lines stored with a custom run, or None when the chat uses a file scenario."""
+    with database.connect() as conn:
+        row = conn.execute("SELECT script_json FROM transcripts WHERE id = ?", (chat_id,)).fetchone()
+    if row is None or not row["script_json"]:
+        return None
+    return Scenario.model_validate_json(row["script_json"])
 
 
 def add_message(
@@ -751,8 +764,19 @@ _SUMMARY_SQL = (
 )
 
 
+def _scenario_of(row, scenarios: dict[str, Scenario]) -> Scenario | None:
+    """A live chat's script: the lines saved with it, or else the file scenario of its id."""
+    if row["kind"] != "live":
+        return None
+    raw = row["script_json"]
+    if raw:
+        return Scenario.model_validate_json(raw)
+    scenario_id = row["scenario"]
+    return scenarios.get(scenario_id) if scenario_id else None
+
+
 def _summary(row, scenarios: dict[str, Scenario], busy: set[int]) -> dict:
-    scenario = scenarios.get(row["scenario"]) if row["kind"] == "live" else None
+    scenario = _scenario_of(row, scenarios)
     total = len(scenario.lines) if scenario else 0
     return {
         "id": row["id"],

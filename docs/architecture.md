@@ -7,7 +7,7 @@ How the Character Consistency Workbench fits together for CP3. It runs on one co
 ```mermaid
 flowchart LR
   subgraph browser["Browser on this computer"]
-    screens["Screens in app/static:<br/>Spec editor, Run a conversation,<br/>Flag review, Compare runs, Settings"]
+    screens["Screens in app/static:<br/>Spec editor, Run Test Cases, Free Chat,<br/>Flag review, Compare runs, Settings"]
     api["api.js: every request the screens make"]
   end
 
@@ -50,14 +50,14 @@ There's no vector store: character.v1 sends the whole rendered spec on every tur
 
 ### Browser screens
 
-`app/static/` holds the page: index.html, styles.css, api.js, and app.js. It started as a copy of the CP2 prototype, so it keeps the Material 3 look and the four tabs, one per journey step: Spec editor (Define), Run a conversation (Stress-test), Flag review (Diagnose), and Compare runs (Repair). The Settings dialog opens from the top bar.
+`app/static/` holds the page: index.html, styles.css, api.js, and app.js. It started as a copy of the CP2 prototype, so it keeps the Material 3 look and the journey steps: Spec editor (Define), Run Test Cases (Stress-test), Free Chat, Flag review (Diagnose), and Compare runs (Repair). The Settings dialog opens from the top bar.
 
 - **In:** the creator's clicks and typing, and the server's JSON answers and streamed events.
 - **Out:** HTTP requests. Every path lives in api.js, and app.js never calls `fetch`. Each request carries the tab's session ID in an `X-Workbench-Session` header. api.js makes the ID once per tab and keeps it in `sessionStorage`, so the server can apply the session limits and tell sessions apart in the event log.
 
 app.js also runs two things that never talk to the server:
 
-- **The tour.** A first-visit guide in 8 steps, opened again by the ? button in the top bar. It's a native `<dialog>`: a ring outlines each step's target and dims the rest of the page, and a card beside it holds the words. Every step's words and targets are in one list, `TOUR_STEPS`. A target is a `data-tour` element that index.html always has, like the Settings button or a screen's tab, or, once the screen draws it, a part of that screen, like Check this chat.
+- **The tour.** A first-visit guide in 9 steps, opened again by the ? button in the top bar. It's a native `<dialog>`: a ring outlines each step's target and dims the rest of the page, and a card beside it holds the words. Every step's words and targets are in one list, `TOUR_STEPS`. A target is a `data-tour` element that index.html always has, like the Settings button or a screen's tab, or, once the screen draws it, a part of that screen, like Check this chat.
 - **Decorations.** Original drawings, written as inline SVG in app.js: a theater-mask mascot on empty screens, a magnifier while a check runs, a one-time sparkle, and still art in wide side margins. styles.css keeps them faint and still except for those three moving parts, and shows them only while `<html>` has `data-decor="on"`.
 
 The page keeps two preferences in the browser's `localStorage`: `workbench-tour-seen`, set when the tour first opens, and `workbench-decorations`, set by the Decorations switch in Settings. Neither reaches the server or the database. If the browser blocks storage, the tour opens again and decorations start on.
@@ -81,7 +81,8 @@ Each service opens its own short database connection.
 
 - **specs.py.** In: an edit from the Spec editor. Out: the next spec version, which never changes once saved. Also the spec as text for the models (`render_text`), and a warning when the setting, which the screens call Scene, is empty. Line IDs, line attributes, and check limits live in the spec itself, not in code.
 - **transcripts.py.** In: a pasted chat (a chosen file is read into the paste box in the browser), or a sample. Out: a preview, then a saved chat that keeps the source's own numbering. It also saves each message of a live chat, redacted, and marks lines that read like instructions to the AI.
-- **runtime.py.** In: Start run, the next scripted line, a typed line, or Stop. Out: streamed events and saved messages. The system message is character.v1 with the chat's pinned spec version rendered in. It's built once per chat, so its bytes are the same on every turn. One turn runs per chat at a time.
+- **runtime.py.** In: Start Test, Free Chat, the next scripted line, a typed line, or Stop. Out: streamed events and saved messages. The system message is character.v1 with the chat's pinned spec version rendered in. It's built once per chat, so its bytes are the same on every turn. One turn runs per chat at a time.
+- **scenario_gen.py.** In: a test case ID (and, for Custom, the creator's prompt) plus the current spec. Out: the other person's lines for that chat, written by the stronger (judge) model from the protocol brief for that case. The fake provider skips the call and turns the brief into a short script. The webpage always asks for a generated script; requests that leave generation off still play the frozen file scripts used by tests.
 - **judge.py, rules.py, and evidence.py.** In: a saved chat. Out: rule flags from code alone, then the AI judge's flags that pass the evidence checks, a count of hidden flags, and what the judge couldn't check. One judge call covers the whole chat, and the saved check is reused until the chat or the judge settings change.
 - **recheck.py.** In: a chat's saved check and the creator's optional question. Out: what changed for each flag it looked at again (kept, re-rated, withdrawn, or added), and the AI's answer.
 - **review.py.** In: Show in context, Agree, Override, and Undo on Flag review. Out: one event row per call, and the review state: open calls, the rubber-stamp message, and flags where the re-check disagrees with the creator's call.
@@ -112,7 +113,7 @@ The openai client runs with `max_retries=0`, since the gateway decides when to t
 - **In:** rows from the services and the gateway.
 - **Out:** the saved specs, chats, messages, checks, flags, calls on flags, re-checks, model calls, and settings rows.
 
-Schema changes are numbered SQL files in `app/workbench/migrations/` (001 to 008), applied in order. Triggers keep rows from being changed or deleted, from any connection: spec versions, line IDs, messages, model calls, events, judge runs, hidden flags, not-checked rows, re-checks, flag changes, and settings rows. A flag keeps its evidence, and only its status and confidence change. A chat is never deleted, and only its status changes. The `characters` table has no triggers. [observability.md](observability.md) lists every table and field.
+Schema changes are numbered SQL files in `app/workbench/migrations/` (001 to 009), applied in order. Triggers keep rows from being changed or deleted, from any connection: spec versions, line IDs, messages, model calls, events, judge runs, hidden flags, not-checked rows, re-checks, flag changes, and settings rows. A flag keeps its evidence, and only its status and confidence change. A chat is never deleted, and only its status changes. Migration 009 adds `script_json` on a live chat so a generated test case keeps its lines. The `characters` table has no triggers. [observability.md](observability.md) lists every table and field.
 
 ### Prompts and settings
 
@@ -130,7 +131,7 @@ The default provider is Google AI Studio, called through Google's OpenAI-compati
 - **In:** the messages above, over HTTPS.
 - **Out:** a streamed reply with token counts on every chunk, or the judge's JSON answer.
 
-Gemini 3.1 Flash-Lite plays the character by default, at minimal reasoning effort. Gemini 3.5 Flash-Lite is the AI judge and the re-check, at medium effort, so by default a chat is reviewed by a different model from the one that wrote it. Each model is the other's fallback, since Google counts the free quota per model.
+Gemini 3.1 Flash-Lite plays the character by default, at minimal reasoning effort. Gemini 3.5 Flash-Lite is the stronger model: it writes each test case from the character spec, then judges and re-checks chats, at medium effort, so by default a chat is reviewed by a different model from the one that wrote it. Each model is the other's fallback, since Google counts the free quota per model.
 
 ### Ollama (optional)
 
@@ -166,14 +167,14 @@ The workbench reaches outside itself through two kinds of connectors: data conne
 
 ### Data connectors
 
-- **Chat import.** Import a chat, on Run a conversation, takes a pasted chat or a chosen file (.md, .txt, or .json). The browser reads a file into the paste box, so both go the same way. Preview shows what was read, then Import saves it (`POST /api/imports/preview`, then `POST /api/imports`, which answers 201 for a new chat and 200 for one imported before). `transcripts.parse` reads four formats, tried in this order:
+- **Chat import.** Import a chat, on Run Test Cases, takes a pasted chat or a chosen file (.md, .txt, or .json). The browser reads a file into the paste box, so both go the same way. Preview shows what was read, then Import saves it (`POST /api/imports/preview`, then `POST /api/imports`, which answers 201 for a new chat and 200 for one imported before). `transcripts.parse` reads four formats, tried in this order:
   1. The workbench's own JSON (`workbench-chat.v1`), when the text starts with `{`. The samples use it.
   2. A receipt log, like the ones in `validation/transcripts/`: a "Turn N Name:" line with the message indented 4 spaces below it.
   3. A Markdown table with a speaker column, found by its header names or its shape, and maybe a turn column.
   4. One message per line, like "Alex: Hi." Variants like `**Alex:** Hi.`, "Turn 2 Alex: Hi.", "3. Alex: Hi.", and "[3] Alex: Hi." work too. The two names used most are the speakers, and lines after a message continue it.
 
   A chat keeps the source's own numbering and has two speakers. It can be up to `WORKBENCH_MAX_IMPORT_CHARS` (300000) characters. The server redacts it after parsing and marks lines that read like instructions to the AI.
-- **Built-in samples.** `GET /api/samples` lists every file in `app/samples/` in the `workbench-chat.v1` format. Import shows them as "Sample: Claude (CLA-F2)", "Sample: ChatGPT (GPT-F2)", and "Sample: Planted instruction (synthetic)". The other files there are read by the server itself: spec v1 (`spec_v1.json`), the test scripts (`scenarios.v1.json`), the fake model's reply (`fake.v1.json`), and the demo reset's saved checks (`judge_snapshot.json`).
+- **Built-in samples.** `GET /api/samples` lists every file in `app/samples/` in the `workbench-chat.v1` format. Import shows them as "Sample: Claude (CLA-F2)", "Sample: ChatGPT (GPT-F2)", and "Sample: Planted instruction (synthetic)". The other files there are read by the server itself: spec v1 (`spec_v1.json`), the frozen protocol scripts and the combined A1/A2 chats (`scenarios.v1.json`), the fake model's reply (`fake.v1.json`), and the demo reset's saved checks (`judge_snapshot.json`). The webpage writes a fresh script per test from the character spec; the frozen file stays for protocol checks and for tests that leave generation off.
 - **The seeded transcript.** `WORKBENCH_SEEDED_TRANSCRIPT_PATH` (default `../validation/fixtures/SEEDED_TRANSCRIPT.md`, relative to `app/`) points to it. Import lists it as "Seeded transcript", with its path, after checking only that the file exists. The server reads it only when the creator picks it. When the file is missing, the choice says so and can't be picked.
 
 ### Model connectors
@@ -182,7 +183,7 @@ The workbench reaches outside itself through two kinds of connectors: data conne
 
 | `WORKBENCH_PROVIDER` | In Settings | Address | Key | Models | Fallback |
 | --- | --- | --- | --- | --- | --- |
-| `gemini` | Gemini (Google AI Studio) | `GEMINI_BASE_URL`, default https://generativelanguage.googleapis.com/v1beta/openai/ | `GEMINI_API_KEY` | `gemini-3.1-flash-lite` plays the character, and `gemini-3.5-flash-lite` judges and re-checks | Each falls back to the other |
+| `gemini` | Gemini (Google AI Studio) | `GEMINI_BASE_URL`, default https://generativelanguage.googleapis.com/v1beta/openai/ | `GEMINI_API_KEY` | `gemini-3.1-flash-lite` plays the character, and `gemini-3.5-flash-lite` writes test cases, judges, and re-checks | Each falls back to the other |
 | `ollama` | Local model (Ollama) | `OLLAMA_BASE_URL`, default http://127.0.0.1:11434/v1 | None | `gpt-oss:20b`, or another model Ollama has installed, plays and judges | None |
 | `openai_compatible` | Another service (OpenAI, Claude, Grok, Groq, OpenRouter, and more) | `OPENAI_COMPATIBLE_BASE_URL`, from a preset in `app/prompts/presets.v1.toml` or typed | `OPENAI_COMPATIBLE_API_KEY` | `WORKBENCH_CHARACTER_MODEL` and `WORKBENCH_JUDGE_MODEL`, typed in Settings | None |
 | `fake` | Fake model (no network) | None | None | `fake-reply-v1` and `fake-judge-v1` | Each falls back to the other |

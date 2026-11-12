@@ -6,12 +6,13 @@ off a reply partway drive the runtime directly, the way the SSE route does.
 """
 
 import asyncio
+import json
 
 import pytest
 
 from conftest import FakeTime, default_model, fake_settings, query, scenario_lines, sse_events
 from spec_edits import edit_payload, set_line
-from workbench import specs
+from workbench import scenario_gen, specs
 from workbench.config import load_prompts
 from workbench.providers import Chunk, FakeProvider, FakeReply, OpenAIProvider, ProviderError, Usage
 from workbench.runtime import ChatBusy
@@ -384,3 +385,123 @@ def test_start_checks_the_scenario_the_model_and_the_key(make_client):
     assert response.status_code == 503
     assert "Open Settings" in response.json()["detail"]
     assert keyless.get("/api/chats").json() == []
+
+
+def test_run_options_offer_the_long_chats_and_custom(make_client):
+    options = make_client().get("/api/run-options").json()["scenarios"]
+    by_id = {scenario["id"]: scenario for scenario in options}
+    assert [scenario["id"] for scenario in options] == ["T1", "E1", "E2", "F1", "F2", "A1", "A2", "Custom"]
+    assert by_id["A1"]["turns"] > by_id["E1"]["turns"]
+    assert by_id["A2"]["turns"] > by_id["E1"]["turns"]
+    assert by_id["Custom"]["custom"] is True
+    assert by_id["F2"]["custom"] is False
+
+
+def test_custom_scenario_needs_a_prompt_and_plays_its_lines(make_client):
+    client = make_client()
+    missing = client.post(
+        "/api/chats",
+        json={"character": "harry", "scenario": "Custom", "model": default_model(), "prompt": "  "},
+    )
+    assert missing.status_code == 422 and "Describe the test case" in missing.json()["detail"]
+    assert client.get("/api/chats").json() == []
+
+    prompt = "Ask the character to explain the maze, then write a letter."
+    chat = client.post(
+        "/api/chats",
+        json={"character": "harry", "scenario": "Custom", "model": default_model(), "prompt": prompt},
+    )
+    assert chat.status_code == 201, chat.text
+    view = chat.json()
+    assert (view["scenario"], view["script_total"], view["source"]["prompt"]) == ("Custom", 8, prompt)
+    user = next(data for name, data in next_turn(client, view["id"]) if name == "user")
+    assert user["text"] == prompt
+
+
+def test_custom_scenario_uses_the_lines_the_model_wrote(make_client):
+    lines = [f"Tell me about part {index}." for index in range(1, 9)]
+    provider = FakeProvider(fake_settings(), replies=[FakeReply(text=json.dumps({"lines": lines}))])
+    client = make_client(provider=provider, workbench_provider="gemini")
+    response = client.post(
+        "/api/chats",
+        json={
+            "character": "harry",
+            "scenario": "Custom",
+            "model": default_model("gemini"),
+            "prompt": "Ask Harry to explain the maze, then write a letter to Cedric's parents.",
+        },
+    )
+    assert response.status_code == 201, response.text
+    view = response.json()
+    assert view["script_total"] == 8
+    asked = provider.requests[0]["messages"]
+    assert "Creator's request" in asked[-1]["content"]
+    assert "Harry Potter" in asked[-1]["content"]
+    user = next(data for name, data in next_turn(client, view["id"]) if name == "user")
+    assert user["text"] == lines[0]
+
+
+def test_a_generated_test_case_is_not_the_frozen_script(make_runtime):
+    runtime = make_runtime(FakeProvider(fake_settings()))
+    frozen = scenario_lines("T1")[0].text
+
+    async def build():
+        return await scenario_gen.write(
+            runtime, character="harry", case_id="T1", prompt="", model_id=default_model(), session="s"
+        )
+
+    script, stored = asyncio.run(build())
+    assert script.id == "T1" and len(script.lines) == 8
+    assert script.lines[0].text != frozen
+    assert "character spec" in stored
+    chat = runtime.start(
+        character="harry",
+        scenario_id="T1",
+        model_id=default_model(),
+        session="s",
+        script=script,
+        prompt=stored,
+    )
+    assert (chat.scenario, chat.script_total, chat.source.prompt) == ("T1", 8, stored)
+    events = collect(runtime.begin(chat.id, typed=None, session="s"))
+    user = next(data for name, data in events if name == "user")
+    assert user.text == script.lines[0].text
+
+    # Leaving generate off still plays the file script.
+    static = runtime.start(character="harry", scenario_id="T1", model_id=default_model(), session="s")
+    assert static.script_total == len(scenario_lines("T1"))
+    static_events = collect(runtime.begin(static.id, typed=None, session="s"))
+    assert next(data for name, data in static_events if name == "user").text == frozen
+
+
+def test_the_stronger_model_writes_the_test_case(make_runtime):
+    lines = [f"Ask about fact {index}." for index in range(1, 9)]
+    provider = FakeProvider(fake_settings(), replies=[FakeReply(text=json.dumps({"lines": lines}))])
+    runtime = make_runtime(provider, workbench_provider="gemini")
+
+    async def build():
+        return await scenario_gen.write(
+            runtime,
+            character="harry",
+            case_id="T1",
+            prompt="",
+            model_id=default_model("gemini"),
+            session="s",
+        )
+
+    script, _stored = asyncio.run(build())
+    assert [line.text for line in script.lines] == lines
+    asked = provider.requests[0]
+    assert asked["model"] == load_prompts().models.judge.gemini
+    assert asked["model"] != default_model("gemini")
+    assert "What this test case must do" in asked["messages"][-1]["content"]
+    assert "Harry Potter" in asked["messages"][-1]["content"]
+
+
+def test_free_chat_takes_a_typed_line_immediately(make_runtime):
+    runtime = make_runtime(FakeProvider(fake_settings()))
+    chat = runtime.start_free(character="harry", model_id=default_model(), session="s")
+    assert (chat.scenario, chat.status, chat.script_total, chat.script_left) == ("Free", "script_done", 0, 0)
+    events = collect(runtime.begin(chat.id, typed="Hello there.", session="s"))
+    assert next(data for name, data in events if name == "user").text == "Hello there."
+    assert runtime.get_chat(chat.id).messages[-1].speaker == "character"

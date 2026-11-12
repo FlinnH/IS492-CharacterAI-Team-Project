@@ -2157,6 +2157,15 @@ button.chip:active::before {
   flex: 1 1 11rem;
 }
 
+/* The custom scenario's prompt takes its own row under the menus. */
+.run-setup__prompt {
+  flex: 1 1 100%;
+}
+
+.run-setup__prompt .text-field__input {
+  min-height: 8.5rem;
+}
+
 /* Lines the 40px button up with the middle of the 56px fields */
 .run-setup .btn {
   margin-top: 8px;
@@ -2209,9 +2218,11 @@ button.chip:active::before {
   font-variant-numeric: tabular-nums;
 }
 
-.run-progress .linear-progress {
+.run-progress .linear-progress,
+.run-progress .check-progress {
   flex: 1 1 8rem;
   width: auto;
+  margin-top: 0;
 }
 
 /* The chat scrolls on its own, so the controls above it stay in view */

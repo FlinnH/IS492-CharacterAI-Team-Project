@@ -342,6 +342,16 @@ class Scenario(Model):
     lines: list[ScenarioLine] = Field(min_length=1)
 
 
+# The lines a custom run's model writes. 12 to 18 is what the prompt asks for;
+# 8 to 20 is what a reply is allowed to be.
+class GeneratedLines(Model):
+    lines: list[Annotated[str, Field(min_length=1, max_length=2000)]] = Field(
+        min_length=8,
+        max_length=20,
+        description="The other person's messages, in order. No character replies, numbering, or name labels.",
+    )
+
+
 class ScenarioFile(Model):
     format: Literal["workbench-scenarios.v1"]
     source: str
@@ -364,6 +374,8 @@ class ChatSource(Model):
     mode: str = ""
     model: str = ""
     note: str = ""
+    # The request a custom run was written from. Empty for every other chat.
+    prompt: str = ""
 
 
 class SampleMessage(Model):
@@ -460,6 +472,12 @@ class StartChat(Model):
     character: str
     scenario: str
     model: str
+    # Set when the scenario is Custom: what the creator wants tested.
+    prompt: str | None = None
+    # The Run Test Cases screen sets this so the stronger model writes the
+    # lines from the spec. Left off, a file scenario plays as written, which
+    # is what the tests do.
+    generate: bool = False
 
 
 class TypedLine(Model):
@@ -489,6 +507,16 @@ class ScenarioOption(Model):
     name: str
     turns: int
     last_turn: int
+    # True for Custom, which has no script until the creator describes one.
+    custom: bool = False
+
+
+# The run menu's last entry. It has no lines in the scenarios file.
+CUSTOM_ID = "Custom"
+CUSTOM_NAME = "Custom: describe a scenario"
+
+# A live chat with no script. The Free Chat screen types into it.
+FREE_ID = "Free"
 
 
 class ModelOption(Model):

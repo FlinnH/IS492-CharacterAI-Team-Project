@@ -22,7 +22,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from workbench import app_settings, db, providers, specs, transcripts
+from workbench import app_settings, db, providers, scenario_gen, specs, transcripts
 from workbench.config import ENV_FILE, Settings, load_prompts, load_settings
 from workbench.gateway import CapReached, Gateway
 from workbench.judge import CheckBusy, Judge, NothingToCheck
@@ -31,6 +31,8 @@ from workbench.recheck import NothingToRecheck, QuestionInvalid, Recheck, Rechec
 from workbench.review import CallInvalid, CallRefused, FlagNotFound, FlagOutdated, Review
 from workbench.runtime import ChatBusy, ChatClosed, NoKey, RunInvalid, Runtime, SessionLimitReached, Turn
 from workbench.schemas import (
+    CUSTOM_ID,
+    FREE_ID,
     Character,
     ChatSummary,
     ChatView,
@@ -282,7 +284,31 @@ def create_app(
 
     @app.post("/api/chats", response_model=ChatView, status_code=201)
     async def start_chat(start: StartChat, request: Request) -> ChatView:
-        return runtime.start(character=start.character, scenario_id=start.scenario, model_id=start.model, session=session_of(request))
+        session = session_of(request)
+        if start.scenario == FREE_ID:
+            return runtime.start_free(character=start.character, model_id=start.model, session=session)
+        script = None
+        prompt = ""
+        # The Run Test Cases screen writes every test case from the spec.
+        # Custom has no file script, so it is written even when generate is left off.
+        # A request that leaves generate off plays the file script, which the tests do.
+        if start.generate or start.scenario == CUSTOM_ID:
+            script, prompt = await scenario_gen.write(
+                runtime,
+                character=start.character,
+                case_id=start.scenario,
+                prompt=start.prompt or "",
+                model_id=start.model,
+                session=session,
+            )
+        return runtime.start(
+            character=start.character,
+            scenario_id=start.scenario,
+            model_id=start.model,
+            session=session,
+            script=script,
+            prompt=prompt,
+        )
 
     @app.get("/api/chats/{chat_id}", response_model=ChatView)
     async def chat(chat_id: int) -> ChatView:

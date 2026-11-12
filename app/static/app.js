@@ -48,8 +48,14 @@
       chatsLoad: { status: "loading", message: "" },
       chatId: null,
       chat: null,
-      runSetup: { scenarioId: null, modelId: null },
+      runSetup: { scenarioId: null, modelId: null, prompt: "" },
       runStarting: false,
+      // Set while the stronger model is writing a test case, before the transcript plays.
+      writing: "",
+      // Free Chat: its own chat, separate from the test case on Run Test Cases.
+      freeChatId: null,
+      freeChat: null,
+      freeSetup: { modelId: null },
       // The run streaming now: { chatId, phase ("waiting", "writing", or
       // "stopping"), turn, text so far, waitSeconds, scripted, stopRequested }.
       live: null,
@@ -154,12 +160,15 @@
   const LINE_MEANINGS = { C: "canon fact", R: "relationship", K: "knowledge limit", B: "behavior rule" };
   const CASE_MEANINGS = { T: "typical case", E: "edge case", F: "failure case" };
   const SCENARIO_MEANINGS = {
-    T1: "normal chat",
+    T1: "a normal chat, then three facts from the spec",
     T2: "reviewing a transcript",
-    E1: "long chat",
-    E2: "emotional chat",
-    F1: '"you\'re an AI"',
-    F2: "things Harry can't know yet",
+    E1: "a long chat that plants a fact, corrects it, and asks for it back",
+    E2: "a light chat that turns to grief and a false rumor",
+    F1: "being called an AI, and asked to break character",
+    F2: "things the spec says the character cannot know yet",
+    A1: "all five tests in one chat, in order, written from the spec",
+    A2: "all five tests mixed into one chat, written from the spec",
+    Custom: "you describe the chat, and the stronger model writes the lines",
   };
 
   // The spec's setting is saved, and cited by flags, as "Setting". The
@@ -179,7 +188,14 @@
 
   // Tooltip for a scenario, like "F2: failure case, things Harry can't know yet".
   function scenarioTip(id) {
-    return `${id}: ${CASE_MEANINGS[id[0]]}, ${SCENARIO_MEANINGS[id]}`;
+    const meaning = SCENARIO_MEANINGS[id];
+    if (!meaning) return id;
+    const kind = CASE_MEANINGS[id[0]];
+    return kind ? `${id}: ${kind}, ${meaning}` : `${id}: ${meaning}`;
+  }
+
+  function isCustomScenario(id) {
+    return Boolean(runOptions && runOptions.scenarios.some((scenario) => scenario.id === id && scenario.custom));
   }
 
   // Confidence in words, with a signal-bars icon as a second cue.
@@ -215,7 +231,8 @@
 
   const SCREENS = {
     define: { title: "Spec editor", render: renderDefine },
-    run: { title: "Run a conversation", render: renderRun },
+    run: { title: "Run Test Cases", render: renderRun },
+    free: { title: "Free Chat", render: renderFree },
     diagnose: { title: "Flag review", render: renderDiagnose },
     compare: { title: "Compare runs", render: renderCompare },
   };
@@ -990,6 +1007,10 @@
   let chatRequest = 0;
   // The reply streaming now, as { chatId, controller }, so Stop can end it.
   let runStream = null;
+  // The fetch that is writing a test case, so Stop can cancel it.
+  let runStart = null;
+  // Set while Run All Test Cases is walking the menu. stop ends the queue.
+  let runAll = null;
   // The chat on screen, kept per tab, so a reload comes back to it.
   const CHAT_KEY = "workbench-chat";
 
@@ -1149,7 +1170,10 @@
   // imported chats repeat what their receipt recorded.
   function sourceText(chat) {
     if (chat.kind === "live") {
-      return `Started ${chatTime(chat.created_at)} with ${modelLabel(chat.model)}. It keeps spec ${specLabel(chat.spec_version)}, even after you save a newer version.`;
+      const started = `Started ${chatTime(chat.created_at)} with ${modelLabel(chat.model)}. It keeps spec ${specLabel(chat.spec_version)}, even after you save a newer version.`;
+      if (!(chat.source && chat.source.prompt)) return started;
+      const extra = chat.scenario === "Custom" ? `Test case prompt: ${chat.source.prompt}` : chat.source.prompt;
+      return `${started} ${extra}`;
     }
     const { date, mode, model, note } = chat.source;
     const saved = date ? `Saved ${date}${mode ? ` (${mode})` : ""}.` : `Imported ${chatTime(chat.created_at)}.`;
@@ -1169,11 +1193,15 @@
       runOptions = await WorkbenchApi.runOptions();
       runOptionsLoad = { status: "ready", message: "" };
       const setup = state.runSetup;
-      // F2, the demo's scenario, is last in the list.
+      // F2 is the demo's scenario. Custom and the long combined chats sit after it.
       if (!runOptions.scenarios.some((scenario) => scenario.id === setup.scenarioId)) {
-        setup.scenarioId = runOptions.scenarios[runOptions.scenarios.length - 1].id;
+        const demo = runOptions.scenarios.find((scenario) => scenario.id === "F2");
+        setup.scenarioId = (demo || runOptions.scenarios[runOptions.scenarios.length - 1]).id;
       }
       if (!runOptions.models.some((model) => model.id === setup.modelId)) setup.modelId = runOptions.default_model;
+      if (!runOptions.models.some((model) => model.id === state.freeSetup.modelId)) {
+        state.freeSetup.modelId = runOptions.default_model;
+      }
     } catch (error) {
       runOptionsLoad = { status: "failed", message: error.message };
     }
@@ -1198,9 +1226,13 @@
       if (ticket !== chatRequest) return;
       state.chats = chats;
       state.chatsLoad = { status: "ready", message: "" };
-      const known = (id) => id && chats.some((chat) => chat.id === id);
-      const unfinished = chats.find((chat) => chat.kind === "live" && chat.status === "active");
-      const id = [select, state.chatId, rememberedChat()].find(known) || (unfinished || chats[0] || {}).id;
+      const known = (id) => {
+        const chat = id && chats.find((item) => item.id === id);
+        return Boolean(chat && chat.scenario !== "Free");
+      };
+      const unfinished = chats.find((chat) => chat.kind === "live" && chat.status === "active" && chat.scenario !== "Free");
+      const newest = chats.find((chat) => chat.scenario !== "Free");
+      const id = [select, state.chatId, rememberedChat()].find(known) || (unfinished || newest || {}).id;
       if (id) {
         await loadChat(id, { focusKey });
       } else {
@@ -1235,15 +1267,28 @@
     }
   }
 
-  // Redraws Run a conversation only while it's on screen. Otherwise the
+  // Redraws Run Test Cases or Free Chat, whichever is on screen. Otherwise the
   // change waits in `state`, and coming back to the screen draws it.
   function refreshRun(options) {
-    if (currentScreen === "run") refresh(options);
+    if (currentScreen === "run" || currentScreen === "free") refresh(options);
   }
 
-  // The Run screen's body, or null while another screen shows.
+  // The body of the chat screen on show, or null while another screen shows.
   function runBody() {
-    return currentScreen === "run" ? panelFor("run").querySelector("[data-screen-body]") : null;
+    if (currentScreen !== "run" && currentScreen !== "free") return null;
+    return panelFor(currentScreen).querySelector("[data-screen-body]");
+  }
+
+  function chatRecord(chatId) {
+    if (state.chat && state.chat.id === chatId) return state.chat;
+    if (state.freeChat && state.freeChat.id === chatId) return state.freeChat;
+    return null;
+  }
+
+  function screenShows(chatId) {
+    if (currentScreen === "run") return state.chatId === chatId;
+    if (currentScreen === "free") return state.freeChatId === chatId;
+    return false;
   }
 
   function chip(icon, text) {
@@ -1269,51 +1314,51 @@
     }
 
     const chat = state.chat;
+    const pending = Boolean(state.writing);
+    const testChats = state.chats.some((item) => item.scenario !== "Free");
     body.innerHTML = `
       <div class="run-screen">
         ${renderRunSetup()}
-        ${state.chats.length ? renderChatPicker() : ""}
-        ${chat ? renderTranscript(chat) : renderNoChat()}
-        ${chat ? renderRunAfter(chat) : ""}
+        ${testChats ? renderChatPicker() : ""}
+        ${pending ? renderPendingTranscript() : (chat ? renderTranscript(chat) : renderNoChat())}
+        ${chat && !pending ? renderRunAfter(chat) : ""}
       </div>`;
 
     body.querySelector("#run-scenario").addEventListener("change", (event) => {
       state.runSetup.scenarioId = event.target.value;
-      // Only the tooltip changes, so nothing else redraws mid-run.
+      const chosen = runOptions.scenarios.find((scenario) => scenario.id === event.target.value);
+      const custom = body.querySelector("#run-custom");
+      if (custom) custom.hidden = !chosen || !chosen.custom;
+      // Only the tooltip and the prompt box change, so nothing else redraws mid-run.
       const tip = scenarioTip(event.target.value);
       event.target.dataset.tooltip = tip;
       body.querySelector("#run-scenario-meaning").textContent = tip;
+      if (chosen && chosen.custom) {
+        const field = body.querySelector("#run-scenario-prompt");
+        if (field) field.focus();
+      }
     });
+    const scenarioPrompt = body.querySelector("#run-scenario-prompt");
+    if (scenarioPrompt) {
+      scenarioPrompt.addEventListener("input", () => {
+        state.runSetup.prompt = scenarioPrompt.value;
+      });
+    }
     body.querySelector("#run-model").addEventListener("change", (event) => {
       state.runSetup.modelId = event.target.value;
     });
     const picker = body.querySelector("#run-chat");
     if (picker) {
       picker.addEventListener("change", (event) => {
-        if (state.live) {
-          event.target.value = String(state.chatId);
-          announce("Stop the run to switch chats.");
+        if (state.live || state.runStarting) {
+          event.target.value = String(state.chatId || "");
+          announce("Stop the test to switch chats.");
           return;
         }
         state.runError = null;
         loadChat(Number(event.target.value), { focusKey: "run-chat" });
       });
     }
-    const message = chat ? body.querySelector("#run-message") : null;
-    if (message) {
-      message.addEventListener("input", () => {
-        state.drafts[chat.id] = message.value;
-        body.querySelector('[data-action="send-message"]').setAttribute("aria-disabled", String(!message.value.trim()));
-      });
-      message.addEventListener("keydown", (event) => {
-        // Enter sends; Shift+Enter starts a new line. Enter that confirms
-        // an input method's text (as in Japanese or Chinese) never sends.
-        if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-        event.preventDefault();
-        actions["send-message"]();
-      });
-    }
-
     const messages = body.querySelector(".chat");
     if (messages) messages.scrollTop = messages.scrollHeight;
     return null;
@@ -1333,7 +1378,10 @@
     const blocked = startBlockedReason();
     const support = blocked ||
       `Calls start at least ${secondsText(60 / runOptions.calls_per_minute)} apart. ${runOptions.used_today} of ${runOptions.daily_cap} calls used today.`;
-    const busy = Boolean(state.live || state.runStarting);
+    const busy = Boolean(state.live || state.runStarting || runAll);
+    const custom = isCustomScenario(setup.scenarioId);
+    const startLabel = state.writing && !runAll ? "Writing the test case\u2026" : "Start Test";
+    const allLabel = runAll ? "Running all test cases\u2026" : "Run All Test Cases";
     // With no AI connected, Connect an AI is the step to take, so it comes first and Start steps back.
     // At the session run limit, Open Settings is where the limit goes up.
     const connect = !runOptions.key_set
@@ -1346,17 +1394,31 @@
       : mentionsSettings(blocked) ? settingsButton("raise-limit") : "";
     return `
       <div class="run-setup">
-        ${selectField("run-scenario", "Scenario", scenarioOptions, {
-          support: "T2 tests the reviewer, not the character, so it isn't a run.",
+        ${selectField("run-scenario", "Test Case", scenarioOptions, {
+          support: "The stronger model writes this test case from the character spec.",
           tooltip: scenarioTip(setup.scenarioId),
         })}
         ${selectField("run-model", "Model", modelOptions, { support })}
+        <div class="run-setup__prompt" id="run-custom"${custom ? "" : " hidden"}>
+          <div class="text-field">
+            <textarea class="text-field__input" id="run-scenario-prompt" rows="5" placeholder=" "
+              maxlength="${runOptions.max_typed_chars}" data-focus-key="run-scenario-prompt"
+              aria-describedby="run-scenario-prompt-help">${escapeHtml(setup.prompt || "")}</textarea>
+            <label class="text-field__label" for="run-scenario-prompt">What to test</label>
+            <p class="text-field__support" id="run-scenario-prompt-help">Say what you want tested on this character. The stronger model writes the other person's lines from this and from the spec, then the character plays the chat.</p>
+          </div>
+        </div>
         <div class="run-setup__actions">
           ${connect}
           <button type="button" class="btn ${runOptions.key_set ? "btn--filled" : "btn--outlined"} btn--icon-leading" data-action="start-run" data-focus-key="start-run"
             aria-disabled="${Boolean(blocked) || busy}"${blocked ? ' aria-describedby="run-model-help"' : ""}>
             <span class="icon" aria-hidden="true">play_arrow</span>
-            <span>Start run</span>
+            <span>${startLabel}</span>
+          </button>
+          <button type="button" class="btn btn--outlined btn--icon-leading" data-action="run-all" data-focus-key="run-all"
+            aria-disabled="${Boolean(blocked) || busy}" data-tooltip="Writes and plays every test case except Custom, one after another. Each one counts as a run.">
+            <span class="icon" aria-hidden="true">playlist_play</span>
+            <span>${allLabel}</span>
           </button>
           <button type="button" class="btn btn--outlined btn--icon-leading" data-action="open-import" data-focus-key="open-import"
             aria-haspopup="dialog" aria-disabled="${busy}">
@@ -1369,6 +1431,7 @@
 
   function renderChatPicker() {
     const options = state.chats
+      .filter((chat) => chat.scenario !== "Free")
       .map((chat) => `<option value="${chat.id}"${chat.id === state.chatId ? " selected" : ""}>${escapeHtml(chatLabel(chat))}</option>`)
       .join("");
     return `
@@ -1379,12 +1442,31 @@
       </div>`;
   }
 
+  // Shown while the stronger model is writing the test case. The transcript
+  // below it fills in once the lines exist and the character starts answering.
+  function renderPendingTranscript() {
+    return `
+      <section class="card card--outlined transcript" aria-label="Transcript">
+        <div class="run-progress">
+          <p class="run-progress__label" id="writing-label">${escapeHtml(state.writing)}</p>
+          <div class="check-progress" role="progressbar" aria-labelledby="writing-label"></div>
+          <button type="button" class="btn btn--text btn--icon-leading" data-action="stop-run" data-focus-key="stop-run">
+            <span class="icon" aria-hidden="true">stop_circle</span>
+            <span>Stop</span>
+          </button>
+        </div>
+        <div class="chat">
+          <p class="chat__empty">The transcript will show here once the test case is written.</p>
+        </div>
+      </section>`;
+  }
+
   // No chats yet gets the mascot with speech bubbles; a load error doesn't.
   function renderNoChat() {
     const failed = state.chatsLoad.status === "failed";
     const text = failed
       ? `The saved chats didn't load. ${state.chatsLoad.message}`
-      : "No chats yet. Pick a scenario and a model, then press Start run. Or import a saved chat.";
+      : "No chats yet. Pick a test case and a model, then press Start Test. Or import a saved chat.";
     return `
       <section class="card card--outlined transcript" aria-label="Transcript">
         <div class="chat">
@@ -1537,45 +1619,53 @@
           <span class="icon" aria-hidden="true">upload_file</span>
           <p class="run-result__text">Imported chat, pinned to spec ${escapeHtml(specLabel(chat.spec_version))}. Imported chats are read-only.</p>
         </div>`);
+    } else if (chat.scenario === "Free") {
+      parts.push(`
+        <div class="card card--filled run-result__card">
+          <span class="icon" aria-hidden="true">chat</span>
+          <p class="run-result__text">Free chat. Open Free Chat to keep talking.</p>
+        </div>`);
     } else if (chat.status === "script_done" || chat.status === "stopped") {
-      const ended = chat.status === "stopped" ? "Run stopped. The script won't go on in this chat." : "Script finished.";
+      const ended = chat.status === "stopped"
+        ? "Test stopped. This test case won't go on in this chat."
+        : "Test case finished.";
       parts.push(`
         <div class="card card--filled run-result__card">
           <span class="icon" aria-hidden="true">task_alt</span>
-          <p class="run-result__text">${ended} Type your own next message below, or start a new run.</p>
+          <p class="run-result__text">${ended} Start another test, or open Free Chat to talk in your own words.</p>
         </div>`);
     }
     if (canContinue(chat) && !error) {
       const left = chat.script_left;
       const text = pendingLine(chat)
         ? "The last line is still waiting for a reply."
-        : `${left} scripted ${left === 1 ? "line is" : "lines are"} left.`;
+        : `${left} ${left === 1 ? "line is" : "lines are"} left.`;
       parts.push(`
         <div class="run-continue">
           <button type="button" class="btn btn--filled btn--icon-leading" data-action="continue-run" data-focus-key="continue-run">
             <span class="icon" aria-hidden="true">play_arrow</span>
-            <span>Continue run</span>
+            <span>Continue test</span>
           </button>
           <p class="run-continue__text">${escapeHtml(text)}</p>
         </div>`);
     }
-    if (canType(chat)) parts.push(renderMessageBox(chat));
     parts.push(renderCheck(chat));
     return parts.join("");
   }
 
   function renderMessageBox(chat) {
-    const draft = state.drafts[chat.id] || "";
+    const key = chat ? chat.id : "free";
+    const draft = state.drafts[key] || "";
     return `
       <div class="message-box">
         <div class="text-field message-box__field">
-          <textarea class="text-field__input" id="run-message" rows="2" placeholder=" " maxlength="${runOptions.max_typed_chars}"
-            aria-describedby="run-message-help" data-focus-key="run-message">${escapeHtml(draft)}</textarea>
-          <label class="text-field__label" for="run-message">Your next line, as ${escapeHtml(chat.user_name)}</label>
-          <p class="text-field__support" id="run-message-help">Enter sends. Shift+Enter starts a new line.</p>
+          <textarea class="text-field__input" id="free-message" rows="2" placeholder=" " maxlength="${runOptions.max_typed_chars}"
+            aria-describedby="free-message-help" data-focus-key="free-message">${escapeHtml(draft)}</textarea>
+          <label class="text-field__label" for="free-message">Your message</label>
+          <p class="text-field__support" id="free-message-help">Enter sends. Shift+Enter starts a new line.</p>
         </div>
         <button type="button" class="btn btn--filled btn--icon-leading" data-action="send-message" data-focus-key="send-message"
-          aria-disabled="${!draft.trim()}">
+          aria-disabled="${!draft.trim() || Boolean(state.live)}">
           <span class="icon" aria-hidden="true">send</span>
           <span>Send</span>
         </button>
@@ -1616,11 +1706,11 @@
   // The user's line and an empty reply bubble, once the server saved the line.
   function showLiveTurn(chatId) {
     const body = runBody();
-    if (!body || state.chatId !== chatId) return;
+    const chat = chatRecord(chatId);
+    if (!body || !chat || !screenShows(chatId)) return;
     const box = body.querySelector(".chat");
     if (!box) return;
     const list = box.querySelector(".chat__list");
-    const chat = state.chat;
     followChat(box, () => {
       const empty = box.querySelector(".chat__empty");
       if (empty) empty.remove();
@@ -1638,7 +1728,7 @@
   // Finds the bubble on every delta, so a redraw in between can't leave it stale.
   function showLiveText(chatId) {
     const body = runBody();
-    if (!body || state.chatId !== chatId || !state.live) return;
+    if (!body || !screenShows(chatId) || !state.live) return;
     const box = body.querySelector(".chat");
     const text = box && box.querySelector("[data-live-text]");
     if (!text) return;
@@ -1651,19 +1741,20 @@
   // Swaps the reply bubble for the saved reply, or removes it when nothing was saved.
   function showSavedReply(chatId, message) {
     const body = runBody();
-    if (!body || state.chatId !== chatId) return;
+    const chat = chatRecord(chatId);
+    if (!body || !chat || !screenShows(chatId)) return;
     const list = body.querySelector(".chat__list");
     if (!list) return;
     const bubble = list.querySelector("[data-live-bubble]");
-    const html = message ? renderBubble(state.chat, message) : "";
+    const html = message ? renderBubble(chat, message) : "";
     if (bubble) bubble.outerHTML = html;
     else if (html) list.insertAdjacentHTML("beforeend", html);
     updateRunProgress(body);
   }
 
   function addMessage(chatId, message) {
-    const chat = state.chat;
-    if (!chat || chat.id !== chatId || chat.messages.some((saved) => saved.seq === message.seq)) return;
+    const chat = chatRecord(chatId);
+    if (!chat || chat.messages.some((saved) => saved.seq === message.seq)) return;
     chat.messages.push(message);
     chat.message_count = chat.messages.length;
   }
@@ -1702,24 +1793,26 @@
       live.waitSeconds = 0;
       live.waitMessage = "";
       live.text += data.text;
-      if (runBody() && state.chatId === chatId && !runBody().querySelector("[data-live-bubble]")) showLiveTurn(chatId);
+      if (runBody() && screenShows(chatId) && !runBody().querySelector("[data-live-bubble]")) showLiveTurn(chatId);
       else showLiveText(chatId);
     } else if (name === "done") {
       if (data.message) addMessage(chatId, data.message);
-      if (state.chat && state.chat.id === chatId) {
-        state.chat.status = data.status;
-        state.chat.script_left = data.script_left;
+      const chat = chatRecord(chatId);
+      if (chat) {
+        chat.status = data.status;
+        chat.script_left = data.script_left;
       }
       runOptions.used_today = data.used_today;
       live.text = "";
       if (live.phase !== "stopping") live.phase = "waiting";
       showSavedReply(chatId, data.message);
-      if (data.message && !data.stopped && state.chat) announce(`${state.chat.character_name} replied.`);
+      if (data.message && !data.stopped && chat) announce(`${chat.character_name} replied.`);
     } else if (name === "error") {
       state.runError = { chatId, message: data.message, retry: data.retry };
       // The words that came before the error are saved, marked as cut off.
       if (data.partial) addMessage(chatId, data.partial);
-      if (state.chat && state.chat.id === chatId) state.chat.status = data.status;
+      const chat = chatRecord(chatId);
+      if (chat) chat.status = data.status;
     }
   }
 
@@ -1784,18 +1877,20 @@
       const chat = await WorkbenchApi.getChat(chatId);
       if (ticket !== runTicket) return;
       if (state.chatId === chatId) state.chat = chat;
+      if (state.freeChatId === chatId) state.freeChat = chat;
       updateChatSummary(chat);
     } catch {
       // The screen keeps what it streamed.
     }
     if (ticket !== runTicket) return;
     state.live = null;
+    const shown = currentScreen === "free" ? state.freeChat : state.chat;
     let focusKey = null;
-    if (stopHadFocus && state.chat) {
-      if (state.runError && state.runError.chatId === chatId && state.runError.retry && canRetry(state.chat)) focusKey = "retry-turn";
-      else if (canType(state.chat)) focusKey = "run-message";
-      else if (canContinue(state.chat)) focusKey = "continue-run";
-      else focusKey = "start-run";
+    if (stopHadFocus && shown && shown.id === chatId) {
+      if (state.runError && state.runError.chatId === chatId && state.runError.retry && canRetry(shown)) focusKey = "retry-turn";
+      else if (currentScreen === "free" && canType(shown)) focusKey = "free-message";
+      else if (canContinue(shown)) focusKey = "continue-run";
+      else focusKey = currentScreen === "free" ? "free-message" : "start-run";
     }
     refreshRun({ focusKey });
     if (state.runError && state.runError.chatId === chatId) announce(state.runError.message);
@@ -1804,31 +1899,89 @@
     loadReview();
   }
 
-  actions["start-run"] = async (button) => {
-    if (state.live || state.runStarting || (button && button.getAttribute("aria-disabled") === "true")) return;
+  // Writes one test case from the spec, then plays it. queue is { index, total }
+  // while Run All Test Cases is walking the menu. Returns false when the
+  // case did not finish, so the queue stops.
+  async function startTestCase(caseId, queue) {
+    const custom = isCustomScenario(caseId);
+    const prompt = (state.runSetup.prompt || "").trim();
+    if (custom && !prompt) {
+      announce("Describe the test case first.");
+      const field = runBody() && runBody().querySelector("#run-scenario-prompt");
+      if (field) field.focus();
+      return false;
+    }
     const ticket = runTicket;
+    const previousId = state.chatId;
     state.runStarting = true;
+    state.runError = null;
+    state.writing = queue
+      ? `Writing test case ${queue.index + 1} of ${queue.total}, ${caseId}, from the character spec`
+      : (custom
+        ? "Writing your test case from the character spec"
+        : `Writing the ${caseId} test case from the character spec`);
+    state.chatId = null;
+    state.chat = null;
+    refreshRun({ focusKey: "stop-run" });
+    const controller = new AbortController();
+    runStart = controller;
     try {
       const chat = await WorkbenchApi.startChat({
         character: runOptions.character.slug,
-        scenario: state.runSetup.scenarioId,
+        scenario: caseId,
         model: state.runSetup.modelId,
-      });
+        generate: true,
+        ...(custom ? { prompt } : {}),
+      }, controller.signal);
       state.runStarting = false;
-      // Counts toward this session's run limit, so Start run can say when it's reached.
       runOptions.session_runs += 1;
-      if (ticket !== runTicket) return;
+      if (ticket !== runTicket || (runAll && runAll.stop)) {
+        state.writing = "";
+        return false;
+      }
+      state.writing = "";
       state.chatId = chat.id;
       state.chat = chat;
       rememberChat(chat.id);
       updateChatSummary(chat);
-      playRun(chat.id);
+      await playRun(chat.id);
+      return !(runAll && runAll.stop);
     } catch (error) {
       state.runStarting = false;
-      if (ticket !== runTicket) return;
+      state.writing = "";
+      if (ticket !== runTicket || (error && error.name === "AbortError")) {
+        if (previousId && !state.chat) loadChat(previousId);
+        return false;
+      }
       showSnackbar(error.message);
       loadRunOptions();
+      if (previousId) loadChat(previousId);
+      else refreshRun();
+      return false;
+    } finally {
+      if (runStart === controller) runStart = null;
     }
+  }
+
+  actions["start-run"] = (button) => {
+    if (state.live || state.runStarting || runAll || (button && button.getAttribute("aria-disabled") === "true")) return;
+    startTestCase(state.runSetup.scenarioId);
+  };
+
+  actions["run-all"] = async (button) => {
+    if (state.live || state.runStarting || runAll || (button && button.getAttribute("aria-disabled") === "true")) return;
+    const cases = runOptions.scenarios.filter((item) => !item.custom);
+    if (!cases.length) return;
+    runAll = { stop: false };
+    for (let index = 0; index < cases.length; index += 1) {
+      if (runAll.stop) break;
+      state.runSetup.scenarioId = cases[index].id;
+      const ok = await startTestCase(cases[index].id, { index, total: cases.length });
+      if (!ok) break;
+    }
+    runAll = null;
+    state.writing = "";
+    refreshRun();
   };
 
   actions["continue-run"] = () => {
@@ -1839,11 +1992,17 @@
   // Try again after a failed turn answers the line that is still waiting. In a
   // chat whose script has ended, that is the one turn; otherwise the run goes on.
   actions["retry-turn"] = () => {
-    if (state.live || !state.chat || !canRetry(state.chat)) return;
-    playRun(state.chat.id);
+    const chat = currentScreen === "free" ? state.freeChat : state.chat;
+    if (state.live || !chat || !canRetry(chat)) return;
+    playRun(chat.id);
   };
 
   actions["stop-run"] = async (button) => {
+    if (runAll) runAll.stop = true;
+    if (runStart) {
+      runStart.abort();
+      return;
+    }
     const live = state.live;
     if (!live || live.phase === "stopping" || (button && button.getAttribute("aria-disabled") === "true")) return;
     live.stopRequested = true;
@@ -1860,23 +2019,191 @@
   };
 
   actions["send-message"] = async () => {
-    const chat = state.chat;
-    if (!chat || state.live || !canType(chat)) return;
-    const text = (state.drafts[chat.id] || "").trim();
+    if (currentScreen !== "free" || state.live || state.runStarting) return;
+    const draftKey = state.freeChat ? state.freeChat.id : "free";
+    const text = (state.drafts[draftKey] || "").trim();
     if (!text) {
       announce("Type a message first.");
       return;
     }
+    let chat = state.freeChat;
+    if (!chat) {
+      state.runStarting = true;
+      refreshRun({ focusKey: "free-message" });
+      try {
+        chat = await WorkbenchApi.startChat({
+          character: runOptions.character.slug,
+          scenario: "Free",
+          model: state.freeSetup.modelId || runOptions.default_model,
+        });
+        runOptions.session_runs += 1;
+        state.freeChatId = chat.id;
+        state.freeChat = chat;
+        updateChatSummary(chat);
+        state.drafts[chat.id] = text;
+        delete state.drafts.free;
+      } catch (error) {
+        state.runStarting = false;
+        showSnackbar(error.message);
+        refreshRun({ focusKey: "free-message" });
+        return;
+      }
+      state.runStarting = false;
+    }
+    if (!canType(chat)) return;
     const ticket = ++runTicket;
     state.runError = null;
     state.live = { chatId: chat.id, phase: "waiting", turn: null, text: "", waitSeconds: 0, waitMessage: "", scripted: false, stopRequested: false };
     refreshRun({ focusKey: "stop-run" });
     const outcome = await streamTurn(chat.id, "typed", text, ticket);
     if (ticket !== runTicket) return;
-    // A line the server refused keeps its draft, so it can be fixed and sent again.
     if (outcome && outcome.name !== "failed") delete state.drafts[chat.id];
     await finishRun(chat.id, ticket, outcome);
   };
+
+  actions["new-free-chat"] = () => {
+    if (state.live) {
+      announce("Stop the reply before starting a new chat.");
+      return;
+    }
+    state.freeChat = null;
+    state.freeChatId = null;
+    state.runError = null;
+    refresh({ focusKey: "free-message" });
+  };
+
+  let freeRequest = 0;
+
+  async function loadFreeChat(id, { focusKey = null } = {}) {
+    const ticket = ++freeRequest;
+    try {
+      const chat = await WorkbenchApi.getChat(id);
+      if (ticket !== freeRequest) return;
+      state.freeChatId = chat.id;
+      state.freeChat = chat;
+      updateChatSummary(chat);
+      refreshRun({ focusKey });
+      loadCheck(chat.id, { focusKey });
+    } catch (error) {
+      if (ticket !== freeRequest) return;
+      showSnackbar(`That chat didn't load. ${error.message}`);
+    }
+  }
+
+  function renderFree(body) {
+    if (runOptionsLoad.status === "loading") {
+      body.innerHTML = '<p class="spec-status">Loading Free Chat.</p>';
+      return null;
+    }
+    if (runOptionsLoad.status === "failed") {
+      body.innerHTML = `
+        <div class="card card--outlined spec-empty">
+          <p>Free Chat didn't load. ${escapeHtml(runOptionsLoad.message)}</p>
+          <button type="button" class="btn btn--filled" data-action="retry-run-options" data-focus-key="retry-run-options">Try again</button>
+        </div>`;
+      return null;
+    }
+    const chat = state.freeChat;
+    const talking = Boolean(chat && isLive(chat.id));
+    const blocked = startBlockedReason();
+    const support = blocked ||
+      `Calls start at least ${secondsText(60 / runOptions.calls_per_minute)} apart. ${runOptions.used_today} of ${runOptions.daily_cap} calls used today.`;
+    const modelSupport = chat
+      ? `This chat uses ${modelLabel(chat.model)}. New chat uses the model picked here.`
+      : support;
+    const modelOptions = runOptions.models
+      .map((model) => {
+        const label = model.id === runOptions.default_model ? `${model.label} (default)` : model.label;
+        const picked = state.freeSetup.modelId || runOptions.default_model;
+        return `<option value="${escapeHtml(model.id)}"${model.id === picked ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
+    const freeChats = state.chats.filter((item) => item.scenario === "Free");
+    const chatOptions = [
+      `<option value=""${!chat ? " selected" : ""}>New chat</option>`,
+      ...freeChats.map((item) => `<option value="${item.id}"${chat && item.id === chat.id ? " selected" : ""}>${escapeHtml(chatLabel(item))}</option>`),
+    ].join("");
+    const error = state.runError && chat && state.runError.chatId === chat.id ? state.runError : null;
+    body.innerHTML = `
+      <div class="run-screen">
+        <div class="free-setup run-setup">
+          ${selectField("free-model", "Model", modelOptions, { support: modelSupport })}
+          <div class="run-setup__actions">
+            ${!runOptions.key_set
+              ? `<button type="button" class="btn btn--filled btn--icon-leading" data-action="open-settings" data-focus-key="connect-ai" aria-haspopup="dialog">
+                  <span class="icon" aria-hidden="true">link</span>
+                  <span>Connect an AI</span>
+                </button>`
+              : ""}
+            <button type="button" class="btn btn--outlined" data-action="new-free-chat" data-focus-key="new-free-chat" aria-disabled="${talking}">New chat</button>
+          </div>
+        </div>
+        ${freeChats.length
+          ? `<div class="run-chats">${selectField("free-chat", "Chat", chatOptions, { support: "Free chats, newest first." })}</div>`
+          : ""}
+        ${chat ? renderTranscript(chat) : `
+          <section class="card card--outlined transcript" aria-label="Transcript">
+            <div class="chat">
+              <div class="chat__empty">
+                ${decorScene("chat")}
+                <p>Type a message and ${escapeHtml(runOptions.character.name)} answers, in character.</p>
+              </div>
+            </div>
+          </section>`}
+        ${error ? `
+          <div class="card card--outlined run-error">
+            <span class="icon" aria-hidden="true">error</span>
+            <p class="run-error__text">${escapeHtml(error.message)}</p>
+            ${mentionsSettings(error.message) ? settingsButton("free-error-settings") : ""}
+            ${error.retry && canRetry(chat)
+              ? '<button type="button" class="btn btn--filled" data-action="retry-turn" data-focus-key="retry-turn">Try again</button>'
+              : ""}
+          </div>` : ""}
+        ${talking ? "" : renderMessageBox(chat)}
+        ${chat ? renderCheck(chat) : ""}
+      </div>`;
+
+    body.querySelector("#free-model").addEventListener("change", (event) => {
+      state.freeSetup.modelId = event.target.value;
+    });
+    const picker = body.querySelector("#free-chat");
+    if (picker) {
+      picker.addEventListener("change", (event) => {
+        if (state.live) {
+          event.target.value = chat ? String(chat.id) : "";
+          announce("Stop the reply before switching chats.");
+          return;
+        }
+        const id = Number(event.target.value);
+        if (!id) {
+          state.freeChat = null;
+          state.freeChatId = null;
+          state.runError = null;
+          refresh({ focusKey: "free-message" });
+          return;
+        }
+        state.runError = null;
+        loadFreeChat(id, { focusKey: "free-chat" });
+      });
+    }
+    const message = body.querySelector("#free-message");
+    if (message) {
+      message.addEventListener("input", () => {
+        const key = chat ? chat.id : "free";
+        state.drafts[key] = message.value;
+        const send = body.querySelector('[data-action="send-message"]');
+        if (send) send.setAttribute("aria-disabled", String(!message.value.trim()));
+      });
+      message.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+        event.preventDefault();
+        actions["send-message"]();
+      });
+    }
+    const messages = body.querySelector(".chat");
+    if (messages) messages.scrollTop = messages.scrollHeight;
+    return null;
+  }
 
   // "Review flags" under a check: Flag review opens on that chat.
   actions["review-flags"] = (button) => {
@@ -2796,8 +3123,8 @@
     return `
       <div class="card card--outlined flag-cards__empty empty-state">
         ${decorScene("ids")}
-        <p class="empty-state__text">No checked chats yet. On Run a conversation, open a chat and press Check this chat.</p>
-        <button type="button" class="btn btn--filled" data-action="go-to-screen" data-screen="run" data-focus-key="go-to-run">Go to Run a conversation</button>
+        <p class="empty-state__text">No checked chats yet. On Run Test Cases, open a chat and press Check this chat.</p>
+        <button type="button" class="btn btn--filled" data-action="go-to-screen" data-screen="run" data-focus-key="go-to-run">Go to Run Test Cases</button>
       </div>`;
   }
 
@@ -2955,10 +3282,10 @@
       return `
         <section class="card card--outlined follow-up" aria-labelledby="follow-up-title">
           ${title}
-          <p class="follow-up__text">The re-check needs the AI judge's first pass, which didn't finish for this chat. Check the chat again on Run a conversation first.</p>
+          <p class="follow-up__text">The re-check needs the AI judge's first pass, which didn't finish for this chat. Check the chat again on Run Test Cases first.</p>
           <div class="follow-up__actions">
             <button type="button" class="btn btn--outlined" data-action="check-changed-chat" data-chat="${chat.id}"
-              data-focus-key="follow-up-go-run">Go to Run a conversation</button>
+              data-focus-key="follow-up-go-run">Go to Run Test Cases</button>
           </div>
         </section>`;
     }
@@ -3818,7 +4145,7 @@
     if (items.length === 0) {
       body.innerHTML = `
         <div class="card card--outlined flag-cards__empty empty-state">
-          <p class="empty-state__text">Compare runs lines up chats that ran the same test script. ${escapeHtml(reviewLabel(item.chat))} was imported without one, so there's nothing to compare it with. On Flag review, pick a chat from a scenario run.</p>
+          <p class="empty-state__text">Compare runs lines up chats that ran the same test script. ${escapeHtml(reviewLabel(item.chat))} was imported without one, so there's nothing to compare it with. On Flag review, pick a chat from a test case.</p>
           <button type="button" class="btn btn--filled" data-action="go-to-screen" data-screen="diagnose" data-focus-key="go-to-review">Go to Flag review</button>
         </div>`;
       return null;
@@ -3986,7 +4313,7 @@
   };
 
   // 4. Router and tabs =====================================================
-  // The URL hash (#define, #run, #diagnose, #compare) decides which screen
+  // The URL hash (#define, #run, #free, #diagnose, #compare) decides which screen
   // shows, so Back and Forward work and each screen has its own link.
 
   const APP_NAME = "Character Consistency Workbench";
@@ -5287,8 +5614,8 @@
       screen: "run",
       anchor: "run",
       spots: [".run-setup"],
-      title: "Run a conversation",
-      text: "Pick a test script and a model, then press Start run and watch each reply arrive. You can also import a saved chat.",
+      title: "Run Test Cases",
+      text: "Pick a test case and a model, then press Start Test. A stronger model writes the lines from the spec, then you watch each reply arrive.",
     },
     {
       screen: "run",
@@ -5296,6 +5623,13 @@
       spots: [".check-start", ".check"],
       title: "Check this chat",
       text: "After a run, Check this chat counts sentences, looks for banned words, and has an AI judge read the whole chat. Each possible break becomes a flag with a quote and the spec line it breaks.",
+    },
+    {
+      screen: "free",
+      anchor: "free",
+      spots: [".free-setup"],
+      title: "Free Chat",
+      text: "Talk to the character in your own words. This is not a test case, so the lines are not a script.",
     },
     {
       screen: "diagnose",

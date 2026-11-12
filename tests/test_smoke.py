@@ -44,7 +44,7 @@ class ScriptFinder(HTMLParser):
             self.sources.append(dict(attrs).get("src"))
 
 
-def test_root_serves_four_tabs(make_client):
+def test_root_serves_the_tabs(make_client):
     client = make_client()
 
     response = client.get("/")
@@ -52,7 +52,7 @@ def test_root_serves_four_tabs(make_client):
     assert response.headers["content-type"].startswith("text/html")
     finder = TabFinder()
     finder.feed(response.text)
-    assert finder.screens == ["define", "run", "diagnose", "compare"]
+    assert finder.screens == ["define", "run", "free", "diagnose", "compare"]
 
     for name, content_type in [
         ("styles.css", "text/css"),

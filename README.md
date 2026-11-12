@@ -93,7 +93,7 @@ Keep the key secret: never put it in a chat, a commit, or a screenshot. The app 
 
 ### Step 6. Connect the key in Settings
 
-1. In the app, press **Settings** in the top bar. (On the Run a conversation tab, **Connect an AI** opens the same dialog.)
+1. In the app, press **Settings** in the top bar. (On the Run Test Cases tab, **Connect an AI** opens the same dialog.)
 2. Under Provider, "Gemini (Google AI Studio)" is already picked. Leave it.
 3. Click in **Gemini API key** and paste your key.
 4. Press **Test**. It sends one tiny message to Gemini, which can take up to half a minute.
@@ -104,8 +104,8 @@ You should see: "Connected." with the model's name after Test, and "Settings sav
 ### Step 7. Take a 5-minute first tour
 
 1. The first time the page opens, a short tour points at each part of the screen. Press **Next** to follow it, or **Skip tutorial** to close it. The **?** button at the right end of the top bar plays it again.
-2. Open the **Run a conversation** tab. Under **Scenario**, pick **F2: knowledge boundary**, then press **Start run**. You should see Alex's lines and Harry's replies appear one at a time. The script takes a minute or two.
-3. When it says "Script finished.", press **Check this chat**. The card counts the seconds while the AI judge reads the whole chat, which can take a minute.
+2. Open the **Run Test Cases** tab. Under **Test Case**, pick **F2: knowledge boundary**, then press **Start Test**. A stronger model writes the lines from the character spec, then Alex's lines and Harry's replies appear one at a time. The chat takes a minute or two.
+3. When it says "Test case finished.", press **Check this chat**. The card counts the seconds while the AI judge reads the whole chat, which can take a minute.
 4. Press **Review flags**. Each flag shows a quote from Harry and the spec line it breaks.
 5. On a flag, press **Show in context** to see the quote in its turn, then press **Agree**. Agree stays locked until you open the context, so you always look at the evidence first.
 
@@ -196,7 +196,7 @@ The app covers the seven features in [validation/OPPORTUNITY_FRAMING.md](validat
 | 1 | Evidence-first flag review | Flag review: each flag card shows the quote, the spec line it cites, and a confidence. Agree unlocks after Show in context, and Override needs a reason of 3 words or more. | [4. Check a chat and review its flags](docs/use-cases.md#4-check-a-chat-and-review-its-flags) |
 | 2 | A built-in follow-up re-check | Flag review: the Follow-up re-check card, with Your question (optional) and Re-check, then What changed in the re-check | [5. Re-check the weakest calls](docs/use-cases.md#5-re-check-the-weakest-calls) |
 | 3 | A structured spec with line IDs, a version history, and a setting field that warns when it's empty | Spec editor: line IDs like C17, Edit spec, the Scene field, and Save as v2 | [1. Define a spec](docs/use-cases.md#1-define-a-spec), [Empty scene](docs/use-cases.md#empty-scene) |
-| 4 | Automatic checks for measurable rules, like sentence count and banned words | Run a conversation: Check this chat runs them on every reply first, with no AI. Their flags say Automatic check. | [4. Check a chat and review its flags](docs/use-cases.md#4-check-a-chat-and-review-its-flags) |
+| 4 | Automatic checks for measurable rules, like sentence count and banned words | Run Test Cases: Check this chat runs them on every reply first, with no AI. Their flags say Automatic check. | [4. Check a chat and review its flags](docs/use-cases.md#4-check-a-chat-and-review-its-flags) |
 | 5 | A provenance check | Flag review: a flag titled "invented claim about the user". The check flags claims about the user that the user never made, and other unsupported facts are caught by the judge's factual-contradiction type. | [4. Check a chat and review its flags](docs/use-cases.md#4-check-a-chat-and-review-its-flags) |
 | 6 | Compare runs | Compare runs: Where each chat broke, Turn by turn, and each chat's first break | [6. Repair: compare runs, then save v2](docs/use-cases.md#6-repair-compare-runs-then-save-v2) |
 | 7 | Persona-exit and near-boundary cues | Flag review: "Needs your call" on the card, with the reason only the creator can settle it | [4. Check a chat and review its flags](docs/use-cases.md#4-check-a-chat-and-review-its-flags) |

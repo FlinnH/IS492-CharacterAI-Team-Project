@@ -95,20 +95,20 @@ Keep the key out of every file except `app/.env`, and out of chats, commits, and
 
 ### Step 6. Connect the key in Settings
 
-1. In the app, press **Settings** in the top bar. Or open the Run a conversation tab: while no AI is connected, it says "No AI is connected yet." and shows **Connect an AI** next to Start run, which opens the same dialog.
+1. In the app, press **Settings** in the top bar. Or open the Run Test Cases tab: while no AI is connected, it says "No AI is connected yet." and shows **Connect an AI** next to Start Test, which opens the same dialog.
 2. Under Provider, "Gemini (Google AI Studio)" is already picked. Leave it.
 3. Click in **Gemini API key** and paste your key. Show key shows what you pasted.
 4. Press **Test**. It sends one tiny message to Harry's model with the settings as you typed them, before anything is saved. It can take up to half a minute. If it works, it says "Connected." with the model's name and how long it took. If not, it says what went wrong and what to do next.
 5. If Test says "Gemini had a problem on its side.", Google's servers are busy with that model. Press Test again in a minute. Or, under Models, pick Gemini 3.5 Flash-Lite as Harry's model and press Test again: each model has its own capacity, and the judge's model moves to the other one by itself.
-6. Press **Save**. It says "Settings saved." The settings take effect right away, with no restart, and Start run is ready.
+6. Press **Save**. It says "Settings saved." The settings take effect right away, with no restart, and Start Test is ready.
 
 Save writes the key to `app/.env`, readable only by your user account, and to nowhere else. The key never comes back to the page: Settings shows only that a key is saved and, for a long key, its last 4 characters. The app logs every Test and Save with its time (never the key), and every model call records the settings it used.
 
 ### Step 7. Take a 5-minute first tour
 
-1. On your first visit, a short tour opens. Its 8 steps each point at one part of the screen and say what it's for. Press **Next** and **Back** to move through it, or **Skip tutorial** (or Escape) to close it. The **?** button at the right end of the top bar opens it again any time. The browser remembers that you've seen it, so it opens by itself only once.
-2. Open the **Run a conversation** tab. Under **Scenario**, pick **F2: knowledge boundary**, then press **Start run**. You should see Alex's lines and Harry's replies appear one at a time. The script takes a minute or two, since calls start at least 4 seconds apart.
-3. When it says "Script finished.", press **Check this chat**. The card counts the seconds while the AI judge reads the whole chat, which can take a minute.
+1. On your first visit, a short tour opens. Its 9 steps each point at one part of the screen and say what it's for. Press **Next** and **Back** to move through it, or **Skip tutorial** (or Escape) to close it. The **?** button at the right end of the top bar opens it again any time. The browser remembers that you've seen it, so it opens by itself only once.
+2. Open the **Run Test Cases** tab. Under **Test Case**, pick **F2: knowledge boundary**, then press **Start Test**. A progress bar shows while a stronger model writes the lines from the character spec, then Alex's lines and Harry's replies appear one at a time. The chat takes a minute or two, since calls start at least 4 seconds apart.
+3. When it says "Test case finished.", press **Check this chat**. The card counts the seconds while the AI judge reads the whole chat, which can take a minute.
 4. Press **Review flags**. Each flag shows a quote from Harry and the spec line it breaks.
 5. On a flag, press **Show in context** to see the quote in its turn, then press **Agree**. Agree stays locked until you open the context, so you always look at the evidence first.
 

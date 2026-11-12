@@ -151,6 +151,8 @@ LAYERS = {
     "transcripts": 6,
     "runtime": 7,
     "judge": 7,
+    # Custom runs: writes a script through the gateway, then runtime saves the chat.
+    "scenario_gen": 8,
     "recheck": 8,
     "review": 9,
     "main": 10,
