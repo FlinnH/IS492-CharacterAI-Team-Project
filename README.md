@@ -8,6 +8,8 @@
 
 **Stack:** Python 3.11 or newer, FastAPI, Uvicorn, and SQLite. The app calls Gemini 3.1 and 3.5 Flash-Lite through the OpenAI Python library, and its screens are the CP2 prototype's plain HTML, CSS, and JavaScript. To run it, see [How to run the app](#how-to-run-the-app).
 
+**CP4 in progress:** the team's start page is [docs/cp4/TEAM_START_HERE.md](docs/cp4/TEAM_START_HERE.md).
+
 ---
 
 ## How to run the app
