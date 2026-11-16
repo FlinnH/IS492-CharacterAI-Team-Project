@@ -1,0 +1,5 @@
+setup,run,chat,line,flag_type,flag_spec_line,answer_sheet,answer_type,result,note
+EXAMPLE full judge,1,TC01,14,style drift,B4,planted,style drift,caught,Delete every EXAMPLE row before you start
+EXAMPLE full judge,1,TC01,9,factual contradiction,C17,clean,,wrong flag,A flag on a clean line or a decoy
+EXAMPLE full judge,1,TC01,22,,,planted,situational mismatch,missed,A planted mistake that got no flag
+EXAMPLE plain prompt,1,TC01,14,,B4,planted,style drift,caught,A plain prompt may name no type

@@ -4,7 +4,7 @@ The CP4 talk is 8 slides in 8 minutes or less. The instructions ask it to cover 
 
 Who owns the slides is part of decision 4 in [docs/cp4/DECISIONS.md](../../docs/cp4/DECISIONS.md#4-who-does-what-and-by-when). Who presents which slide and what the 60-second demo shows are on its [Decide later](../../docs/cp4/DECISIONS.md#decide-later-at-our-second-meeting) list. So the Owner and What we'll show columns are blank until the team decides.
 
-The deck is due Thu Nov 19 at 11:59 PM.
+The deck is due at 11:59 PM the day before the presentation. Check Canvas for the day. [The how-to, section 6](../../docs/cp4/HOW_TO_FINISH_CP4.md#6-the-slides-and-the-talk) covers the demo recording and the rehearsal.
 
 | # | Slide | Time | Required content | Owner | What we'll show |
 | --- | --- | --- | --- | --- | --- |
@@ -13,6 +13,6 @@ The deck is due Thu Nov 19 at 11:59 PM.
 | 3 | Evaluation setup | About 1 minute | Track A: the participants, tasks, and protocol. Track B: the test set, baselines, ablation variables, and metrics |  |  |
 | 4 | Quantitative results | 1.5 to 2 minutes | The charts, ablation tables, and cost and latency |  |  |
 | 5 | Qualitative insights | 1 to 1.5 minutes | Track A: themes from what people said. Track B: what the judge gets wrong and why |  |  |
-| 6 | Limitations and ethics | About 1 minute |  |  |  |
-| 7 | Engineering lessons | About 1 minute | What worked, what failed, prompt design, and run-to-run variation |  |  |
-| 8 | Future work and conclusion | About 30 seconds |  |  |  |
+| 6 | Limitations and ethics | About 1 minute | Honest limits, edge-case failures, hallucination risk, privacy, and bias |  |  |
+| 7 | Engineering lessons | About 1 minute | What worked, what failed, prompt design, run-to-run variation, and human-AI interaction insights |  |  |
+| 8 | Future work and conclusion | About 30 seconds | What's next, and the one-line conclusion |  |  |

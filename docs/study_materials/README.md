@@ -15,6 +15,8 @@ Every file here is a blank template until the team decides. The decisions are in
 | [themes_TEMPLATE.md](themes_TEMPLATE.md) | Themes in what people said: trust, usefulness, and friction | Track A |
 | [test_chat_TEMPLATE.md](test_chat_TEMPLATE.md) | One chat of the test set, line by line | Both tracks |
 | [answer_key_TEMPLATE.md](answer_key_TEMPLATE.md) | The answer sheet for one test chat: its planted mistakes, decoys, and clean lines | Both tracks |
+| [scoring_sheet_TEMPLATE.csv](scoring_sheet_TEMPLATE.csv) | The scoring sheet: one row for each flag, and one for each planted mistake that got no flag | Track B |
+| [error_analysis_TEMPLATE.md](error_analysis_TEMPLATE.md) | The error analysis: the kinds of mistake the system makes, with examples | Track B |
 
 ## How to use a template
 

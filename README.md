@@ -395,7 +395,7 @@ technology and the object of evaluation.
 | **CP1** | Sep 17 *(confirmed)* | Public repo and project board, literature review with individual reflections, formal proposal, and kickoff presentation. |
 | **CP2** | Oct 8 *(confirmed)* | A prompting study of three existing tools (Claude, ChatGPT, and Gemini) covering typical, edge, and failure cases; speed-dating interviews and a gap analysis read through the Gonzalez et al. (2026) complementarity framework; a design spec with user journeys, key screens, and collaboration mechanics; and a clickable prototype of the Define, Stress-test, Diagnose, and Repair loop. |
 | **CP3** | Oct 30 *(estimated)* | A working end-to-end MVP: a character runtime that generates dialogue from a structured specification, and an evaluation layer that reports where and why a character breaks. Demonstrated live on Harry Potter, our example character, with setup instructions and an architecture diagram. |
-| **CP4** | Dec 4 *(estimated)* | Evaluation comparing the integrated system against baseline prompting on the same characters and scenarios, a user study with character creators, and the final report. |
+| **CP4** | Dec 3 *(confirmed)* | Evaluation comparing the integrated system against baseline prompting on the same characters and scenarios, a user study with character creators, and the final report. |
 
 > CP3 delivered the spec-only character runtime and the evaluation layer, and memory and retrieval move to CP4 as on and off comparisons against this baseline.
 
@@ -448,6 +448,7 @@ itself sends to models are in [app/prompts/](app/prompts/README.md).
 | Claude Code | CP2: building the clickable prototype in prototype/ from Flynn's prompts | Flynn |
 | Anthropic | CP3: planning the stack, the free model setup, and the step-by-step build prompts | Flynn |
 | Claude Code | CP3: planning and building the working app in app/, its tests in tests/, and the CP3 docs (milestones M0 to M8 and the final CP3 sessions), from Flynn's prompts | Flynn |
+| Claude Code | CP4: writing the team kit (the start page, the decision sheet, the templates, the issues, and the tests workflow) and the handoff guide, from Flynn's plan, prompts, and decisions | Flynn |
 
 Datasets: the character spec was written by the team from the Harry Potter books' canon, the CP2 chats came from Claude, ChatGPT, and Gemini, and the seeded transcript and the planted-instruction sample are team-written.
 

@@ -2,7 +2,8 @@
 
 The report skeleton has every section, every relative link in the kit's files
 resolves, the tests workflow parses, and the questionnaire template holds SUS
-and UMUX-Lite in full. These read the kit's own files, with no key and no network.
+and UMUX-Lite in full. No kit file holds a key-shaped string. These read the
+kit's own files, with no key and no network.
 """
 
 import json
@@ -12,6 +13,8 @@ from pathlib import Path
 from urllib.parse import unquote
 
 import pytest
+
+from workbench import redact
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 REPORT = REPO_DIR / "docs" / "FINAL_REPORT.md"
@@ -25,6 +28,8 @@ KIT_FILES = [
     "AGENTS.md",
     "docs/FINAL_REPORT.md",
     "docs/cp4/TEAM_START_HERE.md",
+    "docs/cp4/CP4_REQUIREMENTS.md",
+    "docs/cp4/HOW_TO_FINISH_CP4.md",
     "docs/cp4/DECISIONS.md",
     "docs/cp4/WORK_LOG.md",
     "docs/study_materials/README.md",
@@ -37,11 +42,17 @@ KIT_FILES = [
     "docs/study_materials/themes_TEMPLATE.md",
     "docs/study_materials/test_chat_TEMPLATE.md",
     "docs/study_materials/answer_key_TEMPLATE.md",
+    "docs/study_materials/error_analysis_TEMPLATE.md",
     "docs/figures/README.md",
     "slides/cp4/CP4_SLIDE_PLAN.md",
     ".github/pull_request_template.md",
     ".github/ISSUE_TEMPLATE/task.md",
     ".github/ISSUE_TEMPLATE/decision.md",
+]
+
+# Kit files that aren't Markdown. The key check reads them too.
+KIT_DATA_FILES = [
+    "docs/study_materials/scoring_sheet_TEMPLATE.csv",
 ]
 
 # The sections the CP4 instructions name, in their order.
@@ -256,3 +267,44 @@ def test_the_answer_sheet_template_lists_the_judges_failure_types():
     types = schema["properties"]["flags"]["items"]["properties"]["type"]["enum"]
     listed = re.findall(r"^- (.+)$", ANSWER_KEY_TEMPLATE.read_text(encoding="utf-8"), flags=re.M)
     assert [item for item in listed if not item.startswith("**")] == types
+
+
+
+# A made-up key in Google's shape, built here so this file never holds one.
+MADE_UP_KEY = "AI" + "za" + "SyFakeKeyForTests_0123"
+
+
+# A link's target or a web address. Anchors and addresses run long, and they are not keys.
+ADDRESS = re.compile(r"\]\([^)]*\)|https?://[^\s)>\"']+")
+# How a service's keys start. A string like this counts even inside an address.
+KEY_START = re.compile(r"AIza|gsk_|sk-|gh[pousr]_|github_pat_|xox[abposr]-|AKIA")
+
+
+def key_shaped(text):
+    """The key-shaped strings in a doc, found with the app's own key pattern.
+
+    A long anchor or web address is left alone, unless it holds a string that
+    starts the way a service's keys start.
+    """
+    outside = {match.group() for match in redact.KEY.finditer(ADDRESS.sub(" ", text))}
+    inside = {match.group() for match in redact.KEY.finditer(text) if KEY_START.match(match.group())}
+    return sorted(outside | inside)
+
+
+def test_the_key_check_catches_a_made_up_key_in_a_line_or_an_address():
+    assert key_shaped(f"The key is {MADE_UP_KEY}.") == [MADE_UP_KEY]
+    assert key_shaped(f"[the app](https://example.com/?key={MADE_UP_KEY})") == [MADE_UP_KEY]
+
+
+def test_the_key_check_leaves_long_anchors_and_addresses_alone():
+    # A section anchor or a web address can be as long as a key, with letters and digits in it.
+    assert key_shaped("[what we found](HOW_TO_FINISH_CP4.md#11-what-cp2-and-cp3-already-found)") == []
+    assert key_shaped("The prototype is at https://is492-characterai-team-project-prot.vercel.app today.") == []
+    assert key_shaped("Spec line C17, commit 2118db3, and 3,500 to 4,500 words.") == []
+
+
+@pytest.mark.parametrize("name", KIT_FILES + KIT_DATA_FILES)
+def test_no_kit_file_holds_a_key_shaped_string(name):
+    # A key, a token, or the demo code never goes in a doc. It goes in app/.env or a private message.
+    assert key_shaped((REPO_DIR / name).read_text(encoding="utf-8")) == []
+
