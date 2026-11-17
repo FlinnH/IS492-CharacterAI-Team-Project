@@ -1,0 +1,39 @@
+# Keeps the public demo awake, so its first visitor doesn't wait a minute.
+# Render puts a free service to sleep after 15 minutes with no requests.
+#
+# It is off until the repository variable DEMO_HEALTH_URL is set (Settings,
+# Secrets and variables, Actions, Variables) to the demo's health address,
+# like https://your-demo.onrender.com/api/health. Clear the variable to turn
+# it off again. docs/deployment.md has the steps.
+#
+# It always finishes green, even when the demo is asleep or down. The demo
+# deploys only when every check on main passes, so a red run here would
+# block a deploy.
+
+name: Keep the demo warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    name: Ask the demo's health address
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ask once, and wait up to 90 seconds
+        env:
+          DEMO_HEALTH_URL: ${{ vars.DEMO_HEALTH_URL }}
+        run: |
+          if [ -z "$DEMO_HEALTH_URL" ]; then
+            echo "DEMO_HEALTH_URL isn't set, so keep-warm is off."
+            exit 0
+          fi
+          curl --silent --show-error --output /dev/null --max-time 90 \
+            --write-out "The demo answered HTTP %{http_code} in %{time_total} seconds.\n" \
+            "$DEMO_HEALTH_URL" || echo "The demo didn't answer within 90 seconds. It may be waking up."
+          exit 0

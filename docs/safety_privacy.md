@@ -1,6 +1,6 @@
 # Safety and privacy
 
-How the CP3 workbench handles personal data, keys, limits, model failures, prompt injection, jailbreaks and abuse, and AI mistakes, and what it doesn't handle. The workbench is a local tool for one creator on one computer. It isn't a hosted service.
+How the CP3 workbench handles personal data, keys, limits, model failures, prompt injection, jailbreaks and abuse, and AI mistakes, and what it doesn't handle. The workbench is a local tool for one creator on one computer. It isn't a hosted service, with one exception for CP4: the public demo, covered in [Demo mode](#demo-mode-the-public-link).
 
 ## Personal data and redaction
 
@@ -164,6 +164,24 @@ What leaves the computer:
 - **Model calls.** Each call goes to the provider in force, with the spec and the chat, and for the re-check, the check's flags and the creator's question. With Gemini, that means Google. With Ollama, nothing leaves. With another service, it goes to that service's address.
 - **Fonts.** The page loads Roboto and its icons from Google Fonts. The tour and the decorations are drawn in the page itself, so they load nothing from outside.
 - **Links.** The aistudio.google.com link after "Free key, no card" in Settings opens Google AI Studio in a new tab.
+
+## Demo mode (the public link)
+
+CP4 is graded on a working live link, so the workbench also runs as a public demo (`WORKBENCH_MODE=demo`, set up in [deployment.md](deployment.md)). Everything above still holds there. This is what demo mode adds, because strangers can open it.
+
+- **Visitors are kept apart.** Each visitor works on their own copy of the database, so no chat, flag, or call of one visitor can show for another. A copy is deleted after 2 idle hours, and every copy is lost when the free host restarts.
+- **The banner.** Every screen says: "Public demo. Don't type anything personal: text sent to the AI goes to Google's free tier, which may use it to improve its products. Your copy of the demo is wiped after 2 hours." Redaction still runs on everything saved or sent.
+- **The demo code.** Anything that calls a model or stores a visitor's own text needs it: starting a test case, Free Chat, a typed message, Check this chat, a re-check, an Override, and Import. With no code, a visitor can only read and make calls on the samples' flags. The server checks the code on every such request, compares it in constant time, limits wrong tries to 5 in 10 minutes, and never logs it, saves it, or sends it back.
+- **What is off.** Settings (it holds the key), saving a spec version, the seeded transcript, Run All Test Cases, and FastAPI's docs pages. They are refused on the server, not only hidden.
+- **Keys.** The Gemini key and the demo code are environment values on Render, marked `sync: false` in `render.yaml`, so the repo holds neither. The demo uses its own key from a project with no billing, so Google's free quota is the hard stop. No key or code reaches the browser, a log, or a saved file.
+- **The cookie and other sites.** The visitor cookie is HttpOnly, Secure, and SameSite=Lax, and the server signs it. A POST whose Origin isn't the demo's own address is refused, so another website can't make a visitor's browser spend calls or change their flags.
+- **Limits.** All visitors together share `WORKBENCH_DAILY_CALL_CAP` model calls a day and the per-minute spacing. One visitor may start 2 live chats, and run 4 AI checks and 4 re-checks. When a limit is reached, a card says so and the sample chats keep working.
+
+What it doesn't do: there are still no accounts, so the demo code is shared by everyone who has it. The daily count starts over when the host restarts, and it can pass the cap by one call for each visitor who is mid-call. A visitor who has the code can type as many messages as the daily cap allows.
+
+Tests:
+
+- `tests/test_demo_mode.py`
 
 ## What we don't handle
 

@@ -21,9 +21,10 @@ from fastapi.responses import JSONResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from starlette.types import ASGIApp
 
-from workbench import app_settings, db, providers, scenario_gen, specs, transcripts
-from workbench.config import ENV_FILE, Settings, load_prompts, load_settings
+from workbench import app_settings, db, demo, providers, scenario_gen, specs, transcripts
+from workbench.config import ENV_FILE, Settings, listen_port, load_prompts, load_settings
 from workbench.gateway import CapReached, Gateway
 from workbench.judge import CheckBusy, Judge, NothingToCheck
 from workbench.limiter import Limiter
@@ -139,9 +140,13 @@ def create_app(
     env_file: Path = ENV_FILE,
     clock: Callable[[], float] | None = None,
     sleep: Callable[[float], Awaitable[None]] | None = None,
+    limiter: Limiter | None = None,
+    ledger: db.Database | None = None,
 ) -> FastAPI:
     """The app. build_provider makes the provider for new settings (Settings'
-    Save and Test), and env_file is where Settings writes them."""
+    Save and Test), and env_file is where Settings writes them. Demo mode (CP4)
+    builds one app per visitor and hands each the same limiter and ledger, so
+    the call spacing and the daily cap cover every visitor together."""
     # Startup work runs here, not in a lifespan handler, because TestClient
     # only runs lifespan inside a with block.
     prompts = load_prompts()
@@ -156,9 +161,10 @@ def create_app(
             return providers.build(chosen, prompts.presets)
 
     provider = provider if provider is not None else build_provider(settings)
-    limiter = Limiter(settings.workbench_calls_per_minute, settings.workbench_daily_call_cap, prompts.models.quota_timezone)
+    if limiter is None:
+        limiter = Limiter(settings.workbench_calls_per_minute, settings.workbench_daily_call_cap, prompts.models.quota_timezone)
     timing = {name: value for name, value in (("clock", clock), ("sleep", sleep)) if value is not None}
-    gateway = Gateway(database, settings, prompts, provider, limiter, **timing)
+    gateway = Gateway(database, settings, prompts, provider, limiter, ledger=ledger, **timing)
     runtime = Runtime(database, settings, prompts, gateway, transcripts.load_scenarios())
     judge = Judge(database, settings, prompts, gateway, runtime.scenarios, busy=lambda: runtime.running)
     recheck = Recheck(database, settings, prompts, gateway, judge)
@@ -423,16 +429,25 @@ def refusal(error: Exception) -> str:
     return " ".join(str(error).split())
 
 
+# What WORKBENCH_MODE starts. local is the workbench on the creator's own
+# computer. demo (CP4) is the public link: one private copy per visitor, built
+# by demo.py around the same create_app. A new mode is a new entry here.
+MODES: dict[str, Callable[[Settings], ASGIApp]] = {
+    "local": create_app,
+    "demo": lambda settings: demo.create_demo(settings, create_app),
+}
+
+
 def main() -> None:
     try:
         settings = load_settings()
-        app = create_app(settings)
+        app = MODES[settings.workbench_mode](settings)
     except (RuntimeError, ValidationError) as error:
         # The refusals already say what to fix, so the traceback would only bury them.
         print(f"run.sh: {refusal(error)}", file=sys.stderr)
         raise SystemExit(1) from None
     # One process and one worker.
-    uvicorn.run(app, host=settings.workbench_host, port=settings.workbench_port)
+    uvicorn.run(app, host=settings.workbench_host, port=listen_port(settings))
 
 
 if __name__ == "__main__":

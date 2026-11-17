@@ -1,0 +1,67 @@
+/*
+  Character Consistency Workbench: styles for the public demo only
+
+  The server adds this file to the page in demo mode (app/workbench/demo.py),
+  so the local workbench never loads it. It uses the tokens styles.css
+  defines, so both themes work.
+*/
+
+/* The banner: one slim band across the top of the header, on every screen. */
+.demo-banner {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.demo-banner__inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: var(--app-content-max);
+  margin: 0 auto;
+  padding: 6px var(--app-margin);
+  font: var(--type-body-small);
+  letter-spacing: var(--md-sys-typescale-body-small-tracking);
+}
+
+.demo-banner .icon {
+  font-size: 16px;
+}
+
+/* Off in the demo, on the server too. Settings holds the key, Run All Test
+   Cases is about 100 model calls, and the seeded transcript stays private. */
+[data-action="open-settings"],
+[data-action="run-all"],
+.import__choice:has(input[value="sample:seeded"]) {
+  display: none !important;
+}
+
+/* The demo's cards: the code card, a limit, and what is switched off. */
+.demo-dialog {
+  width: min(480px, calc(100vw - 48px));
+}
+
+.demo-dialog__content p + p,
+.demo-dialog__content p + .text-field {
+  margin-top: 12px;
+}
+
+.demo-dialog__content .text-field {
+  margin-top: 16px;
+}
+
+.demo-dialog__content a {
+  color: var(--md-sys-color-primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.demo-dialog__content a:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+}
+
+.demo-dialog__status--error {
+  color: var(--md-sys-color-error);
+}

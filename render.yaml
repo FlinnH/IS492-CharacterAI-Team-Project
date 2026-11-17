@@ -1,0 +1,47 @@
+# Render Blueprint for the public demo (CP4). docs/deployment.md has the steps.
+#
+# One free web service that runs the workbench in demo mode. It deploys from
+# main, and only after the GitHub tests pass (.github/workflows/tests.yml).
+# The two secrets have no value here. Render asks for them once, when the
+# Blueprint is first created, and they never sit in the repo.
+
+services:
+  - type: web
+    name: character-consistency-workbench
+    runtime: python
+    plan: free
+    region: ohio
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: pip install -r app/requirements.txt
+    startCommand: cd app && python -m workbench.main
+    healthCheckPath: /api/health
+    envVars:
+      # Render's default Python is newer than the one the tests run on.
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: WORKBENCH_MODE
+        value: demo
+      # Render reaches the service on every address, at the port it names in PORT.
+      - key: WORKBENCH_HOST
+        value: "0.0.0.0"
+      # Secrets. Their values are typed into Render, never into this file.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: WORKBENCH_DEMO_CODE
+        sync: false
+      # Limits. Model calls a day for every visitor together, then what one
+      # visitor with the code may do, then how many visitors' copies are kept
+      # and for how many idle minutes.
+      - key: WORKBENCH_DAILY_CALL_CAP
+        value: "200"
+      - key: WORKBENCH_DEMO_RUN_LIMIT
+        value: "2"
+      - key: WORKBENCH_DEMO_CHECK_LIMIT
+        value: "4"
+      - key: WORKBENCH_DEMO_RECHECK_LIMIT
+        value: "4"
+      - key: WORKBENCH_DEMO_MAX_VISITORS
+        value: "30"
+      - key: WORKBENCH_DEMO_IDLE_MINUTES
+        value: "120"

@@ -228,8 +228,13 @@ class Gateway:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         wall: Callable[[], datetime] = telemetry.utc_now,
+        ledger: db.Database | None = None,
     ) -> None:
         self.database = database
+        # Demo mode (CP4): one database every visitor's gateway shares. Each
+        # attempt is copied there, with nothing that names a visitor or a chat,
+        # and the daily cap counts its rows, so the cap covers all visitors.
+        self.ledger = ledger
         self.settings = settings
         self.prompts = prompts
         self.provider = provider
@@ -246,14 +251,30 @@ class Gateway:
         """A gateway for Settings' Test of settings that aren't saved yet. It shares
         the call spacing, the clock, and the log, so a test waits and counts like any call."""
         trial = Gateway(
-            self.database, settings, self.prompts, provider, self.limiter, clock=self.clock, sleep=self.sleep, wall=self.wall
+            self.database,
+            settings,
+            self.prompts,
+            provider,
+            self.limiter,
+            clock=self.clock,
+            sleep=self.sleep,
+            wall=self.wall,
+            ledger=self.ledger,
         )
         trial.app_settings_id = app_settings_id
         return trial
 
     def used_today(self) -> int:
         day = self.limiter.quota_day(self.wall())
-        return telemetry.calls_on_day(self.database, self.provider.name, day) + self.in_flight
+        return telemetry.calls_on_day(self.ledger or self.database, self.provider.name, day) + self.in_flight
+
+    def record(self, call: telemetry.CallRecord) -> int:
+        """Logs one attempt and returns its row. With a ledger, the count's copy goes there too."""
+        row = telemetry.record_call(self.database, call)
+        if self.ledger is not None:
+            shared = dataclasses.replace(call, session=None, transcript_id=None, turn=None, app_settings_id=None)
+            telemetry.record_call(self.ledger, shared)
+        return row
 
     def check_cap(
         self,
@@ -270,8 +291,7 @@ class Gateway:
         message = self.limiter.cap_message(self.used_today(), now)
         if message is None:
             return
-        telemetry.record_call(
-            self.database,
+        self.record(
             telemetry.CallRecord(
                 started_at=telemetry.timestamp(now),
                 quota_day=self.limiter.quota_day(now),
@@ -288,7 +308,7 @@ class Gateway:
                 status="capped",
                 error="daily cap reached",
                 app_settings_id=self.app_settings_id,
-            ),
+            )
         )
         raise CapReached(message)
 
@@ -434,8 +454,7 @@ class Gateway:
                 retryable = error.kind in RETRYABLE
             finally:
                 try:
-                    result.model_call_id = telemetry.record_call(
-                        self.database,
+                    result.model_call_id = self.record(
                         telemetry.CallRecord(
                             started_at=telemetry.timestamp(started_at),
                             quota_day=self.limiter.quota_day(started_at),
@@ -462,7 +481,7 @@ class Gateway:
                             reasoning_tokens=completion.usage.reasoning_tokens if completion and completion.usage else None,
                             est_cost_usd=estimated_cost(spec, completion.usage if completion else None),
                             app_settings_id=self.app_settings_id,
-                        ),
+                        )
                     )
                 finally:
                     if forced is None:
@@ -638,8 +657,7 @@ class Call:
         result.ttft_ms = round((first_text - started) * 1000) if first_text is not None else None
         result.latency_ms = round((ended - started) * 1000)
         cost = estimated_cost(spec, usage)
-        result.model_call_id = telemetry.record_call(
-            gateway.database,
+        result.model_call_id = gateway.record(
             telemetry.CallRecord(
                 started_at=telemetry.timestamp(started_at),
                 quota_day=gateway.limiter.quota_day(started_at),
@@ -666,5 +684,5 @@ class Call:
                 reasoning_tokens=usage.reasoning_tokens if usage else None,
                 est_cost_usd=cost,
                 app_settings_id=gateway.app_settings_id,
-            ),
+            )
         )
