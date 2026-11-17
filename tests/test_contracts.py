@@ -155,6 +155,8 @@ LAYERS = {
     "scenario_gen": 8,
     "recheck": 8,
     "review": 9,
+    # Demo mode (CP4): wraps the app main builds, one copy per visitor.
+    "demo": 9,
     "main": 10,
 }
 

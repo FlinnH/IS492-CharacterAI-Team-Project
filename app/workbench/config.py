@@ -43,7 +43,8 @@ PROMPTS_DIR = APP_DIR / "prompts"
 SPEC_PLACEHOLDER = "{spec}"
 
 # The settings that hold a key. app/.env.example leaves them empty.
-KEY_SETTINGS = ("gemini_api_key", "openai_compatible_api_key")
+# The demo code (CP4) counts as one: it unlocks model calls on the public link.
+KEY_SETTINGS = ("gemini_api_key", "openai_compatible_api_key", "workbench_demo_code")
 
 # What save_env writes: no spaces, quotes, #, backslashes, or line breaks, so a
 # value can never end its line and start another setting or a comment.
@@ -84,6 +85,16 @@ class Settings(BaseSettings):
     workbench_max_typed_chars: PositiveInt
     workbench_max_import_chars: PositiveInt
     workbench_seeded_transcript_path: Path
+    # The mode (CP4): local, or demo for the public link. A new mode is a new
+    # value here and a new entry in main.MODES. The demo settings below matter
+    # only in demo mode.
+    workbench_mode: Literal["local", "demo"]
+    workbench_demo_code: SecretStr
+    workbench_demo_max_visitors: PositiveInt
+    workbench_demo_idle_minutes: PositiveInt
+    workbench_demo_run_limit: PositiveInt
+    workbench_demo_check_limit: PositiveInt
+    workbench_demo_recheck_limit: PositiveInt
 
     # The provider is checked before these fields, so info.data holds it when it is valid.
 
@@ -121,6 +132,15 @@ def load_settings(env_file: Path = ENV_FILE) -> Settings:
                 "Move the key to app/.env and leave the example empty."
             )
     return Settings(_env_file=(EXAMPLE_FILE, env_file))
+
+
+def listen_port(settings: Settings) -> int:
+    """The port the server listens on: WORKBENCH_PORT, or in demo mode the one
+    the host hands the service in PORT, as Render does."""
+    hosted = os.environ.get("PORT", "")
+    if settings.workbench_mode == "demo" and hosted.isdigit() and 1 <= int(hosted) <= 65535:
+        return int(hosted)
+    return settings.workbench_port
 
 
 def save_env(values: Mapping[str, str], path: Path | str = ENV_FILE) -> None:

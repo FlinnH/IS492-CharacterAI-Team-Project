@@ -1,6 +1,6 @@
 # Architecture
 
-How the Character Consistency Workbench fits together for CP3. It runs on one computer: a browser page, one local server, one SQLite file, and the model service the creator picks in Settings. For setup, see [app/INSTALL.md](../app/INSTALL.md). For what each screen does, see [use-cases.md](use-cases.md).
+How the Character Consistency Workbench fits together for CP3. It runs on one computer: a browser page, one local server, one SQLite file, and the model service the creator picks in Settings. For setup, see [app/INSTALL.md](../app/INSTALL.md). For what each screen does, see [use-cases.md](use-cases.md). CP4 adds a public demo, which runs the same app on a free host: see [Demo mode](#demo-mode-the-public-link).
 
 ## Diagram
 
@@ -215,9 +215,25 @@ Code runs the review in steps: the automatic checks, one judge call, the evidenc
 4. Every judge flag passes the evidence checks or is saved apart as hidden, with its reason.
 5. The check is saved, and Flag review reads it from the database.
 
+## Demo mode (the public link)
+
+`WORKBENCH_MODE` in `app/.env.example` picks what `main.py` starts. `local`, the default, is everything above. `demo` is the public link for CP4: the same app on one free Render web service, set up by `render.yaml`. [deployment.md](deployment.md) has the steps and every environment variable.
+
+`app/workbench/demo.py` wraps the same `create_app` that local mode runs. It changes no service and no route.
+
+- **One small app per visitor.** At startup it builds a template database with the service calls the demo reset uses: spec v1, the CLA-F2 and GPT-F2 samples, and the judge snapshot's checks. A visitor's first request copies the template to that visitor's own file and builds a workbench app on it. Every route, including one added later, then reads only that file. A copy that sits idle for `WORKBENCH_DEMO_IDLE_MINUTES` is deleted, and `WORKBENCH_DEMO_MAX_VISITORS` caps how many are kept. Past the cap, a new visitor gets a page that says the demo is busy.
+- **The visitor.** A random cookie the server sets with the page and signs: HttpOnly, Secure, and SameSite=Lax. The visitor's ID replaces the tab's session ID, so limits count per visitor. Any request that isn't a GET must carry the demo's own address in its Origin header.
+- **The route table.** `demo.ROUTES` names every route as open, code, or off. Open routes read, or record a call on a flag. Off routes are Settings, saving a spec version, and FastAPI's own docs pages. Every other route needs the demo code, and so does any route the table doesn't name. Import also refuses the seeded transcript.
+- **The demo code.** It arrives in a POST body at `/api/demo/code`, is compared in constant time on every gated request, and lives only in the server's memory for that visitor. Each visitor's provider is also wrapped in a lock that refuses every call until the code is in, so a route opened by mistake still can't reach a model.
+- **Shared limits.** Every visitor's gateway shares one Limiter and one ledger database, `ledger.db`. Each attempt is copied there with no session and no chat ID, and the daily cap counts its rows, so the call spacing and the cap cover all visitors together. On top of that, one visitor may start `WORKBENCH_DEMO_RUN_LIMIT` live chats, and run `WORKBENCH_DEMO_CHECK_LIMIT` AI checks and `WORKBENCH_DEMO_RECHECK_LIMIT` re-checks.
+- **The page.** In demo mode the server adds `demo.css` and `demo.js` to index.html as it serves it. `demo.js` adds the banner, puts a Demo code button where Settings is, rewords the tour's Settings step, and steps in front of the buttons that need the code or that a limit has closed. It talks only to `/api/demo/` paths. `app.js`, `api.js`, `index.html`, and `styles.css` are the same files in both modes.
+- **On the host.** The service listens on `0.0.0.0` at the port Render names in `PORT`, reads its key and code from environment variables, and starts with no `app/.env`. `.github/workflows/keep-warm.yml` can ask `/api/health` every 10 minutes, and `app/scripts/check_link.py` checks a deployed link from a laptop with no model call.
+
+`tests/test_demo_mode.py` holds the tests. Three of them guard the route table: one fails when a route has no place in it, one fails when an open route takes a body or a query, and one calls every open route with no code and fails if any of them asks for a model.
+
 ## Boundaries the tests enforce
 
-Imports point one way, from the bottom up: schemas; then config, redact, and injection; then db; then telemetry, limiter, and providers; then the gateway; then specs, app_settings, rules, and evidence; then transcripts; then runtime and judge; then recheck; then review; and main last. `tests/test_contracts.py` holds the ranks (`LAYERS`), and `test_imports_point_one_way` fails when a module imports one at its own rank or above. The same file checks 10 more boundaries:
+Imports point one way, from the bottom up: schemas; then config, redact, and injection; then db; then telemetry, limiter, and providers; then the gateway; then specs, app_settings, rules, and evidence; then transcripts; then runtime and judge; then recheck; then review and demo; and main last. `tests/test_contracts.py` holds the ranks (`LAYERS`), and `test_imports_point_one_way` fails when a module imports one at its own rank or above. The same file checks 10 more boundaries:
 
 - only db.py imports sqlite3
 - only providers.py imports openai and httpx2
