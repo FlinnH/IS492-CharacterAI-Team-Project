@@ -857,8 +857,8 @@ def test_demo_js_says_what_the_server_says(make_demo):
     assert BANNER.format(time="45 minutes").endswith("wiped after 45 minutes.")
     assert f"{constants['CODE_HEAD']}. {constants['CODE_TEXT']}" == CODE_NEEDED == state["code_needed"]
     assert CODE_NEEDED == (
-        "Live AI needs a demo code. Course staff: it is in our Canvas submission. "
-        "Anyone can also run the workbench on their own computer in about 15 minutes."
+        "Live AI needs a demo code. This link is a demo. The workbench is built to run "
+        "on your own computer, with your own free AI key. Setup takes about 15 minutes."
     )
     assert constants["SPEC_OFF"] == SPEC_OFF == state["spec_off"]
     assert constants["QUICK_START"] == QUICK_START == state["quick_start"]

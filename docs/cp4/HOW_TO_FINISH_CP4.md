@@ -23,7 +23,7 @@ You don't need to read it all. Find your task in the list, and follow that secti
 ## Three things to know first
 
 - **The toolkit doesn't exist yet.** I planned scripts for exports, scoring, and charts, and I ran out of time. If a file named `analysis/README.md` exists, someone built it, so use its commands. If not, every section here has a way by hand.
-- **The public link doesn't exist yet either.** If a file named `docs/deployment.md` exists, the link is in it. If not, [section 7](#7-the-package) says what to do.
+- **The public link is live.** It is https://character-consistency-workbench.onrender.com, and [section 7](#7-the-package) says what to know about it. Live AI there needs the demo code, which I sent you privately.
 - **An AI tool can help with one section at a time.** For example, tell it: "Read AGENTS.md and section 2 of docs/cp4/HOW_TO_FINISH_CP4.md, then help me with step 3."
 
 On Nov 15, 2026, the import, check, database, and query steps here were run on a scratch copy of the app on my Mac. The Windows steps were only checked against the code.
@@ -435,7 +435,7 @@ For a practice round, `app/scripts/reset_demo.py` gives the two sample chats the
 3. Sort the typed answers into themes with [themes_TEMPLATE.md](../study_materials/themes_TEMPLATE.md).
 4. Run the knob tests on the judge ([section 4](#4-ablations)). The rubric asks for an ablation analysis in both tracks.
 
-If the public link exists, I'd still run sessions on your laptop. That way every person sees the same flags.
+The public link is live, but I'd still run sessions on your laptop. That way every person sees the same flags, and nothing gets wiped.
 
 ## 4. Ablations
 
@@ -587,7 +587,7 @@ You should see: a video file of about 60 seconds, with no key and no personal de
 
 The reset replaces the database the app is using, after it saves a backup in `app/data/backups/`. Your evaluation runs are safe in their own files, once that line is out of `app/.env`.
 
-If the public link exists, you could record the same path there. It also proves the link is real. `docs/deployment.md` would say what works there.
+You could also record the same path on the public link, which proves the link is real. The sample chats and their flags work there with no code.
 
 ### One timed rehearsal
 
@@ -613,7 +613,7 @@ This part is worth 2.0 points. Graders look for clean code, a working public lin
 | Docs on the design, each screen, the logs, and safety | Done | [architecture](../architecture.md), [use cases](../use-cases.md), [observability](../observability.md), [safety and privacy](../safety_privacy.md) |
 | The prompts and model settings | Done | [app/prompts/README.md](../../app/prompts/README.md) |
 | Rules for AI coding tools | Done | [AGENTS.md](../../AGENTS.md) |
-| The public link | To do | See below |
+| The public link | Done | https://character-consistency-workbench.onrender.com. See below. |
 | Charts in `docs/figures/` | To do | [Section 2](#2-track-b-step-by-step), step 12 |
 | A way to rerun the numbers | To do | Your scoring sheet and formulas, or the toolkit if it exists |
 | README updates | To do | The two lines from [decision 5](DECISIONS.md#5-two-readme-promises), the folder list, and your AI tools |
@@ -621,18 +621,28 @@ This part is worth 2.0 points. Graders look for clean code, a working public lin
 
 ### The public link
 
-I planned a public link and didn't get to build it. I'm sorry, because it is part of the grade. The design is in [issue 103](https://github.com/FlinnH/IS492-CharacterAI-Team-Project/issues/103), in case one of you wants to build it.
+The app is online at https://character-consistency-workbench.onrender.com. I built it on Nov 16, 2026. [docs/deployment.md](../deployment.md) explains how it works.
 
-How to tell if it exists: look for a file named `docs/deployment.md`. If it is there, it names the link.
+What to know:
 
-If the link exists:
+- **It opens for anyone.** With no code, a visitor can read the spec, open the two sample chats, see their flags, and compare them.
+- **Live AI needs the demo code.** I sent that code to you privately, and it is never written in this repo. Put it in the Canvas submission ([section 8](#8-submitting)).
+- **It can be slow to wake.** Free hosting sleeps when nobody visits, so the first load can take up to a minute.
+- **Nothing there is kept.** Each visitor gets a private copy, wiped after 2 idle hours and on every restart. So please do the evaluation runs on your laptop.
+- **It has limits.** One visitor may start 2 live chats, and run 4 AI checks and 4 re-checks. All visitors share 200 model calls a day.
+- **It updates by itself.** Every merge into `main` that passes the tests goes live a few minutes later. If the tests fail, the link keeps the old version.
+- **A new route needs one line.** If you or an AI tool adds a route to `app/workbench/main.py`, add it to `ROUTES` in `app/workbench/demo.py`. Until then the tests fail, and the link stops updating. [AGENTS.md](../../AGENTS.md#demo-mode) has the rule.
+- **It runs on my Render account, and only I can log in there.** So please don't plan on changing anything in Render. The limits live in `render.yaml`, so a pull request can change those.
 
-- It runs on my Render account, and only I can log in there. So please don't plan on changing anything in Render.
-- Fixes go through GitHub, not Render. Merge the fix into `main` with the tests green.
-- It can be slow to wake. Free hosting sleeps when nobody visits, so wait a minute and reload.
-- Live AI on the link needs the demo code. I sent that code to you privately, and it is never written in this repo.
+To check the link, run this from the repo root. It makes no model call and needs no code:
 
-If the link breaks, or doesn't exist by the deadline:
+```bash
+app/.venv/bin/python app/scripts/check_link.py https://character-consistency-workbench.onrender.com
+```
+
+You should see: every line starts with `ok`.
+
+If the link breaks:
 
 1. Show the app running on a laptop instead ([section 1](#1-run-the-app-on-your-laptop)), in the recording and in the talk.
 2. Tell the TA plainly what happened.
@@ -676,7 +686,7 @@ The CP2 prototype is still online at https://is492-characterai-team-project-prot
 
    You should see: `* [new tag]         cp4-submitted -> cp4-submitted`.
 
-5. Submit on Canvas. If the public link exists, put the demo code in the submission text, so graders can try the live AI. The code is in the private message I sent you. If there is no public link, say that the app runs on a laptop with `app/INSTALL.md`.
+5. Submit on Canvas. Put the public link and the demo code in the submission text, so graders can try the live AI. The code is in the private message I sent you. If the link is down that day, say that the app runs on a laptop with `app/INSTALL.md`.
 6. Write your contribution reflection. Each person writes their own, so mine is on me. Check Canvas for where it goes.
 
 The tag marks the exact version you handed in. The earlier ones are `cp2-submitted` and `cp3-submitted`. Please never move or delete a tag.
@@ -733,10 +743,11 @@ If you pick Track A, the same shape works. Recruiting starts Mon Nov 16. Session
 | Check results says "AI judge: unavailable" | The judge's answer couldn't be read, or the judge's model is wrong in Settings. Only the automatic checks ran. Check again in a minute, and don't count that run. |
 | "Shown from the saved check, with no new model call." | That is the saved check, not a new run. For a new run, use a fresh database file ([section 2](#2-track-b-step-by-step), step 9). |
 | The server won't start, and says a prompt file "changed after manifest.toml recorded it" | A file in `app/prompts/` was edited. Run `git restore app/prompts/` to put it back. |
-| The public link is slow to open | If the link exists, free hosting may be asleep. Wait a minute, and reload. |
-| The public link is broken | Only I can log in to Render. Show the app on a laptop, and tell the TA. A fix goes through a pull request into `main`. |
+| The public link is slow to open | Free hosting may be asleep. Wait a minute, and reload. |
+| The public link is broken | Run the checker in [section 7](#7-the-package) to see what fails. Only I can log in to Render, so show the app on a laptop, and tell the TA. A fix goes through a pull request into `main`. |
+| The tests fail and name `demo.ROUTES` | A new route has no line in `ROUTES` in `app/workbench/demo.py`. Add one: `CODE` if it calls a model or saves typed text, `OPEN` if it only reads. |
 | The report is over the word limit | Count each section against its suggested length. Cut background from sections 1 and 2 first. Keep the results. Link to long material from the appendices. |
-| You lost the demo code | A demo code only exists if the public link exists. Then it is in the private message I sent you both, so ask each other. It isn't in the repo, and only I can set a new one. The app on a laptop needs no code. |
+| You lost the demo code | It is in the private message I sent you both, so ask each other. It isn't in the repo, and only I can set a new one. The app on a laptop needs no code. |
 | An AI coding tool wants to change many files | My suggestion: stop it first. Then ask it to read [AGENTS.md](../../AGENTS.md), then to list each file it wants to change, and why. Say no to `app/prompts/`, `prototype/`, and tests it didn't write. Look at `git status` before you commit. |
 | An AI tool already made a mess | `git restore .` puts every tracked file back to your last commit. It throws away uncommitted edits, so be sure first. |
 | The app won't start | [INSTALL.md](../../app/INSTALL.md#when-something-goes-wrong) lists each message and its fix. |

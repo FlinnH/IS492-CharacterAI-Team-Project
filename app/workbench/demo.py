@@ -142,8 +142,8 @@ BANNER = (
     "which may use it to improve its products. Your copy of the demo is wiped after {time}."
 )
 CODE_NEEDED = (
-    "Live AI needs a demo code. Course staff: it is in our Canvas submission. "
-    "Anyone can also run the workbench on their own computer in about 15 minutes."
+    "Live AI needs a demo code. This link is a demo. The workbench is built to run "
+    "on your own computer, with your own free AI key. Setup takes about 15 minutes."
 )
 BUSY = "The demo is busy. Try again in a few minutes."
 NO_COOKIE = "The demo keeps your copy with a cookie, and this request had none. Reload the page, and allow cookies for this site."
