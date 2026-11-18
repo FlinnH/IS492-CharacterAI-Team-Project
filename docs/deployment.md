@@ -12,7 +12,7 @@ In demo mode:
 
 - **Each visitor gets a private copy.** The first time a browser opens the link, the server gives it a cookie and its own copy of the starting data: spec v1 and the two sample chats, Claude (CLA-F2) and ChatGPT (GPT-F2), with their saved checks. Nothing one visitor does shows for another.
 - **No code is needed to look around.** A visitor can open every screen, read the spec, open the samples, see their flags, press Show in context, Agree, and Undo, and compare the two samples. None of that calls a model.
-- **Live AI needs the demo code.** Starting a test case, Free Chat, a typed message, Check this chat, a re-check, an Override, and Import all ask for it. Without it, the button opens a card that says where the code is and links to the README's quick start.
+- **Live AI needs the demo code.** Starting a test case, Free Chat, a typed message, Check this chat, a re-check, an Override, and Import all ask for it. Without it, the button opens a card that says the link is a demo, built to run on your own computer, and links to the README's quick start.
 - **Some things are off.** Settings, saving a new spec version, the seeded transcript, and Run All Test Cases.
 - **There are limits.** One visitor may start 2 live chats, run 4 AI checks, and run 4 re-checks. All visitors together share 200 model calls a day. A copy that sits idle for 2 hours is deleted.
 

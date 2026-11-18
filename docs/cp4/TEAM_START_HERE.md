@@ -2,7 +2,7 @@
 
 Hi Gawon and Kiara. I'm away from Sun Nov 15, 2026, for a family matter, and I may not be back before the talk. I'm sorry to leave in the middle of it.
 
-Before I left, I finished the working app (CP3), this team kit, and a step-by-step guide. Everything you need is in this repo, so nothing has to wait for me. Where I suggest something, it is only a suggestion. Every decision is yours.
+Before I left, I finished the working app (CP3), this team kit, a step-by-step guide, and the public link. Everything you need is in this repo, so nothing has to wait for me. Where I suggest something, it is only a suggestion. Every decision is yours.
 
 ## CP4 in five lines
 
@@ -17,7 +17,7 @@ Before I left, I finished the working app (CP3), this team kit, and a step-by-st
 | Piece | Status | Notes and links |
 | --- | --- | --- |
 | Team kit | Done | This page, [the how-to](HOW_TO_FINISH_CP4.md), the templates, and the 8 issues. [The map](#the-map) lists them. |
-| Public link | To do | Not built. See [the how-to, section 7](HOW_TO_FINISH_CP4.md#7-the-package) and [issue 103][103]. |
+| Public link | Done | https://character-consistency-workbench.onrender.com. Live AI there needs the demo code, which I sent you privately. See [the how-to, section 7](HOW_TO_FINISH_CP4.md#7-the-package). |
 | Toolkit | To do | Not built. Every step in [the how-to](HOW_TO_FINISH_CP4.md#three-things-to-know-first) has a way by hand. |
 | Package polish | To do | [The how-to, section 7](HOW_TO_FINISH_CP4.md#7-the-package) lists what is left. |
 | Decisions | Ready to use | My picks are in [DECISIONS.md](DECISIONS.md). Yours decide. [Issue 102][102]. |
@@ -69,7 +69,8 @@ The how-to has a [day-by-day plan](HOW_TO_FINISH_CP4.md#9-a-day-by-day-plan) you
 | `.github/` | Issue and pull request templates, and the tests GitHub runs | They work by themselves |
 | [The CP4 milestone](https://github.com/FlinnH/IS492-CharacterAI-Team-Project/milestone/4) | The 8 issues, each with a checklist | To take and tick off work |
 | [app/INSTALL.md](../../app/INSTALL.md) | Installing the app, and every setting | When the app misbehaves |
-| `analysis/` and `docs/deployment.md` | The toolkit, and the public link's guide | Only if they exist. They didn't when I left. |
+| [docs/deployment.md](../deployment.md) | How the public link works, its limits, and how to check it | If the link misbehaves |
+| `analysis/` | The toolkit | Only if it exists. It didn't when I left. |
 
 ## House rules
 

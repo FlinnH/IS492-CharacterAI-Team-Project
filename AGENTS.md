@@ -26,7 +26,7 @@ Each module in `app/workbench/` has a rank in `LAYERS` in `tests/test_contracts.
 | 6 | transcripts |
 | 7 | runtime, judge |
 | 8 | scenario_gen, recheck |
-| 9 | review |
+| 9 | review, demo |
 | 10 | main |
 
 ## Boundaries
@@ -51,6 +51,18 @@ Other tests pin the screens:
 - `localStorage` is touched only inside `try` (`tests/test_screens.py`).
 
 [docs/architecture.md](docs/architecture.md) explains each part and why the boundaries are there.
+
+## Demo mode
+
+The public link runs the same app with `WORKBENCH_MODE=demo` ([docs/deployment.md](docs/deployment.md)). Every merge into `main` that passes the tests goes live there by itself, so these rules protect the link. `tests/test_demo_mode.py` checks each one.
+
+- **A new route needs a line in `ROUTES`** in `app/workbench/demo.py`. Mark it `CODE` if it calls a model or saves text a visitor typed, `OPEN` if it only reads, and `OFF` if the demo should refuse it. Without a line, `test_every_route_has_a_place_in_the_demo_table` fails, and the link stops updating until it passes.
+- **An open route takes no body and no query, and never asks a model** (`test_open_routes_take_no_body_and_no_query`, `test_no_open_route_reaches_a_model`). When unsure, mark a route `CODE`.
+- **Local mode stays as it is.** `WORKBENCH_MODE=local` is the default. `app.js`, `api.js`, `index.html`, and `styles.css` never mention the demo, and the demo's own page code lives in `demo.js` and `demo.css` (`test_the_local_page_and_routes_know_nothing_of_the_demo`).
+- **`demo.js` finds the app's buttons by their `data-action` names**, and the tour's Settings step by its title. If you rename one in `app.js`, change it in `demo.js` too (`test_demo_js_steps_in_front_of_buttons_app_js_still_has`).
+- **The demo code is a secret, like a key.** It lives only in the host's settings. Never write it in code, a doc, a test, an issue, or a pull request.
+- **`render.yaml` holds the demo's limits.** Change a limit there, in a pull request. Its two secrets have no value in the file, and must stay that way (`test_render_yaml_parses_and_holds_no_secret`).
+- **`.github/workflows/keep-warm.yml` must always finish green**, or it blocks deploys (`test_keep_warm_always_finishes_green`).
 
 ## Versioned files
 

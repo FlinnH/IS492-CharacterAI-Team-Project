@@ -216,6 +216,8 @@ Every reply is then "This is a fake reply. No model was called." The fake judge 
 
 Every setting is listed in `app/.env.example`, with its default and a short note. To change one by hand, copy its line into `app/.env` (make the file if there isn't one yet) and edit it there, then restart `app/run.sh`. Values load from `app/.env.example`, then `app/.env`, then environment variables, and the last one wins. Git ignores `app/.env`.
 
+The settings for demo mode (`WORKBENCH_MODE` and the `WORKBENCH_DEMO_` ones) run the public link. [docs/deployment.md](../docs/deployment.md) explains each one, and the app on your computer ignores them.
+
 The server refuses to start, with one plain line, if a setting is missing, misspelled, or wrong. It also refuses if `app/.env.example` holds a key. Never put a real key in the example file.
 
 | Setting | Default | What it does | In Settings |

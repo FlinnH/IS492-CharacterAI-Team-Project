@@ -98,7 +98,8 @@ The owners are now Gawon and Kiara. Where a cell is filled in, it is only Flynn'
 | Chunk | Owner |
 | --- | --- |
 | Setup: the team kit | Flynn. Done. |
-| Setup: the public link and the toolkit | Not built. Open, if one of you wants to build either. |
+| Setup: the public link | Flynn. Done. |
+| Setup: the toolkit | Not built. Open, if one of you wants to build it. |
 | Test set | Both, about 4 chats each |
 | Running the evaluation and the analysis | Gawon or Kiara: ____ |
 | Final report (half each) | Both |

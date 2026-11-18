@@ -23,7 +23,7 @@
     "Public demo. Don't type anything personal: text sent to the AI goes to Google's free tier, which may use it to improve its products. Your copy of the demo is wiped after 2 hours.";
   const CODE_HEAD = "Live AI needs a demo code";
   const CODE_TEXT =
-    "Course staff: it is in our Canvas submission. Anyone can also run the workbench on their own computer in about 15 minutes.";
+    "This link is a demo. The workbench is built to run on your own computer, with your own free AI key. Setup takes about 15 minutes.";
   const SPEC_OFF =
     "Saving a spec version is off in the public demo. To edit the spec, run the workbench on your own computer.";
   const QUICK_START = "https://github.com/FlinnH/IS492-CharacterAI-Team-Project#how-to-run-the-app";
